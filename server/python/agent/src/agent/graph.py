@@ -173,7 +173,8 @@ async def propose_action(state: State, runtime: Rt) -> dict:
     runtime.context.check_time()
     if state["turns"] >= harness.MAX_TURNS:
         return {"proposed_action": None}
-    model = harness.chat_model(runtime.context.toolbox.for_node("propose_action"))
+    model = harness.chat_model(runtime.context.toolbox.for_node("propose_action"), harness.PROPOSE_REASONING_EFFORT,
+                               tool_choice="required")
     messages = [
         SystemMessage(harness.prompt("system") + "\n\n" + harness.prompt("propose")),
         HumanMessage(f"진단 결과:\n{state['findings']}\n\n런북·계약 조항:\n"
@@ -194,7 +195,7 @@ def route_propose(state: State) -> Literal["approval", "report"]:
 
 
 async def verify(state: State, runtime: Rt) -> dict:
-    await asyncio.sleep(10)  # 조치가 메트릭에 반영될 시간
+    await asyncio.sleep(20)  # 조치가 메트릭에 반영될 시간. prompts/verify.md의 rate 창(15s)보다 길어야 한다
     messages = [
         SystemMessage(harness.prompt("system") + "\n\n" + harness.prompt("verify")),
         HumanMessage(f"실행한 조치: {json.dumps(state['proposed_action'], ensure_ascii=False)}\n"

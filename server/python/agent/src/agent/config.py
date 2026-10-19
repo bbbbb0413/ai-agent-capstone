@@ -18,6 +18,8 @@ class Settings:
     grafana_mcp_url: str = _env("GRAFANA_MCP_URL", "http://localhost:9103/mcp")
     llm_model: str = _env("LLM_MODEL", "gpt-5-mini")
     fallback_model: str = _env("FALLBACK_MODEL", "gpt-5-nano")
+    # 추론 모델(gpt-5 계열)용. 비우면 모델 기본값을 쓴다. 추론을 지원하지 않는 모델이면 비워야 한다
+    reasoning_effort: str = _env("LLM_REASONING_EFFORT", "low")
     dispatch_mode: str = _env("DISPATCH_MODE", "http")
     kafka_bootstrap_servers: str = _env("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
     prompts_dir: str = _env("PROMPTS_DIR", os.path.join(os.path.dirname(__file__), "..", "..", "prompts"))

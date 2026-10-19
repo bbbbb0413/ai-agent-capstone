@@ -20,6 +20,9 @@ from agent.config import settings
 MAX_TURNS = 8            # 작업 하나에서 모델을 부르는 최대 횟수
 TASK_SECONDS = 120       # 실행 시간 한도. 승인 대기 시간은 빼고 구간별로 잰다
 MAX_SAME_TOOL = 3        # 같은 도구 호출 한도
+# gpt-5-mini가 조치 도구를 호출하지 않고 권고문만 쓰는 경우가 있었다 (low 2/2, medium 1/5, docs/harness-spec.md).
+# 그래서 propose_action은 도구 호출을 강제하고, 어떤 도구를 고를지는 medium으로 판단한다
+PROPOSE_REASONING_EFFORT = "medium"
 
 # ── Tools / Context ───────────────────────────────────────────
 TOOL_RESULT_CHARS = 4_000      # 도구 결과는 이 길이로 자른다
@@ -114,12 +117,17 @@ def compact(messages: list[AnyMessage]) -> list[AnyMessage]:
 _RETRYABLE = (RateLimitError, InternalServerError, APITimeoutError, APIConnectionError)
 
 
-def chat_model(tools: list[BaseTool] | None = None) -> Runnable:
-    """429·5xx는 2회 재시도(총 3회)하고, 그래도 실패하면 대체 모델로 넘어간다."""
+def chat_model(tools: list[BaseTool] | None = None, reasoning_effort: str | None = None,
+               tool_choice: str | None = None) -> Runnable:
+    """429·5xx는 2회 재시도(총 3회)하고, 그래도 실패하면 대체 모델로 넘어간다.
+
+    reasoning_effort를 주지 않으면 LLM_REASONING_EFFORT를 쓴다. tool_choice="required"면 도구를 반드시 고른다.
+    """
+    effort = reasoning_effort or settings.reasoning_effort or None
 
     def build(model: str) -> Runnable:
-        llm = ChatOpenAI(model=model, max_retries=0, timeout=30)
-        bound = llm.bind_tools(tools) if tools else llm
+        llm = ChatOpenAI(model=model, max_retries=0, timeout=30, reasoning_effort=effort)
+        bound = llm.bind_tools(tools, tool_choice=tool_choice) if tools else llm
         return bound.with_retry(retry_if_exception_type=_RETRYABLE, stop_after_attempt=3)
 
     return build(settings.llm_model).with_fallbacks([build(settings.fallback_model)])

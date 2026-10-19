@@ -23,6 +23,7 @@ from agent.config import settings
 from agent.runner import Runner
 
 logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
 
 _background: set[asyncio.Task] = set()
 _slots = asyncio.Semaphore(settings.workers)
@@ -30,7 +31,8 @@ _slots = asyncio.Semaphore(settings.workers)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    pool = AsyncConnectionPool(settings.database_url, open=False,
+    # check: postgres가 재시작되면 풀에 남은 커넥션이 끊긴다. 꺼낼 때 확인해서 새로 연결한다
+    pool = AsyncConnectionPool(settings.database_url, open=False, check=AsyncConnectionPool.check_connection,
                                kwargs={"autocommit": True, "prepare_threshold": 0, "row_factory": dict_row})
     await pool.open()
     checkpointer = AsyncPostgresSaver(pool)
@@ -77,9 +79,14 @@ def _spawn(coro) -> None:
     task.add_done_callback(_background.discard)
 
 
-async def _limited(coro) -> Any:
+async def _limited(task_id: str, coro) -> Any:
+    """Graph에 들어가기 전(checkpoint 조회 등)에 실패해도 작업이 QUEUED로 남지 않게 FAILED를 알린다."""
     async with _slots:
-        return await coro
+        try:
+            return await coro
+        except Exception as e:
+            log.exception("task %s failed", task_id)
+            await backend.result(task_id, status="FAILED", answer=f"실행 중 오류: {type(e).__name__}")
 
 
 @app.get("/health")
@@ -89,11 +96,11 @@ async def health() -> dict:
 
 @app.post("/agent/tasks/{task_id}/run", status_code=202, dependencies=[Depends(require_service_token)])
 async def run(task_id: str, message: TaskMessage) -> dict:
-    _spawn(_limited(app.state.runner.run(message.model_dump())))
+    _spawn(_limited(task_id, app.state.runner.run(message.model_dump())))
     return {"taskId": task_id}
 
 
 @app.post("/agent/tasks/{task_id}/resume", status_code=202, dependencies=[Depends(require_service_token)])
 async def resume(task_id: str, request: ResumeRequest) -> dict:
-    _spawn(_limited(app.state.runner.resume(task_id, request.model_dump())))
+    _spawn(_limited(task_id, app.state.runner.resume(task_id, request.model_dump())))
     return {"taskId": task_id}

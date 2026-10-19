@@ -67,7 +67,7 @@ class Runner:
             remaining = max(1.0, harness.TASK_SECONDS - elapsed)
             result = await asyncio.wait_for(self.graph.ainvoke(payload, config, context=context), timeout=remaining)
         except (TimeoutError, harness.HarnessLimit) as e:
-            await backend.result(task_id, status="FAILED", answer=f"Harness 한도로 중단했다: {e or '시간 초과'}")
+            await backend.result(task_id, status="FAILED", answer=f"Harness 한도로 중단했다: {str(e) or '시간 초과'}")
             return "FAILED"
         except Exception as e:
             log.exception("task %s failed", task_id)
