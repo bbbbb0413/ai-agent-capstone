@@ -46,6 +46,13 @@ k -n argocd apply --server-side --force-conflicts \
   -f "https://raw.githubusercontent.com/argoproj/argo-cd/${ARGOCD_VERSION}/manifests/install.yaml" > /dev/null
 k -n argocd rollout status deploy/argocd-repo-server --timeout=180s
 k -n argocd rollout status statefulset/argocd-application-controller --timeout=180s
+# Git을 30초마다 확인한다 (기본 3분). PR 병합 후 반영까지 기다리는 시간을 줄인다
+k -n argocd patch configmap argocd-cm --type merge -p '{"data":{"timeout.reconciliation":"30s"}}' > /dev/null
+k -n argocd rollout restart deploy/argocd-repo-server statefulset/argocd-application-controller > /dev/null 2>&1 || true
+# 동기화 완료 알림 (backend /internal/gitops/sync-events)
+k -n argocd create secret generic argocd-notifications-secret --from-literal=opslens-token="$SERVICE_TOKEN" \
+  --dry-run=client -o yaml | k apply -f - > /dev/null
+k apply -f "$ROOT/gitops/cluster/argocd-notifications.yaml"
 k apply -f "$ROOT/gitops/cluster/argocd-tenant-a.yaml"
 
 # 6. backend가 쓸 고객사별 접속 정보 (git에 올리지 않는다)

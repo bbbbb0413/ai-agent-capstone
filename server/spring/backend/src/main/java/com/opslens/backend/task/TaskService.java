@@ -79,6 +79,20 @@ public class TaskService {
         agent.resume(taskId, new AgentClient.ResumeRequest(decision, comment, user.username()));
     }
 
+    /**
+     * 반영 대기(CHANGE_PENDING)를 끝내고 agent를 재개한다.
+     * decision: SYNCED(병합·동기화 완료) | TIMEOUT(기한 안에 병합되지 않음)
+     */
+    public boolean finishChange(TaskRecord task, String decision, String comment, String actor) {
+        if (!tasks.claimChange(task.id())) {
+            return false;
+        }
+        audit.record(task.tenantId(), actor, "CHANGE_" + decision,
+                Map.of("taskId", task.id(), "change", task.pendingAction(), "comment", comment), null);
+        agent.resume(task.id(), new AgentClient.ResumeRequest(decision, comment, actor));
+        return true;
+    }
+
     public void onEvent(UUID taskId, String type, JsonNode data) {
         if (!TaskEventHub.EVENT_TYPES.contains(type)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "unknown event type " + type);
@@ -86,6 +100,8 @@ public class TaskService {
         tasks.markRunningIfQueued(taskId);
         if ("APPROVAL_REQUIRED".equals(type)) {
             tasks.waitForApproval(taskId, data);
+        } else if ("CHANGE_PENDING".equals(type)) {
+            tasks.waitForChange(taskId, data);
         }
         events.publish(taskId, type, data);
     }

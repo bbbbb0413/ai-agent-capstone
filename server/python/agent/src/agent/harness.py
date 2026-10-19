@@ -18,8 +18,10 @@ from agent.config import settings
 
 # ── Agent Loop ────────────────────────────────────────────────
 MAX_TURNS = 8            # 작업 하나에서 모델을 부르는 최대 횟수
-TASK_SECONDS = 120       # 실행 시간 한도. 승인 대기 시간은 빼고 구간별로 잰다
-MAX_SAME_TOOL = 3        # 같은 도구 호출 한도
+TASK_SECONDS = 120       # 실행 시간 한도. 승인·반영 대기와 회복 확인 대기(VERIFY_SETTLE_SECONDS)는 빼고 잰다
+MAX_SAME_TOOL = 3        # 같은 Node 안에서 같은 도구 호출 한도
+# 조치가 메트릭에 반영될 때까지 기다리는 시간. prompts/verify.md의 rate 창(15s)보다 길어야 한다
+VERIFY_SETTLE_SECONDS = 20
 # gpt-5-mini가 조치 도구를 호출하지 않고 권고문만 쓰는 경우가 있었다 (low 2/2, medium 1/5, docs/harness-spec.md).
 # 그래서 propose_action은 도구 호출을 강제하고, 어떤 도구를 고를지는 medium으로 판단한다
 PROPOSE_REASONING_EFFORT = "medium"
@@ -35,7 +37,8 @@ NODE_TOOLS: dict[str, set[str]] = {
                      "business_list_incidents"},
     "diagnose": {"grafana_query_prometheus", "grafana_query_prometheus_histogram",
                  "grafana_list_prometheus_label_values", "grafana_query_loki_logs", "grafana_query_loki_patterns",
-                 "grafana_query_loki_stats", "business_list_incidents", "business_get_service_inventory"},
+                 "grafana_query_loki_stats", "business_list_incidents", "business_get_service_inventory",
+                 "business_list_recent_changes"},
     "retrieve_runbook": {"rag_search_documents"},
     "propose_action": {"business_execute_runbook_action", "business_send_customer_notice"},
     "escalate": {"business_escalate_incident"},

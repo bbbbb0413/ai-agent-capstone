@@ -34,6 +34,12 @@ services:
       AGENT_URL: http://agent:8000
       DISPATCH_MODE: ${DISPATCH_MODE:-http}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      # 고객사 조치 반영 (ADR 0001). 고객사 자격증명은 backend만 가진다
+      TENANT_CREDENTIALS_DIR: /run/opslens/tenants
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+    volumes:
+      # scripts/cluster-up.sh가 만든 고객사별 ServiceAccount 토큰과 클러스터 CA
+      - ./.local/tenants:/run/opslens/tenants:ro
     depends_on:
       postgres:
         condition: service_healthy

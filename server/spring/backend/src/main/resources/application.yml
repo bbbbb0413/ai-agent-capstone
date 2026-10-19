@@ -28,6 +28,14 @@ opslens:
   alert-webhook-token: ${ALERT_WEBHOOK_TOKEN:}
   agent-url: ${AGENT_URL:http://localhost:8000}
   dispatch-mode: ${DISPATCH_MODE:http}   # http | kafka
+  kubernetes:
+    credentials-dir: ${TENANT_CREDENTIALS_DIR:../../../.local/tenants}
+  gitops:
+    api-url: https://api.github.com
+    repo: ${GITOPS_REPO:bbbbb0413/ai-agent-capstone}
+    base-branch: main
+    token: ${GITHUB_TOKEN:}
+    merge-timeout: 30m   # 이 시간 안에 PR이 병합·동기화되지 않으면 에스컬레이션한다
 
 management:
   endpoints:

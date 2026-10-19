@@ -62,6 +62,33 @@ public class TaskRepository {
                 .params(toJson(pendingAction), id).update();
     }
 
+    public void waitForChange(UUID id, JsonNode change) {
+        jdbc.sql("""
+                        UPDATE ai_tasks SET status = 'CHANGE_PENDING', pending_action = ?::jsonb, updated_at = now()
+                        WHERE id = ?
+                        """)
+                .params(toJson(change), id).update();
+    }
+
+    public List<TaskRecord> listChangePending(String tenantId) {
+        return jdbc.sql("SELECT * FROM ai_tasks WHERE status = 'CHANGE_PENDING' AND tenant_id = ?")
+                .param(tenantId).query(this::toTask).list();
+    }
+
+    public List<TaskRecord> listChangePendingSince(OffsetDateTime before) {
+        return jdbc.sql("SELECT * FROM ai_tasks WHERE status = 'CHANGE_PENDING' AND updated_at < ?")
+                .param(before).query(this::toTask).list();
+    }
+
+    /** 반영 대기를 끝낸다. 동기화 알림과 시간 초과가 겹쳐도 한 번만 재개되도록 상태를 조건으로 건다. */
+    public boolean claimChange(UUID id) {
+        return jdbc.sql("""
+                        UPDATE ai_tasks SET status = 'RUNNING', pending_action = NULL, updated_at = now()
+                        WHERE id = ? AND status = 'CHANGE_PENDING'
+                        """)
+                .param(id).update() == 1;
+    }
+
     public void resume(UUID id) {
         jdbc.sql("UPDATE ai_tasks SET status = 'RUNNING', pending_action = NULL, updated_at = now() WHERE id = ?")
                 .param(id).update();

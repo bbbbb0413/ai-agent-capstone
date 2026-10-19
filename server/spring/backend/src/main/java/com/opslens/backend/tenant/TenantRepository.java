@@ -61,7 +61,8 @@ public class TenantRepository {
     private static Tenant toTenant(ResultSet rs, int rowNum) throws SQLException {
         return new Tenant(rs.getString("id"), rs.getString("name"), rs.getString("sla_tier"),
                 rs.getBigDecimal("availability_target"), rs.getInt("response_minutes"),
-                rs.getString("app_url"), strings(rs.getArray("allowed_actions")));
+                strings(rs.getArray("allowed_actions")), rs.getString("change_mode"), rs.getString("namespace"),
+                rs.getString("gitops_path"));
     }
 
     private static List<String> strings(Array array) throws SQLException {

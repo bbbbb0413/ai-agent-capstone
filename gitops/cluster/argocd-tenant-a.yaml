@@ -5,6 +5,9 @@ kind: Application
 metadata:
   name: tenant-a
   namespace: argocd
+  annotations:
+    # 동기화 완료를 OpsLens backend에 알린다 (argocd-notifications.yaml)
+    notifications.argoproj.io/subscribe.on-opslens-synced.opslens: ""
 spec:
   project: default
   source:

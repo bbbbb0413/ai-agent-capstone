@@ -9,6 +9,9 @@ import org.springframework.stereotype.Component;
  * 주입된 장애 상태.
  *   DB_POOL_EXHAUSTION : 시나리오 A. 요청 절반이 커넥션 획득 실패로 5xx
  *   PAYMENT_LATENCY    : 시나리오 B2. 외부 결제 API가 1.5초 이상 지연
+ *   WORKER_HANG        : 시나리오 B. 작업 스레드가 모두 묶여 요청을 받지 못한다. 파드를 재시작하면 풀린다
+ *
+ * 상태는 프로세스 메모리에만 있다. 그래서 파드 재시작(restart_pods)이 곧 주입된 장애의 해소다.
  *
  * 시작할 때 설정(DEMO_POOL_SIZE)으로 풀 크기를 받는다. 20보다 작으면 처음부터 커넥션 풀 고갈 상태다.
  * 그래서 GitOps 고객사의 "잘못된 설정 배포"는 매니페스트의 이 값을 줄이는 커밋으로 만들고,
@@ -17,9 +20,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class FaultState {
 
-    public enum Fault { NONE, DB_POOL_EXHAUSTION, PAYMENT_LATENCY }
+    public enum Fault { NONE, DB_POOL_EXHAUSTION, PAYMENT_LATENCY, WORKER_HANG }
 
-    /** 이 크기 이상이면 커넥션 풀 고갈이 해소된다 (런북의 권장 조치와 맞춘다) */
+    /** 이 크기보다 작으면 커넥션 풀이 고갈된다 */
     public static final int RECOVERY_POOL_SIZE = 20;
 
     private final AtomicReference<Fault> fault;
@@ -48,12 +51,5 @@ public class FaultState {
 
     public void clear() {
         fault.set(Fault.NONE);
-    }
-
-    public void resizePool(int size) {
-        poolSize.set(size);
-        if (size >= RECOVERY_POOL_SIZE && fault.get() == Fault.DB_POOL_EXHAUSTION) {
-            fault.set(Fault.NONE);
-        }
     }
 }

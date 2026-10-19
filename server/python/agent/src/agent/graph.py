@@ -2,7 +2,8 @@
 
 LLM이 도구를 고르는 Node: diagnose, propose_action, verify, report
 코드가 정해진 도구를 부르는 Node: load_context, retrieve_runbook, execute
-사람의 결정을 기다리는 Node(interrupt): approval, escalate, notice_approval
+사람의 결정을 기다리는 Node(interrupt): approval, escalate, notice_approval, await_change
+  await_change는 GitOps 고객사의 PR이 병합되고 ArgoCD 동기화가 끝나기를 기다린다. backend가 동기화 알림을 받아 재개한다.
 
 interrupt가 있는 Node는 재개될 때 처음부터 다시 실행된다. 그래서 interrupt 앞에는 부수효과(도구 호출, 모델 호출)를 두지 않는다.
 """
@@ -38,6 +39,8 @@ class State(TypedDict, total=False):
     evidence: list[dict[str, Any]]  # 답변의 근거 (도구, 요약)
     runbook: list[dict[str, Any]]   # 근거 문서 조항
     proposed_action: dict[str, Any] | None
+    action_result: dict[str, Any] | None   # 조치 도구의 결과 (status: EXECUTED | PR_CREATED)
+    change: dict[str, Any] | None          # GitOps PR과 반영 상태 (result: SYNCED | TIMEOUT)
     approvals: list[dict[str, Any]]
     turns: int
     tool_counts: dict[str, int]
@@ -53,10 +56,20 @@ class Context:
     toolbox: ToolBox
     segment_started: float = field(default_factory=time.monotonic)
     elapsed_before: float = 0.0     # 이전 구간들의 실행 시간 (승인 대기 시간은 들어가지 않는다)
+    waited: float = 0.0             # 이 구간에서 회복 확인을 위해 기다린 시간 (실행 시간에서 뺀다)
+
+    def elapsed(self) -> float:
+        return time.monotonic() - self.segment_started - self.waited
 
     def check_time(self) -> None:
-        if self.elapsed_before + time.monotonic() - self.segment_started > harness.TASK_SECONDS:
+        if self.elapsed_before + self.elapsed() > harness.TASK_SECONDS:
             raise harness.HarnessLimit(f"작업 시간 한도({harness.TASK_SECONDS}초)를 넘었다")
+
+    async def settle(self, seconds: float) -> None:
+        """Agent가 일하지 않고 시스템 반영을 기다리는 시간. 실행 시간 한도에 넣지 않는다."""
+        started = time.monotonic()
+        await asyncio.sleep(seconds)
+        self.waited += time.monotonic() - started
 
 
 Rt = Runtime[Context]
@@ -106,12 +119,19 @@ async def execute(state: State, runtime: Rt) -> dict:
     result = await runtime.context.toolbox.call("propose_action", action["tool"], action["args"], counts,
                                                 incident_id=state.get("incident_id"))
     evidence = state["evidence"] + [{"tool": action["tool"], "summary": str(result.content)[:500]}]
-    return {"evidence": evidence, "tool_counts": counts}
+    parsed = parse_json(result)
+    outcome = parsed if isinstance(parsed, dict) and parsed.get("status") else None
+    change = None
+    if outcome and outcome["status"] == "PR_CREATED":
+        change = {key: outcome.get(key) for key in ("action", "service", "changeMode", "prNumber", "prUrl", "files")}
+    return {"evidence": evidence, "tool_counts": counts, "action_result": outcome, "change": change}
 
 
-def route_execute(state: State) -> Literal["verify", "report"]:
-    # 고객 공지처럼 시스템을 바꾸지 않는 조치는 회복 확인이 필요 없다
-    return "verify" if state["proposed_action"]["tool"] == "business_execute_runbook_action" else "report"
+def route_execute(state: State) -> Literal["verify", "await_change", "report"]:
+    # 고객 공지처럼 시스템을 바꾸지 않는 조치, 실행에 실패한 조치는 회복 확인 없이 보고서로 간다
+    if state["proposed_action"]["tool"] != "business_execute_runbook_action" or not state.get("action_result"):
+        return "report"
+    return "await_change" if state.get("change") else "verify"
 
 
 # ── LLM Node ──────────────────────────────────────────────────
@@ -195,7 +215,7 @@ def route_propose(state: State) -> Literal["approval", "report"]:
 
 
 async def verify(state: State, runtime: Rt) -> dict:
-    await asyncio.sleep(20)  # 조치가 메트릭에 반영될 시간. prompts/verify.md의 rate 창(15s)보다 길어야 한다
+    await runtime.context.settle(harness.VERIFY_SETTLE_SECONDS)  # 조치가 메트릭에 반영될 시간
     messages = [
         SystemMessage(harness.prompt("system") + "\n\n" + harness.prompt("verify")),
         HumanMessage(f"실행한 조치: {json.dumps(state['proposed_action'], ensure_ascii=False)}\n"
@@ -248,8 +268,12 @@ def route_report(state: State) -> Literal["notice_approval", "__end__"]:
 
 
 def _approval_request(tool: str, args: dict, reason: str, state: State) -> dict:
-    return {"tool": tool, "args": args, "reason": reason,
-            "evidence": state.get("evidence", [])[-5:], "runbook": state.get("runbook", [])[:3]}
+    request = {"tool": tool, "args": args, "reason": reason,
+               "evidence": state.get("evidence", [])[-5:], "runbook": state.get("runbook", [])[:3]}
+    if tool == "business_execute_runbook_action":
+        # 화면의 승인 카드에 반영 방식을 보여 준다. 방식은 backend가 정한 고객사 값이다
+        request["changeMode"] = (state.get("context", {}).get("tenant") or {}).get("changeMode")
+    return request
 
 
 async def approval(state: State) -> dict:
@@ -262,9 +286,27 @@ def route_approval(state: State) -> Literal["execute", "report"]:
     return "execute" if state["approvals"][-1].get("decision") == "APPROVE" else "report"
 
 
+async def await_change(state: State) -> dict:
+    """PR 병합과 동기화를 기다린다. 이 대기 시간은 실행 시간 한도에 들어가지 않는다 (runner가 구간별로 잰다)."""
+    change = state["change"]
+    decision = interrupt({"kind": "CHANGE", "tool": state["proposed_action"]["tool"],
+                          "args": state["proposed_action"]["args"], **change})
+    return {"change": {**change, "result": decision.get("decision"), "comment": decision.get("comment")}}
+
+
+def route_await_change(state: State) -> Literal["verify", "final_escalate"]:
+    return "verify" if state["change"].get("result") == "SYNCED" else "final_escalate"
+
+
+def _escalation_reason(state: State) -> str:
+    if (state.get("change") or {}).get("result") == "TIMEOUT":
+        return f"조치 PR이 기한 안에 병합되지 않음 ({state['change'].get('prUrl')})"
+    return "P1 장애 발생" if not state.get("attempts") else "조치 후에도 회복되지 않음"
+
+
 async def escalate(state: State, runtime: Rt) -> dict:
-    """P1이거나 회복에 실패하면 담당자 호출을 제안한다. 승인되면 호출한다."""
-    reason = "P1 장애 발생" if not state.get("attempts") else "조치 후에도 회복되지 않음"
+    """P1이거나 회복에 실패하거나 PR이 병합되지 않으면 담당자 호출을 제안한다. 승인되면 호출한다."""
+    reason = _escalation_reason(state)
     args = {"incident_id": state["incident_id"], "reason": reason}
     decision = interrupt(_approval_request("business_escalate_incident", args, reason, state))
     approvals = state["approvals"] + [{**decision, "tool": "business_escalate_incident"}]
@@ -294,7 +336,7 @@ def build(checkpointer):
     for name, node in [
         ("intake", intake), ("load_context", load_context), ("escalate", escalate), ("diagnose", diagnose),
         ("retrieve_runbook", retrieve_runbook), ("propose_action", propose_action), ("approval", approval),
-        ("execute", execute), ("verify", verify), ("bump_attempt", bump_attempt),
+        ("execute", execute), ("await_change", await_change), ("verify", verify), ("bump_attempt", bump_attempt),
         ("final_escalate", escalate), ("report", report), ("notice_approval", notice_approval),
     ]:
         g.add_node(name, node)
@@ -308,6 +350,7 @@ def build(checkpointer):
     g.add_conditional_edges("propose_action", route_propose)
     g.add_conditional_edges("approval", route_approval)
     g.add_conditional_edges("execute", route_execute)
+    g.add_conditional_edges("await_change", route_await_change)
     g.add_conditional_edges("verify", route_verify, {"report": "report", "diagnose": "bump_attempt",
                                                      "final_escalate": "final_escalate"})
     g.add_edge("bump_attempt", "diagnose")

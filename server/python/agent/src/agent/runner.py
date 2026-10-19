@@ -1,6 +1,6 @@
 """작업 실행기. Graph를 interrupt나 종료까지 돌리고, 결과를 backend에 넘긴다.
 
-- 실행 시간 한도(120초)는 구간별로 잰다. 승인을 기다리는 시간은 들어가지 않는다.
+- 실행 시간 한도(120초)는 구간별로 잰다. 승인·반영(PR 병합)을 기다리는 시간과 회복 확인 대기는 들어가지 않는다.
   누적 시간은 checkpointer와 별도로 agent 스키마의 task_budget 테이블에 둔다.
 - 같은 task_id가 다시 오면(Kafka 중복 소비) 이미 checkpoint가 있으므로 건너뛴다 (멱등).
 """
@@ -61,10 +61,12 @@ class Runner:
     async def _drive(self, task_id: str, payload: Any, values: dict, config: dict, raise_errors: bool) -> str:
         elapsed = await self._elapsed(task_id)
         started = time.monotonic()
+        context: Context | None = None
         try:
             tools = await load_tools(values["tenant_id"], task_id, values["trace_id"])
             context = Context(toolbox=ToolBox(tools, values["tenant_id"], task_id), elapsed_before=elapsed)
-            remaining = max(1.0, harness.TASK_SECONDS - elapsed)
+            # 회복 확인 대기(verify, 재진입 포함 최대 2번)는 한도에서 빠지므로 그만큼 여유를 둔다
+            remaining = max(1.0, harness.TASK_SECONDS - elapsed) + 2 * harness.VERIFY_SETTLE_SECONDS
             result = await asyncio.wait_for(self.graph.ainvoke(payload, config, context=context), timeout=remaining)
         except (TimeoutError, harness.HarnessLimit) as e:
             await backend.result(task_id, status="FAILED", answer=f"Harness 한도로 중단했다: {str(e) or '시간 초과'}")
@@ -76,10 +78,14 @@ class Runner:
             await backend.result(task_id, status="FAILED", answer=f"실행 중 오류: {type(e).__name__}")
             return "FAILED"
         finally:
-            await self._add_elapsed(task_id, time.monotonic() - started)
+            await self._add_elapsed(task_id, time.monotonic() - started - (context.waited if context else 0.0))
 
         if interrupts := result.get("__interrupt__"):
-            await backend.emit(task_id, "APPROVAL_REQUIRED", interrupts[0].value)
+            value = interrupts[0].value
+            if value.get("kind") == "CHANGE":  # GitOps PR 병합·동기화 대기 (graph.await_change)
+                await backend.emit(task_id, "CHANGE_PENDING", value)
+                return "CHANGE_PENDING"
+            await backend.emit(task_id, "APPROVAL_REQUIRED", value)
             return "WAITING_APPROVAL"
 
         sources = [{"doc": d.get("uri"), "section": d.get("section")} for d in result.get("runbook", [])]

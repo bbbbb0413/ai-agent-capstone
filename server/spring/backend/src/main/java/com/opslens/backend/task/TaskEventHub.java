@@ -20,7 +20,7 @@ public class TaskEventHub {
 
     /** 화면이 받는 이벤트 (기획안 5.3) */
     public static final Set<String> EVENT_TYPES =
-            Set.of("TOKEN", "TOOL_START", "TOOL_END", "APPROVAL_REQUIRED", "DONE", "FAILED");
+            Set.of("TOKEN", "TOOL_START", "TOOL_END", "APPROVAL_REQUIRED", "CHANGE_PENDING", "DONE", "FAILED");
     private static final Set<String> TERMINAL = Set.of("DONE", "FAILED");
 
     private final Map<UUID, List<SseEmitter>> emitters = new ConcurrentHashMap<>();

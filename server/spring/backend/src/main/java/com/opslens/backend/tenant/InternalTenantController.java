@@ -1,6 +1,7 @@
 package com.opslens.backend.tenant;
 
 import com.opslens.backend.audit.AuditLog;
+import com.opslens.backend.change.ChangeService;
 import com.opslens.backend.incident.Incident;
 import com.opslens.backend.incident.IncidentRepository;
 import jakarta.validation.Valid;
@@ -32,7 +33,8 @@ public class InternalTenantController {
 
     record EscalateRequest(@NotBlank String reason) {}
 
-    record ActionRequest(@NotBlank String action, Map<String, Object> params, @NotNull Long incidentId) {}
+    record ActionRequest(@NotBlank String action, @NotBlank String service, Integer replicas,
+            @NotNull Long incidentId, String reason) {}
 
     record NoticeRequest(@NotNull Long incidentId, @NotBlank String message) {}
 
@@ -41,15 +43,15 @@ public class InternalTenantController {
     private final TenantRepository tenants;
     private final IncidentRepository incidents;
     private final SlaPolicy sla;
-    private final DemoAppClient demoApps;
+    private final ChangeService changes;
     private final AuditLog audit;
 
     public InternalTenantController(TenantRepository tenants, IncidentRepository incidents, SlaPolicy sla,
-            DemoAppClient demoApps, AuditLog audit) {
+            ChangeService changes, AuditLog audit) {
         this.tenants = tenants;
         this.incidents = incidents;
         this.sla = sla;
-        this.demoApps = demoApps;
+        this.changes = changes;
         this.audit = audit;
     }
 
@@ -68,10 +70,14 @@ public class InternalTenantController {
     }
 
     @GetMapping("/services")
-    List<TenantRepository.Service> services(@PathVariable String tenantId,
-            @RequestHeader("X-Tenant-Id") String caller) {
-        tenant(tenantId, caller);
-        return tenants.services(tenantId);
+    List<Map<String, Object>> services(@PathVariable String tenantId, @RequestHeader("X-Tenant-Id") String caller) {
+        return changes.inventory(tenant(tenantId, caller));
+    }
+
+    @GetMapping("/changes")
+    Map<String, Object> recentChanges(@PathVariable String tenantId, @RequestHeader("X-Tenant-Id") String caller,
+            @RequestParam String service) {
+        return changes.recentChanges(tenant(tenantId, caller), service);
     }
 
     @GetMapping("/incidents")
@@ -125,11 +131,14 @@ public class InternalTenantController {
                     "'%s'는 %s 계약상 허용되지 않는다. 허용 조치: %s"
                             .formatted(request.action(), tenant.name(), tenant.allowedActions()));
         }
-        Map<String, Object> params = request.params() == null ? Map.of() : request.params();
-        Map<?, ?> result = demoApps.execute(tenant, request.action(), params);
-        audit.record(tenantId, "agent", "ACTION_EXECUTED",
-                Map.of("incidentId", request.incidentId(), "action", request.action(), "params", params), traceId);
-        return Map.of("action", request.action(), "result", result);
+        String reason = "인시던트 #%d: %s".formatted(request.incidentId(),
+                request.reason() == null ? "" : request.reason());
+        Map<String, Object> result = changes.execute(tenant, request.action(), request.service(), request.replicas(),
+                reason);
+        audit.record(tenantId, "agent", ChangeService.PR_CREATED.equals(result.get("status"))
+                ? "CHANGE_PR_CREATED" : "ACTION_EXECUTED", Map.of("incidentId", request.incidentId(), "result", result),
+                traceId);
+        return result;
     }
 
     @PostMapping("/notices")

@@ -1,0 +1,28 @@
+# ArgoCD 동기화가 끝나고 Healthy가 되면 OpsLens backend에 알린다 (기획안 4.4).
+# backend는 이 알림을 받아 PR 병합을 기다리던 Agent 작업을 재개한다.
+# 서비스 토큰은 scripts/cluster-up.sh가 argocd-notifications-secret의 opslens-token 키로 넣는다.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-notifications-cm
+  namespace: argocd
+data:
+  service.webhook.opslens: |
+    url: http://backend:8080/internal/gitops
+    headers:
+      - name: Authorization
+        value: Bearer $opslens-token
+      - name: Content-Type
+        value: application/json
+  template.opslens-synced: |
+    webhook:
+      opslens:
+        method: POST
+        path: /sync-events
+        body: |
+          {"app": "{{.app.metadata.name}}", "revision": "{{.app.status.sync.revision}}", "health": "{{.app.status.health.status}}"}
+  # 같은 revision에는 한 번만 보낸다
+  trigger.on-opslens-synced: |
+    - when: app.status.operationState != nil and app.status.operationState.phase in ['Succeeded'] and app.status.health.status == 'Healthy'
+      oncePer: app.status.sync.revision
+      send: [opslens-synced]

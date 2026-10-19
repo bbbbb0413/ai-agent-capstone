@@ -48,12 +48,14 @@ class ToolBox:
 
     async def call(self, node: str, name: str, args: dict[str, Any], counts: dict[str, int],
                    call_id: str = "direct", incident_id: int | None = None) -> ToolMessage:
-        """counts(도구별 호출 횟수)는 호출한 쪽이 State에 저장한다."""
+        """counts(Node·도구별 호출 횟수)는 호출한 쪽이 State에 저장한다."""
         if name not in harness.NODE_TOOLS[node] or name not in self.by_name:
             return self._error(call_id, name, f"'{name}'은 이 단계({node})에서 쓸 수 없는 도구다")
-        if counts.get(name, 0) >= harness.MAX_SAME_TOOL:
-            return self._error(call_id, name, f"'{name}'을 이미 {harness.MAX_SAME_TOOL}번 호출했다. 다른 근거로 판단한다")
-        counts[name] = counts.get(name, 0) + 1
+        key = f"{node}:{name}"  # 한도는 Node마다 따로 센다. 진단에서 다 쓰면 회복 확인에서 조회할 수 없다
+        if counts.get(key, 0) >= harness.MAX_SAME_TOOL:
+            return self._error(call_id, name, f"'{name}'을 이 단계에서 이미 {harness.MAX_SAME_TOOL}번 호출했다. "
+                                              "다른 근거로 판단한다")
+        counts[key] = counts.get(key, 0) + 1
 
         tool = self.by_name[name]
         try:

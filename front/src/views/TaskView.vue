@@ -9,6 +9,7 @@ const task = ref(null)
 const answer = ref('')
 const activity = ref([])
 const approval = ref(null)
+const change = ref(null)   // GitOps PR 병합·동기화 대기 (CHANGE_PENDING)
 const error = ref('')
 let source
 
@@ -19,6 +20,7 @@ function subscribe() {
   source.addEventListener('TOOL_START', (e) => activity.value.push(`${JSON.parse(e.data).tool} 실행 중…`))
   source.addEventListener('TOOL_END', (e) => activity.value.push(`${JSON.parse(e.data).tool} 완료`))
   source.addEventListener('APPROVAL_REQUIRED', (e) => (approval.value = JSON.parse(e.data)))
+  source.addEventListener('CHANGE_PENDING', (e) => (change.value = JSON.parse(e.data)))
   for (const type of ['DONE', 'FAILED']) {
     source.addEventListener(type, async () => {
       source.close()
@@ -31,6 +33,7 @@ onMounted(async () => {
   try {
     task.value = await api.task(props.id)
     if (task.value.status === 'WAITING_APPROVAL') approval.value = task.value.pendingAction
+    if (task.value.status === 'CHANGE_PENDING') change.value = task.value.pendingAction
     if (!['DONE', 'FAILED'].includes(task.value.status)) subscribe()
   } catch (e) {
     error.value = e.message
@@ -59,6 +62,9 @@ async function decide(decision) {
   <section v-if="approval" class="card approval">
     <h2>승인 필요: {{ approval.tool }}</h2>
     <p>{{ approval.reason }}</p>
+    <p v-if="approval.changeMode" class="muted">
+      반영 방식: {{ approval.changeMode === 'GITOPS' ? '설정 저장소 PR (병합 후 ArgoCD 동기화)' : 'Kubernetes API로 바로 실행' }}
+    </p>
     <pre>{{ JSON.stringify(approval.args, null, 2) }}</pre>
     <details v-if="approval.runbook?.length">
       <summary>근거 문서</summary>
@@ -68,6 +74,12 @@ async function decide(decision) {
       <button @click="decide('APPROVE')">승인</button>
       <button class="secondary" @click="decide('REJECT')">거절</button>
     </div>
+  </section>
+
+  <section v-if="change && task?.status !== 'DONE'" class="card approval">
+    <h2>반영 대기: {{ change.action }} · {{ change.service }}</h2>
+    <p>설정 저장소 PR이 병합되고 ArgoCD 동기화가 끝나면 회복 확인을 이어서 한다.</p>
+    <a :href="change.prUrl" target="_blank" rel="noopener">PR #{{ change.prNumber }} 열기</a>
   </section>
 
   <section class="card">

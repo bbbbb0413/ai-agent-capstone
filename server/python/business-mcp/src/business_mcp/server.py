@@ -80,8 +80,16 @@ async def get_oncall_contacts() -> list[dict[str, Any]]:
 
 @mcp.tool(annotations=READ)
 async def get_service_inventory() -> list[dict[str, Any]]:
-    """현재 고객사가 운영하는 서비스 이름과 각 서비스의 의존 대상(DB, 외부 API 등)을 돌려준다."""
+    """현재 고객사가 운영하는 서비스 이름, 의존 대상(DB, 외부 API 등), 현재 레플리카 수와 이미지를 돌려준다."""
     return await _call("GET", "/services")
+
+
+@mcp.tool(annotations=READ)
+async def list_recent_changes(service: str) -> dict[str, Any]:
+    """서비스의 최근 배포·설정 변경 3건(최신순). 장애가 직전 변경과 관련 있는지 볼 때 쓴다.
+    설정 저장소로 운영하는 고객사는 커밋(시각, 메시지, 변경 내용 일부)을, 직접 운영 고객사는 배포 이력
+    (revision, 이미지, 환경변수, 생성 시각)을 돌려준다."""
+    return await _call("GET", "/changes", params={"service": service})
 
 
 # ── 변경 도구 (destructiveHint: agent Harness가 실행 전에 사람의 승인을 받는다) ──
@@ -102,16 +110,21 @@ async def escalate_incident(incident_id: int, reason: str) -> dict[str, Any]:
 @mcp.tool(annotations=WRITE)
 async def execute_runbook_action(
     incident_id: int,
-    action: Literal["adjust_pool", "restart", "clear_fault"],
-    pool_size: int | None = None,
+    action: Literal["restart_pods", "scale_deployment", "rollback_deployment"],
+    service: str,
+    replicas: int | None = None,
+    reason: str | None = None,
 ) -> dict[str, Any]:
     """고객사 서비스에 런북 조치를 실행한다.
-    - adjust_pool: DB 커넥션 풀 크기를 pool_size로 바꾼다
-    - restart: 서비스를 재시작한다
-    - clear_fault: 주입된 장애를 해제한다
+    - restart_pods: 서비스의 파드를 재시작한다 (메모리에 묶인 상태가 풀린다)
+    - scale_deployment: 레플리카 수를 replicas(1~10)로 바꾼다
+    - rollback_deployment: 직전 배포(설정·이미지)로 되돌린다
+    service는 get_service_inventory의 서비스 이름이다. reason에는 근거 런북 조항과 이유를 한 문장으로 적는다.
+    반영 방식은 고객사 운영 방식에 따라 backend가 정한다. 결과 status가 EXECUTED면 바로 반영된 것이고,
+    PR_CREATED면 설정 저장소 PR이 만들어진 것이다(병합·동기화 후 반영된다).
     계약상 허용되지 않은 조치는 거부되고, 오류 메시지에 허용 조치 목록이 담긴다."""
-    params = {"size": pool_size} if pool_size is not None else {}
-    return await _call("POST", "/actions", json={"incidentId": incident_id, "action": action, "params": params})
+    return await _call("POST", "/actions", json={"incidentId": incident_id, "action": action, "service": service,
+                                                  "replicas": replicas, "reason": reason})
 
 
 @mcp.tool(annotations=WRITE)

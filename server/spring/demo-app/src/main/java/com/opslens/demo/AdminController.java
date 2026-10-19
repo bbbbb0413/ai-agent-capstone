@@ -18,16 +18,14 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * 관리 API. 장애 주입은 시연 스크립트가, 조치(풀 조정·재시작·장애 해제)는 backend가 호출한다.
- * docker network 안에서만 열리고 서비스 토큰이 필요하다.
+ * 장애 주입 API. 시연 스크립트(scripts/scenario-*.sh)만 호출한다. 서비스 토큰이 필요하다.
+ * 조치는 여기가 아니라 Kubernetes API(파드 재시작, 확장, 롤백)로 한다.
  */
 @RestController
 @RequestMapping("/admin")
 public class AdminController {
 
     record FaultRequest(FaultState.Fault fault) {}
-
-    record PoolRequest(int size) {}
 
     private static final Logger log = LoggerFactory.getLogger(AdminController.class);
 
@@ -59,26 +57,6 @@ public class AdminController {
         authorize(authorization);
         faults.clear();
         log.info("fault cleared");
-        return state();
-    }
-
-    @PostMapping("/pool")
-    Map<String, Object> resizePool(@RequestHeader("Authorization") String authorization,
-            @RequestBody PoolRequest request) {
-        authorize(authorization);
-        faults.resizePool(request.size());
-        log.info("connection pool resized to {}", request.size());
-        return state();
-    }
-
-    @PostMapping("/restart")
-    Map<String, Object> restart(@RequestHeader("Authorization") String authorization) {
-        authorize(authorization);
-        // 실제 재시작 대신 상태를 초기화한다. 커넥션 풀 고갈은 재시작으로 일시 해소된다
-        if (faults.fault() == FaultState.Fault.DB_POOL_EXHAUSTION) {
-            faults.clear();
-        }
-        log.info("application restarted");
         return state();
     }
 
