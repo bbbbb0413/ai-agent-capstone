@@ -6,6 +6,7 @@
 
 import json
 from typing import Any
+from uuid import uuid4
 
 from langchain_core.messages import ToolMessage
 from langchain_core.tools import BaseTool
@@ -65,11 +66,25 @@ class ToolBox:
         if incident_id is not None and "incident_id" in args:
             args = {**args, "incident_id": incident_id}  # 모델이 다른 인시던트 번호를 넣지 못하게 한다
 
-        await backend.emit(self.task_id, "TOOL_START", {"tool": name, "node": node, "args": args})
-        output = await tool.ainvoke(args)  # MCP 오류는 어댑터가 문자열로 돌려준다 (handle_tool_errors)
-        text = harness.truncate(harness.mask(_as_text(output)))
-        await backend.emit(self.task_id, "TOOL_END", {"tool": name, "node": node})
-        return ToolMessage(content=harness.as_untrusted(text), tool_call_id=call_id, name=name)
+        call_id = uuid4().hex if call_id == "direct" else call_id
+        event = {"tool": name, "node": node, "callId": call_id}
+        await backend.emit(self.task_id, "TOOL_START", {**event, "args": args})
+        try:
+            # ToolCall 형태로 호출해야 어댑터가 MCP의 isError와 artifact를 보존한다.
+            output = await tool.ainvoke({"type": "tool_call", "name": name, "args": args, "id": call_id})
+        except Exception as e:
+            await backend.emit(self.task_id, "TOOL_END", {
+                **event, "status": "error", "error": harness.truncate(harness.mask(str(e)), 500),
+            })
+            raise  # 연결 오류 등은 기존 Runner 재시도 정책으로 처리한다
+        status = output.status if isinstance(output, ToolMessage) else "success"
+        content = output.content if isinstance(output, ToolMessage) else output
+        text = harness.truncate(harness.mask(_as_text(content)))
+        await backend.emit(self.task_id, "TOOL_END", {
+            **event, "status": status, **({"error": text[:500]} if status == "error" else {}),
+        })
+        return ToolMessage(content=harness.as_untrusted(text), tool_call_id=call_id, name=name,
+                           status=status)
 
     @staticmethod
     def _error(call_id: str, name: str, message: str) -> ToolMessage:

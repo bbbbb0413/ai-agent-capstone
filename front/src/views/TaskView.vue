@@ -4,7 +4,7 @@ import { marked } from 'marked'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { api } from '../api.js'
 import StatusBadge from '../components/StatusBadge.vue'
-import { ADMIN_ONLY_TOOLS, actionDetail, approvalFields, approvalImpact, toolLabel, toTimeline } from '../progress.js'
+import { ADMIN_ONLY_TOOLS, actionDetail, actionResultLabel, approvalChangeMode, approvalFields, approvalImpact, toolLabel, toTimeline } from '../progress.js'
 import { useSession } from '../session.js'
 
 const props = defineProps({ id: { type: String, required: true } })
@@ -15,6 +15,7 @@ const events = ref([])     // 저장된 진행 이력 + 실시간 이벤트
 const approval = ref(null)
 const change = ref(null)   // GitOps PR 병합·동기화 대기 (CHANGE_PENDING)
 const error = ref('')
+const deciding = ref(false)
 // 진행 중에는 스트리밍되는 리포트를 보여주고, 끝나서 요약 표가 생기면 접어 둔다
 const reportOpen = ref(true)
 let source
@@ -59,10 +60,10 @@ function subscribe() {
       events.value.push({ type, data, createdAt: new Date().toISOString() })
       handle?.(data)
     })
-  record('STEP')
-  record('TOOL_START')
-  record('TOOL_END')
   const setStatus = (status) => task.value && (task.value.status = status)
+  record('STEP', () => setStatus('RUNNING'))
+  record('TOOL_START', () => setStatus('RUNNING'))
+  record('TOOL_END')
   record('APPROVAL_REQUIRED', (data) => {
     approval.value = data
     setStatus('WAITING_APPROVAL')
@@ -101,12 +102,20 @@ onMounted(async () => {
 onUnmounted(() => source?.close())
 
 async function decide(decision) {
+  if (deciding.value) return
+  deciding.value = true
+  error.value = ''
   try {
-    await api.approve(props.id, decision)
+    await api.approve(props.id, decision, undefined, approval.value?.approvalId)
     approval.value = null
-    if (!source || source.readyState === EventSource.CLOSED) subscribe()
+    await refresh()
+    if (task.value.status === 'WAITING_APPROVAL') approval.value = task.value.pendingAction
+    if (!['DONE', 'FAILED'].includes(task.value.status)
+        && (!source || source.readyState === EventSource.CLOSED)) subscribe()
   } catch (e) {
     error.value = e.message
+  } finally {
+    deciding.value = false
   }
 }
 </script>
@@ -129,7 +138,7 @@ async function decide(decision) {
         </tr>
         <tr v-if="approval.changeMode">
           <th>반영 방식</th>
-          <td>{{ approval.changeMode === 'GITOPS' ? '설정 저장소 PR (병합 후 ArgoCD 동기화)' : 'Kubernetes API로 바로 실행' }}</td>
+          <td>{{ approvalChangeMode(approval) }}</td>
         </tr>
         <tr v-if="approvalImpact(approval)"><th>영향</th><td>{{ approvalImpact(approval) }}</td></tr>
       </tbody>
@@ -147,8 +156,8 @@ async function decide(decision) {
         이 조치는 MSP 관리자만 승인하거나 거절할 수 있다. 관리자에게 확인을 요청한다.
       </p>
       <div v-else class="row">
-        <button @click="decide('APPROVE')">승인</button>
-        <button class="secondary" @click="decide('REJECT')">거절</button>
+        <button :disabled="deciding" @click="decide('APPROVE')">{{ deciding ? '전달 중…' : '승인' }}</button>
+        <button class="secondary" :disabled="deciding" @click="decide('REJECT')">거절</button>
       </div>
     </template>
   </section>
@@ -171,6 +180,13 @@ async function decide(decision) {
         <tr><th>근거 조항</th><td>{{ summary.runbook_clause || '없음' }}</td></tr>
         <tr><th>조치</th><td>{{ actionLabel }}</td></tr>
         <tr v-if="summary.action"><th>조치 승인</th><td>{{ decisionLabel(summary.action.decision, '결정 전') }}</td></tr>
+        <tr v-if="summary.action">
+          <th>실행 결과</th>
+          <td :class="{ error: summary.action.result?.status === 'FAILED' }">
+            {{ actionResultLabel(summary.action.result) }}
+            <p v-if="summary.action.result?.error" class="muted">{{ summary.action.result.error }}</p>
+          </td>
+        </tr>
         <tr v-if="summary.change">
           <th>반영</th>
           <td>
@@ -184,6 +200,7 @@ async function decide(decision) {
         </tr>
         <tr><th>에스컬레이션</th><td>{{ decisionLabel(summary.escalation) }}</td></tr>
         <tr><th>고객 공지</th><td>{{ decisionLabel(summary.notice) }}</td></tr>
+        <tr v-if="summary.notice_result"><th>공지 결과</th><td>{{ actionResultLabel(summary.notice_result) }}</td></tr>
       </tbody>
     </table>
   </section>

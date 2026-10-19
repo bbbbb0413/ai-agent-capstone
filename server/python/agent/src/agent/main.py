@@ -71,6 +71,7 @@ class ResumeRequest(BaseModel):
     decision: str
     comment: str | None = None
     approver: str
+    approvalId: str | None = None
 
 
 def _spawn(coro) -> None:

@@ -1,0 +1,145 @@
+"""실제 조치·LLM 호출 없이 MCP 오류, 보고서 근거, 승인 재개를 검증한다."""
+
+import asyncio
+import json
+import unittest
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
+
+from langchain_core.messages import ToolMessage
+from langchain_mcp_adapters.tools import convert_mcp_tool_to_langchain_tool
+from mcp.types import CallToolResult, TextContent, Tool
+
+from agent import graph, summary
+from agent.runner import Runner
+from agent.toolbox import ToolBox, parse_json
+
+
+class ToolOutcomeTests(unittest.IsolatedAsyncioTestCase):
+    async def call_mcp(self, *, is_error, text):
+        session = SimpleNamespace(call_tool=AsyncMock(return_value=CallToolResult(
+            isError=is_error, content=[TextContent(type="text", text=text)])))
+        spec = Tool(name="send_customer_notice", inputSchema={
+            "type": "object", "properties": {"incident_id": {"type": "integer"}},
+            "required": ["incident_id"],
+        })
+        tool = convert_mcp_tool_to_langchain_tool(session, spec, server_name="business", tool_name_prefix=True)
+        with patch("agent.toolbox.backend.emit", new=AsyncMock()) as emit:
+            result = await ToolBox([tool], "tenant-a", "test").call(
+                "notice", tool.name, {"incident_id": 1}, {}, call_id="call-1")
+        return result, emit
+
+    async def test_mcp_error_is_preserved_in_message_and_event(self):
+        result, emit = await self.call_mcp(is_error=True, text="403: permission denied")
+        self.assertEqual(result.status, "error")
+        self.assertIn("403", result.content)
+        end = emit.await_args_list[-1].args
+        self.assertEqual(end[1], "TOOL_END")
+        self.assertEqual(end[2]["status"], "error")
+        self.assertEqual(end[2]["callId"], "call-1")
+
+    async def test_success_keeps_parseable_json(self):
+        result, emit = await self.call_mcp(is_error=False, text='{"sent": true}')
+        self.assertEqual(result.status, "success")
+        self.assertEqual(parse_json(result), {"sent": True})
+        self.assertEqual(emit.await_args_list[-1].args[2]["status"], "success")
+
+    async def test_transport_failure_emits_error_then_propagates(self):
+        tool = SimpleNamespace(name="business_send_customer_notice", ainvoke=AsyncMock(side_effect=OSError("offline")))
+        with patch("agent.toolbox.backend.emit", new=AsyncMock()) as emit:
+            with self.assertRaises(OSError):
+                await ToolBox([tool], "tenant-a", "test").call("notice", tool.name, {}, {})
+        self.assertEqual(emit.await_args_list[-1].args[2]["status"], "error")
+
+    async def test_failed_execution_never_routes_to_recovery_verification(self):
+        result = ToolMessage(content="403: denied", status="error", tool_call_id="test")
+        box = SimpleNamespace(call=AsyncMock(return_value=result))
+        state = {"proposed_action": {"tool": "business_execute_runbook_action", "args": {}},
+                 "tool_counts": {}, "evidence": []}
+        update = await graph.execute(state, SimpleNamespace(context=SimpleNamespace(toolbox=box)))
+        self.assertEqual(update["action_result"]["status"], "FAILED")
+        self.assertEqual(graph.route_execute({**state, **update}), "report")
+
+    async def test_execution_and_pr_creation_have_distinct_routes(self):
+        state = {"proposed_action": {"tool": "business_execute_runbook_action"}}
+        self.assertEqual(graph.route_execute({**state, "action_result": {"status": "EXECUTED"}}), "verify")
+        self.assertEqual(graph.route_execute({**state, "action_result": {"status": "PR_CREATED"},
+                                            "change": {"prNumber": 1}}), "await_change")
+
+
+class ReportTests(unittest.IsolatedAsyncioTestCase):
+    async def test_unlinked_question_does_not_propose_an_invalid_execution(self):
+        with patch("agent.graph.harness.chat_model") as model:
+            update = await graph.propose_action({"type": "QUESTION", "incident_id": None}, None)
+        self.assertIsNone(update["proposed_action"])
+        model.assert_not_called()
+
+    async def test_report_and_summary_receive_actual_outcome(self):
+        state = {"question": "why?", "task_id": "test", "evidence": [], "context": {},
+                 "proposed_action": {"tool": "business_execute_runbook_action", "args": {}},
+                 "action_result": {"status": "PR_CREATED", "prUrl": "https://example.invalid/pr/1"},
+                 "change": {"prNumber": 1, "result": "SYNCED"},
+                 "approvals": [{"tool": "business_execute_runbook_action", "decision": "APPROVE"}]}
+        payloads = []
+
+        class StubModel:
+            async def astream(self, messages):
+                payloads.append(json.loads(messages[1].content))
+                yield SimpleNamespace(content="## 요약\nPR 반영 완료")
+
+        with patch("agent.graph.harness.chat_model", return_value=StubModel()), \
+                patch("agent.graph.backend.emit", new=AsyncMock()), \
+                patch("agent.graph.summary.classify", new=AsyncMock(return_value={"error_type": "기타"})):
+            update = await graph.report(state, None)
+        self.assertEqual(payloads[0]["action_result"], state["action_result"])
+        self.assertEqual(payloads[0]["change"], state["change"])
+        built = summary.build({**state, **update})
+        self.assertEqual(built["action"]["result"]["status"], "PR_CREATED")
+        self.assertEqual(built["change"]["result"], "SYNCED")
+
+    async def test_notice_failure_is_not_reported_as_sent(self):
+        state = {"task_id": "test", "incident_id": 1, "notice_draft": "test", "tool_counts": {}, "approvals": []}
+        result = ToolMessage(content="403: denied", status="error", tool_call_id="test")
+        runtime = SimpleNamespace(context=SimpleNamespace(toolbox=SimpleNamespace(call=AsyncMock(return_value=result))))
+        with patch("agent.graph.interrupt", return_value={"decision": "APPROVE"}):
+            update = await graph.notice_approval(state, runtime)
+        self.assertEqual(update["notice_result"]["status"], "FAILED")
+
+
+class ResumeTests(unittest.IsolatedAsyncioTestCase):
+    def runner(self):
+        snapshot = SimpleNamespace(interrupts=[SimpleNamespace(value={"approvalId": "current"})],
+                                   values={"tenant_id": "tenant-a", "trace_id": "trace"})
+        fake_graph = SimpleNamespace(aget_state=AsyncMock(return_value=snapshot))
+        return Runner(fake_graph, None), snapshot
+
+    async def test_stale_approval_never_resumes_new_interrupt(self):
+        runner, _ = self.runner()
+        runner._drive = AsyncMock()
+        self.assertEqual(await runner.resume("test", {"approvalId": "old"}), "DUPLICATE")
+        runner._drive.assert_not_awaited()
+
+    async def test_concurrent_duplicate_resume_only_drives_once(self):
+        runner, snapshot = self.runner()
+
+        async def drive(*args, **kwargs):
+            await asyncio.sleep(0)
+            snapshot.interrupts = []
+            return "DONE"
+
+        runner._drive = AsyncMock(side_effect=drive)
+        outcomes = await asyncio.gather(*(runner.resume("test", {"approvalId": "current"}) for _ in range(2)))
+        self.assertEqual(sorted(outcomes), ["DONE", "DUPLICATE"])
+        self.assertEqual(runner._drive.await_count, 1)
+
+    def test_approval_identity_is_stable_and_advances_with_decisions(self):
+        state = {"task_id": "test", "approvals": []}
+        make = lambda: graph._approval_request("tool", {}, "test", state)["approvalId"]
+        first = make()
+        self.assertEqual(first, make())
+        state["approvals"].append({"decision": "APPROVE"})
+        self.assertNotEqual(first, make())
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -66,7 +66,8 @@ public class InternalTenantController {
     SlaPolicy.SlaTerms slaTerms(@PathVariable String tenantId, @RequestHeader("X-Tenant-Id") String caller,
             @RequestParam long incidentId) {
         Tenant tenant = tenant(tenantId, caller);
-        return sla.terms(tenant, incidents.getForTenant(tenantId, incidentId).startedAt());
+        Incident incident = incidents.getForTenant(tenantId, incidentId);
+        return sla.terms(tenant, incident.severity(), incident.startedAt());
     }
 
     @GetMapping("/services")

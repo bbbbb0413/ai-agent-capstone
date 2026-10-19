@@ -2,6 +2,13 @@
 
 입력 JSON을 바탕으로 진단 리포트를 Markdown으로 쓴다. 입력에 없는 사실은 쓰지 않는다.
 
+- approvals는 사람의 결정이며 실행 성공을 뜻하지 않는다. 실행 여부는 action_result로 판단한다.
+- action_result.status가 FAILED면 실행 실패, UNCONFIRMED면 결과 확인 불가, EXECUTED면 조치 실행,
+  SENT면 고객 공지 발송이다. 결과가 없으면 실행했다고 쓰지 않는다.
+- PR_CREATED는 PR 생성만 끝난 상태다. change.result가 SYNCED일 때만 병합·동기화 완료라고 쓴다.
+- 도구가 error를 반환했으면 근거 조회/조치에 실패한 것이다. 관리 API의 접속·인증 오류만으로
+  고객 서비스 지연의 원인을 확정하지 않는다. 로그를 조회하지 않았으면 '미조회'라고 쓴다.
+
 ```
 ## 요약
 무슨 일이 언제부터 일어났는가 (2문장 이내)

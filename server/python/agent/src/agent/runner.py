@@ -8,6 +8,7 @@
 import asyncio
 import logging
 import time
+from weakref import WeakValueDictionary
 from typing import Any
 
 from langgraph.types import Command
@@ -25,6 +26,7 @@ class Runner:
     def __init__(self, graph, pool: AsyncConnectionPool) -> None:
         self.graph = graph
         self.pool = pool
+        self._resume_locks: WeakValueDictionary[str, asyncio.Lock] = WeakValueDictionary()
 
     async def setup(self) -> None:
         async with self.pool.connection() as conn:
@@ -53,10 +55,18 @@ class Runner:
         return await self._drive(task_id, state, state, config, raise_errors)
 
     async def resume(self, task_id: str, decision: dict[str, Any]) -> str:
-        snapshot = await self.graph.aget_state({"configurable": {"thread_id": task_id}})
-        values = snapshot.values
-        config = self._config(task_id, values["tenant_id"], values["trace_id"])
-        return await self._drive(task_id, Command(resume=decision), values, config, raise_errors=False)
+        # 전달 응답 유실 후 재시도나 동시 승인에서도 같은 interrupt를 한 번만 소비한다.
+        lock = self._resume_locks.setdefault(task_id, asyncio.Lock())
+        async with lock:
+            snapshot = await self.graph.aget_state({"configurable": {"thread_id": task_id}})
+            if not snapshot.interrupts:
+                return "DUPLICATE"
+            approval_id = decision.get("approvalId")
+            if approval_id and approval_id != snapshot.interrupts[0].value.get("approvalId"):
+                return "DUPLICATE"
+            values = snapshot.values
+            config = self._config(task_id, values["tenant_id"], values["trace_id"])
+            return await self._drive(task_id, Command(resume=decision), values, config, raise_errors=False)
 
     async def _drive(self, task_id: str, payload: Any, values: dict, config: dict, raise_errors: bool) -> str:
         elapsed = await self._elapsed(task_id)
