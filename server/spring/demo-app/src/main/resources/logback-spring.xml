@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+    <springProperty name="TENANT_ID" source="demo.tenant-id"/>
+    <springProperty name="LOKI_URL" source="demo.loki-url"/>
+
+    <!-- 고객사별 X-Scope-OrgID(tenantId)로 로그를 분리해서 Loki에 보낸다 -->
+    <appender name="LOKI" class="com.github.loki4j.logback.Loki4jAppender">
+        <labels>
+            app = demo-app
+            tenant = ${TENANT_ID}
+            level = %level
+        </labels>
+        <message>
+            <pattern>%-5level [%thread] %logger{20} - %msg%n</pattern>
+        </message>
+        <http>
+            <url>${LOKI_URL}</url>
+            <tenantId>${TENANT_ID}</tenantId>
+        </http>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="LOKI"/>
+    </root>
+</configuration>

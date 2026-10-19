@@ -1,0 +1,13 @@
+[project]
+name = "business-mcp"
+version = "0.1.0"
+description = "OpsLens business-mcp: Spring Boot /internal/** 를 감싼 업무 조회·변경 도구"
+requires-python = ">=3.12"
+dependencies = [
+    "fastmcp==4.1.1",
+    "httpx>=0.28,<0.29",
+]
+
+[build-system]
+requires = ["uv_build>=0.12,<0.13"]
+build-backend = "uv_build"

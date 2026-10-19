@@ -1,0 +1,12 @@
+# 개발용 포트 공개. 배포 원칙(공개 포트는 frontend·backend뿐)과 다르므로 로컬에서만 쓴다.
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+services:
+  grafana:
+    ports:
+      - "3000:3000"
+  postgres:
+    ports:
+      - "5432:5432"
+  prometheus:
+    ports:
+      - "9090:9090"

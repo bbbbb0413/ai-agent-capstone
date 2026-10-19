@@ -1,0 +1,25 @@
+groups:
+  - name: demo-app
+    rules:
+      # 시나리오 A: DB 커넥션 고갈 → 5xx 급증
+      - alert: HighErrorRate
+        expr: |
+          sum by (tenant, service) (rate(demo_orders_seconds_count{outcome="error"}[1m]))
+            /
+          sum by (tenant, service) (rate(demo_orders_seconds_count[1m])) > 0.2
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.tenant }} {{ $labels.service }} 에러율 20% 초과"
+
+      # 시나리오 B: 외부 API 지연 → 응답시간 악화
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum by (tenant, service, le) (rate(demo_orders_seconds_bucket[1m]))) > 1
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.tenant }} {{ $labels.service }} p95 응답시간 1초 초과"

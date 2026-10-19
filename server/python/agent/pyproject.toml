@@ -1,0 +1,22 @@
+[project]
+name = "agent"
+version = "0.1.0"
+description = "OpsLens agent: Harness로 감싼 LangGraph 장애 대응 Agent"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.146,<0.147",
+    "uvicorn[standard]>=0.54,<0.55",
+    "httpx>=0.28,<0.29",
+    "langgraph==1.2.16",
+    "langgraph-checkpoint-postgres==3.2.0",
+    "langchain-openai==1.7.2",
+    # MCP Server(FastMCP 4.1, mcp 2.x)와 다른 컨테이너라서 이 어댑터의 mcp 1.x와 충돌하지 않는다.
+    # FastMCP 4.1 Server가 이전 연결 절차(initialize)도 받아서 통신이 된다 (2026-10-19 확인).
+    "langchain-mcp-adapters==0.3.2",
+    "psycopg[binary,pool]>=3.3,<3.4",
+    "aiokafka>=0.14,<0.15",
+]
+
+[build-system]
+requires = ["uv_build>=0.12,<0.13"]
+build-backend = "uv_build"

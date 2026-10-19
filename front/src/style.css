@@ -1,0 +1,51 @@
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --text: #1f2328;
+  --muted: #656d76;
+  --border: #d0d7de;
+  --accent: #0969da;
+  --danger: #cf222e;
+  --warn-bg: #fff8c5;
+  font-family: system-ui, -apple-system, "Apple SD Gothic Neo", sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --text: #e6edf3;
+    --muted: #8d96a0;
+    --border: #30363d;
+    --accent: #4493f8;
+    --danger: #f85149;
+    --warn-bg: #3b2e00;
+  }
+}
+
+body { margin: 0; background: var(--bg); }
+.topbar { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.brand { font-weight: 700; color: var(--text); text-decoration: none; }
+.who { color: var(--muted); font-size: 14px; }
+.page { max-width: 1080px; margin: 0 auto; padding: 16px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+.card.narrow { max-width: 360px; margin: 48px auto; display: grid; gap: 12px; }
+.card.approval { background: var(--warn-bg); }
+h1, h2 { margin: 0 0 12px; font-size: 18px; }
+label { display: grid; gap: 4px; font-size: 14px; }
+input, select { padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
+button { padding: 8px 14px; border: 0; border-radius: 6px; background: var(--accent); color: #fff; cursor: pointer; }
+button.secondary { background: var(--muted); }
+button.link { background: none; color: var(--accent); padding: 0 0 0 8px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+.row input { flex: 1; min-width: 200px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.card:has(table) { overflow-x: auto; }
+pre { white-space: pre-wrap; word-break: break-word; }
+.report { min-height: 80px; }
+.activity { font-size: 14px; color: var(--muted); }
+.muted { color: var(--muted); }
+.error { color: var(--danger); }

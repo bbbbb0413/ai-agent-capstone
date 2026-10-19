@@ -1,0 +1,19 @@
+# 강의 자료 (SK AX 저작물, 배포 금지)
+AI-Agent Capstone(+MCP).pdf
+
+# 비밀 값
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+
+# 빌드 산출물
+node_modules/
+dist/
+build/
+.gradle/
+.venv/
+__pycache__/
+*.pyc

@@ -1,0 +1,45 @@
+# 고객사별 데이터소스. Harness는 쿼리 문자열이 아니라 datasource UID가 현재 고객사 것인지 검사한다.
+#   Prometheus: prom-label-proxy가 X-Tenant 헤더로 tenant label을 강제한다
+#   Loki: X-Scope-OrgID 멀티테넌시
+apiVersion: 1
+
+datasources:
+  - name: Prometheus (tenant-a)
+    uid: prom-tenant-a
+    type: prometheus
+    access: proxy
+    url: http://prom-label-proxy:8080
+    jsonData:
+      httpHeaderName1: X-Tenant
+    secureJsonData:
+      httpHeaderValue1: tenant-a
+
+  - name: Prometheus (tenant-b)
+    uid: prom-tenant-b
+    type: prometheus
+    access: proxy
+    url: http://prom-label-proxy:8080
+    jsonData:
+      httpHeaderName1: X-Tenant
+    secureJsonData:
+      httpHeaderValue1: tenant-b
+
+  - name: Loki (tenant-a)
+    uid: loki-tenant-a
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    jsonData:
+      httpHeaderName1: X-Scope-OrgID
+    secureJsonData:
+      httpHeaderValue1: tenant-a
+
+  - name: Loki (tenant-b)
+    uid: loki-tenant-b
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    jsonData:
+      httpHeaderName1: X-Scope-OrgID
+    secureJsonData:
+      httpHeaderValue1: tenant-b

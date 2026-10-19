@@ -1,0 +1,316 @@
+"""장애 대응 Graph (PDF A안: 직접 만든 StateGraph). 흐름은 기획안 6장의 그림과 같다.
+
+LLM이 도구를 고르는 Node: diagnose, propose_action, verify, report
+코드가 정해진 도구를 부르는 Node: load_context, retrieve_runbook, execute
+사람의 결정을 기다리는 Node(interrupt): approval, escalate, notice_approval
+
+interrupt가 있는 Node는 재개될 때 처음부터 다시 실행된다. 그래서 interrupt 앞에는 부수효과(도구 호출, 모델 호출)를 두지 않는다.
+"""
+
+import asyncio
+import json
+import time
+from dataclasses import dataclass, field
+from typing import Annotated, Any, Literal, TypedDict
+
+from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, SystemMessage
+from langgraph.graph import END, START, StateGraph
+from langgraph.graph.message import add_messages
+from langgraph.runtime import Runtime
+from langgraph.types import interrupt
+
+from agent import harness
+from agent.backend import backend
+from agent.toolbox import ToolBox, parse_json
+
+
+class State(TypedDict, total=False):
+    task_id: str
+    tenant_id: str
+    incident_id: int | None
+    type: str                       # DIAGNOSE | QUESTION
+    question: str
+    trace_id: str
+    context: dict[str, Any]         # 고객사·SLA·서비스 정보 (backend 계산값)
+    plan: str
+    messages: Annotated[list[AnyMessage], add_messages]
+    findings: str
+    evidence: list[dict[str, Any]]  # 답변의 근거 (도구, 요약)
+    runbook: list[dict[str, Any]]   # 근거 문서 조항
+    proposed_action: dict[str, Any] | None
+    approvals: list[dict[str, Any]]
+    turns: int
+    tool_counts: dict[str, int]
+    attempts: int                   # verify 실패 후 진단 재진입 횟수
+    recovered: bool
+    report: str
+    notice_draft: str
+
+
+@dataclass
+class Context:
+    """Graph 실행마다 넘기는 값. checkpointer에 저장되지 않는다."""
+    toolbox: ToolBox
+    segment_started: float = field(default_factory=time.monotonic)
+    elapsed_before: float = 0.0     # 이전 구간들의 실행 시간 (승인 대기 시간은 들어가지 않는다)
+
+    def check_time(self) -> None:
+        if self.elapsed_before + time.monotonic() - self.segment_started > harness.TASK_SECONDS:
+            raise harness.HarnessLimit(f"작업 시간 한도({harness.TASK_SECONDS}초)를 넘었다")
+
+
+Rt = Runtime[Context]
+
+
+# ── 코드 Node ─────────────────────────────────────────────────
+
+
+async def intake(state: State, runtime: Rt) -> dict:
+    return {"turns": state.get("turns", 0), "tool_counts": state.get("tool_counts", {}),
+            "attempts": state.get("attempts", 0), "evidence": state.get("evidence", []),
+            "approvals": state.get("approvals", [])}
+
+
+async def load_context(state: State, runtime: Rt) -> dict:
+    box, counts = runtime.context.toolbox, dict(state["tool_counts"])
+    context: dict[str, Any] = {
+        "tenant": parse_json(await box.call("load_context", "business_get_tenant_profile", {}, counts)),
+        "services": parse_json(await box.call("load_context", "business_get_service_inventory", {}, counts)),
+    }
+    if state.get("incident_id"):
+        incident_id = state["incident_id"]
+        context["sla"] = parse_json(await box.call("load_context", "business_get_sla_terms",
+                                                   {"incident_id": incident_id}, counts))
+        incidents = parse_json(await box.call("load_context", "business_list_incidents", {"status": "OPEN"}, counts))
+        if isinstance(incidents, list):
+            context["incident"] = next((i for i in incidents if i.get("id") == incident_id), None)
+    return {"context": context, "tool_counts": counts}
+
+
+def route_triage(state: State) -> Literal["escalate", "diagnose"]:
+    incident = state.get("context", {}).get("incident") or {}
+    return "escalate" if incident.get("severity") == "P1" and not state.get("approvals") else "diagnose"
+
+
+async def retrieve_runbook(state: State, runtime: Rt) -> dict:
+    counts = dict(state["tool_counts"])
+    result = await runtime.context.toolbox.call(
+        "retrieve_runbook", "rag_search_documents",
+        {"query": state.get("findings") or state["question"], "top_k": 4}, counts)
+    docs = parse_json(result)
+    return {"runbook": docs if isinstance(docs, list) else [], "tool_counts": counts}
+
+
+async def execute(state: State, runtime: Rt) -> dict:
+    action, counts = state["proposed_action"], dict(state["tool_counts"])
+    result = await runtime.context.toolbox.call("propose_action", action["tool"], action["args"], counts,
+                                                incident_id=state.get("incident_id"))
+    evidence = state["evidence"] + [{"tool": action["tool"], "summary": str(result.content)[:500]}]
+    return {"evidence": evidence, "tool_counts": counts}
+
+
+def route_execute(state: State) -> Literal["verify", "report"]:
+    # 고객 공지처럼 시스템을 바꾸지 않는 조치는 회복 확인이 필요 없다
+    return "verify" if state["proposed_action"]["tool"] == "business_execute_runbook_action" else "report"
+
+
+# ── LLM Node ──────────────────────────────────────────────────
+
+
+async def _tool_loop(node: str, state: State, runtime: Rt, messages: list[AnyMessage],
+                     max_turns: int) -> tuple[list[AnyMessage], int, dict[str, int], list[dict]]:
+    """모델이 허용목록 안에서 도구를 고르고, Harness가 실행한다. 턴·시간·도구 한도를 지킨다."""
+    box = runtime.context.toolbox
+    model = harness.chat_model(box.for_node(node))
+    turns, counts, evidence, new = state["turns"], dict(state["tool_counts"]), [], []
+    for _ in range(max_turns):
+        if turns >= harness.MAX_TURNS:
+            break
+        runtime.context.check_time()
+        ai: AIMessage = await model.ainvoke(harness.compact(messages + new))
+        turns += 1
+        new.append(ai)
+        if not ai.tool_calls:
+            break
+        for call in ai.tool_calls:
+            result = await box.call(node, call["name"], call["args"], counts, call["id"], state.get("incident_id"))
+            new.append(result)
+            evidence.append({"tool": call["name"], "args": call["args"], "summary": str(result.content)[:500]})
+    return new, turns, counts, evidence
+
+
+def _final_text(messages: list[AnyMessage]) -> str:
+    for message in reversed(messages):
+        if isinstance(message, AIMessage) and not message.tool_calls and message.content:
+            return str(message.content)
+    return ""
+
+
+async def diagnose(state: State, runtime: Rt) -> dict:
+    if state.get("messages"):
+        intro = [HumanMessage("조치 후에도 회복되지 않았다. 조치 이후 시간대를 다시 조사한다.")]
+    else:
+        intro = [
+            SystemMessage(harness.prompt("system") + "\n\n" + harness.prompt("diagnose")),
+            HumanMessage(f"요청: {state['question']}\n\n고객사 컨텍스트(backend 계산값):\n"
+                         f"{json.dumps(state.get('context', {}), ensure_ascii=False, default=str)}"),
+        ]
+    history = list(state.get("messages", [])) + intro
+    new, turns, counts, evidence = await _tool_loop("diagnose", state, runtime, history, harness.MAX_TURNS)
+    findings = _final_text(new) or "원인 미확정: 턴 한도 안에 근거를 모으지 못했다"
+    update = {"messages": intro + new, "findings": findings, "turns": turns, "tool_counts": counts,
+              "evidence": state["evidence"] + evidence}
+    if not state.get("plan") and new and isinstance(new[0], AIMessage):
+        update["plan"] = str(new[0].content)
+    return update
+
+
+def route_diagnose(state: State) -> Literal["retrieve_runbook", "report"]:
+    return "report" if state["findings"].startswith("원인 미확정") else "retrieve_runbook"
+
+
+async def propose_action(state: State, runtime: Rt) -> dict:
+    runtime.context.check_time()
+    if state["turns"] >= harness.MAX_TURNS:
+        return {"proposed_action": None}
+    model = harness.chat_model(runtime.context.toolbox.for_node("propose_action"))
+    messages = [
+        SystemMessage(harness.prompt("system") + "\n\n" + harness.prompt("propose")),
+        HumanMessage(f"진단 결과:\n{state['findings']}\n\n런북·계약 조항:\n"
+                     f"{json.dumps(state.get('runbook', []), ensure_ascii=False)}\n\n"
+                     f"고객사 컨텍스트:\n{json.dumps(state.get('context', {}), ensure_ascii=False, default=str)}"),
+    ]
+    ai: AIMessage = await model.ainvoke(messages)
+    if not ai.tool_calls:
+        return {"proposed_action": None, "turns": state["turns"] + 1}
+    call = ai.tool_calls[0]
+    args = {**call["args"], "incident_id": state.get("incident_id")} if "incident_id" in call["args"] else call["args"]
+    return {"proposed_action": {"tool": call["name"], "args": args, "reason": str(ai.content)},
+            "turns": state["turns"] + 1}
+
+
+def route_propose(state: State) -> Literal["approval", "report"]:
+    return "approval" if state.get("proposed_action") else "report"
+
+
+async def verify(state: State, runtime: Rt) -> dict:
+    await asyncio.sleep(10)  # 조치가 메트릭에 반영될 시간
+    messages = [
+        SystemMessage(harness.prompt("system") + "\n\n" + harness.prompt("verify")),
+        HumanMessage(f"실행한 조치: {json.dumps(state['proposed_action'], ensure_ascii=False)}\n"
+                     f"진단 결과: {state['findings']}"),
+    ]
+    new, turns, counts, evidence = await _tool_loop("verify", state, runtime, messages, max_turns=3)
+    verdict = _final_text(new)
+    return {"recovered": verdict.strip().upper().startswith("RECOVERED"), "turns": turns, "tool_counts": counts,
+            "evidence": state["evidence"] + evidence}
+
+
+def route_verify(state: State) -> Literal["report", "diagnose", "final_escalate"]:
+    if state["recovered"]:
+        return "report"
+    return "diagnose" if state["attempts"] < 1 else "final_escalate"
+
+
+async def bump_attempt(state: State) -> dict:
+    return {"attempts": state["attempts"] + 1}
+
+
+async def report(state: State, runtime: Rt) -> dict:
+    """보고서를 TOKEN 이벤트로 흘려보내며 작성한다. 마지막의 '고객 공지 문안' 절은 notice_approval에서 쓴다."""
+    model = harness.chat_model()
+    messages = [
+        SystemMessage(harness.prompt("system") + "\n\n" + harness.prompt("report")),
+        HumanMessage(json.dumps({
+            "request": state["question"], "plan": state.get("plan"), "findings": state.get("findings"),
+            "evidence": state.get("evidence", []), "runbook": state.get("runbook", []),
+            "action": state.get("proposed_action"), "approvals": state.get("approvals", []),
+            "recovered": state.get("recovered"), "context": state.get("context", {}),
+        }, ensure_ascii=False, default=str)),
+    ]
+    chunks: list[str] = []
+    async for chunk in model.astream(messages):
+        if chunk.content:
+            chunks.append(str(chunk.content))
+            await backend.emit(state["task_id"], "TOKEN", {"text": chunk.content})
+    text = "".join(chunks)
+    body, _, notice = text.partition("## 고객 공지 문안")
+    return {"report": body.strip(), "notice_draft": notice.strip()}
+
+
+def route_report(state: State) -> Literal["notice_approval", "__end__"]:
+    sent = (state.get("proposed_action") or {}).get("tool") == "business_send_customer_notice"
+    return "notice_approval" if state.get("incident_id") and state.get("notice_draft") and not sent else END
+
+
+# ── 사람의 결정을 기다리는 Node (interrupt) ───────────────────────
+
+
+def _approval_request(tool: str, args: dict, reason: str, state: State) -> dict:
+    return {"tool": tool, "args": args, "reason": reason,
+            "evidence": state.get("evidence", [])[-5:], "runbook": state.get("runbook", [])[:3]}
+
+
+async def approval(state: State) -> dict:
+    action = state["proposed_action"]
+    decision = interrupt(_approval_request(action["tool"], action["args"], action["reason"], state))
+    return {"approvals": state["approvals"] + [{**decision, "tool": action["tool"]}]}
+
+
+def route_approval(state: State) -> Literal["execute", "report"]:
+    return "execute" if state["approvals"][-1].get("decision") == "APPROVE" else "report"
+
+
+async def escalate(state: State, runtime: Rt) -> dict:
+    """P1이거나 회복에 실패하면 담당자 호출을 제안한다. 승인되면 호출한다."""
+    reason = "P1 장애 발생" if not state.get("attempts") else "조치 후에도 회복되지 않음"
+    args = {"incident_id": state["incident_id"], "reason": reason}
+    decision = interrupt(_approval_request("business_escalate_incident", args, reason, state))
+    approvals = state["approvals"] + [{**decision, "tool": "business_escalate_incident"}]
+    counts = dict(state["tool_counts"])
+    if decision.get("decision") == "APPROVE":
+        await runtime.context.toolbox.call("escalate", "business_escalate_incident", args, counts,
+                                           incident_id=state["incident_id"])
+    return {"approvals": approvals, "tool_counts": counts}
+
+
+async def notice_approval(state: State, runtime: Rt) -> dict:
+    args = {"incident_id": state["incident_id"], "message": state["notice_draft"]}
+    decision = interrupt(_approval_request("business_send_customer_notice", args, "고객 공지 발송", state))
+    counts = dict(state["tool_counts"])
+    if decision.get("decision") == "APPROVE":
+        await runtime.context.toolbox.call("notice", "business_send_customer_notice", args, counts,
+                                           incident_id=state["incident_id"])
+    return {"approvals": state["approvals"] + [{**decision, "tool": "business_send_customer_notice"}],
+            "tool_counts": counts}
+
+
+# ── Graph ─────────────────────────────────────────────────────
+
+
+def build(checkpointer):
+    g = StateGraph(State, context_schema=Context)
+    for name, node in [
+        ("intake", intake), ("load_context", load_context), ("escalate", escalate), ("diagnose", diagnose),
+        ("retrieve_runbook", retrieve_runbook), ("propose_action", propose_action), ("approval", approval),
+        ("execute", execute), ("verify", verify), ("bump_attempt", bump_attempt),
+        ("final_escalate", escalate), ("report", report), ("notice_approval", notice_approval),
+    ]:
+        g.add_node(name, node)
+
+    g.add_edge(START, "intake")
+    g.add_edge("intake", "load_context")
+    g.add_conditional_edges("load_context", route_triage)          # triage
+    g.add_edge("escalate", "diagnose")
+    g.add_conditional_edges("diagnose", route_diagnose)
+    g.add_edge("retrieve_runbook", "propose_action")
+    g.add_conditional_edges("propose_action", route_propose)
+    g.add_conditional_edges("approval", route_approval)
+    g.add_conditional_edges("execute", route_execute)
+    g.add_conditional_edges("verify", route_verify, {"report": "report", "diagnose": "bump_attempt",
+                                                     "final_escalate": "final_escalate"})
+    g.add_edge("bump_attempt", "diagnose")
+    g.add_edge("final_escalate", "report")
+    g.add_conditional_edges("report", route_report)
+    g.add_edge("notice_approval", END)
+    return g.compile(checkpointer=checkpointer)
