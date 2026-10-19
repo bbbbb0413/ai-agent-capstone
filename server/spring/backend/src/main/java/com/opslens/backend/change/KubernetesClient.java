@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.security.KeyStore;
 import java.security.cert.CertificateFactory;
 import java.time.Duration;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -75,14 +76,30 @@ public class KubernetesClient {
                 .body(Map.of("spec", Map.of("replicas", replicas))).retrieve().toBodilessEntity());
     }
 
-    /** 직전 ReplicaSet의 파드 템플릿으로 되돌린다 (kubectl rollout undo와 같은 동작). */
-    public Revision rollback(Tenant tenant, String service) {
+    /**
+     * 장애 시작 전 마지막 배포의 바로 이전 ReplicaSet 파드 템플릿으로 되돌린다 (kubectl rollout undo와 비슷하다).
+     * 기준을 장애 시작 시각으로 잡아서, 롤백을 두 번 해도 원래 장애 배포로 돌아가지 않는다.
+     */
+    public Revision rollback(Tenant tenant, String service, OffsetDateTime incidentStartedAt) {
         List<JsonNode> sets = replicaSets(tenant, service);
-        if (sets.size() < 2) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "%s에 되돌릴 이전 배포 이력이 없다".formatted(service));
+        List<JsonNode> byCreation = new ArrayList<>(sets);
+        byCreation.sort(Comparator.comparing((JsonNode rs) -> createdAt(rs)).reversed());
+        int culprit = -1;
+        for (int i = 0; i < byCreation.size(); i++) {
+            if (!createdAt(byCreation.get(i)).isAfter(incidentStartedAt)) {
+                culprit = i;
+                break;
+            }
         }
-        JsonNode previous = sets.get(1);
+        if (culprit < 0 || culprit + 1 >= byCreation.size()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "%s에 장애 시작 전 배포보다 이전 이력이 없다".formatted(service));
+        }
+        JsonNode previous = byCreation.get(culprit + 1);
+        if (sets.get(0).path("metadata").path("name").equals(previous.path("metadata").path("name"))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "%s는 이미 장애 시작 전 배포(revision %d)로 되돌려져 있다".formatted(service, revisionOf(previous)));
+        }
         ObjectNode template = previous.path("spec").path("template").deepCopy();
         ((ObjectNode) template.path("metadata").path("labels")).remove("pod-template-hash");
         call(tenant, c -> c.patch().uri(deploymentPath(tenant, service)).contentType(JSON_PATCH)
@@ -122,6 +139,10 @@ public class KubernetesClient {
         JsonNode container = rs.path("spec").path("template").path("spec").path("containers").path(0);
         return new Revision(revisionOf(rs), container.path("image").asText(), env(container),
                 rs.path("metadata").path("creationTimestamp").asText());
+    }
+
+    private static OffsetDateTime createdAt(JsonNode rs) {
+        return OffsetDateTime.parse(rs.path("metadata").path("creationTimestamp").asText());
     }
 
     private static int revisionOf(JsonNode rs) {

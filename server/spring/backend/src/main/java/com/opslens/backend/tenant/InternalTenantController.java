@@ -126,7 +126,7 @@ public class InternalTenantController {
             @RequestHeader(value = "X-Trace-Id", required = false) String traceId,
             @Valid @RequestBody ActionRequest request) {
         Tenant tenant = tenant(tenantId, caller);
-        incidents.getForTenant(tenantId, request.incidentId());
+        Incident incident = incidents.getForTenant(tenantId, request.incidentId());
         if (!tenant.allowedActions().contains(request.action())) {
             throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
                     "'%s'는 %s 계약상 허용되지 않는다. 허용 조치: %s"
@@ -135,7 +135,7 @@ public class InternalTenantController {
         String reason = "인시던트 #%d: %s".formatted(request.incidentId(),
                 request.reason() == null ? "" : request.reason());
         Map<String, Object> result = changes.execute(tenant, request.action(), request.service(), request.replicas(),
-                reason);
+                reason, incident.startedAt());
         audit.record(tenantId, "agent", ChangeService.PR_CREATED.equals(result.get("status"))
                 ? "CHANGE_PR_CREATED" : "ACTION_EXECUTED", Map.of("incidentId", request.incidentId(), "result", result),
                 traceId);

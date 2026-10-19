@@ -151,17 +151,22 @@ def route_execute(state: State) -> Literal["verify", "await_change", "report"]:
 # ── LLM Node ──────────────────────────────────────────────────
 
 
-async def _tool_loop(node: str, state: State, runtime: Rt, messages: list[AnyMessage],
-                     max_turns: int) -> tuple[list[AnyMessage], int, dict[str, int], list[dict]]:
-    """모델이 허용목록 안에서 도구를 고르고, Harness가 실행한다. 턴·시간·도구 한도를 지킨다."""
+async def _tool_loop(node: str, state: State, runtime: Rt, messages: list[AnyMessage], max_turns: int,
+                     require_tool_first: bool = False) -> tuple[list[AnyMessage], int, dict[str, int], list[dict]]:
+    """모델이 허용목록 안에서 도구를 고르고, Harness가 실행한다. 턴·시간·도구 한도를 지킨다.
+
+    require_tool_first=True면 첫 호출에서 도구를 반드시 고르게 한다. 조회 없이 결론부터 내지 못하게 한다.
+    """
     box = runtime.context.toolbox
-    model = harness.chat_model(box.for_node(node))
+    tools = box.for_node(node)
+    model = harness.chat_model(tools)
+    first = harness.chat_model(tools, tool_choice="required") if require_tool_first else model
     turns, counts, evidence, new = state["turns"], dict(state["tool_counts"]), [], []
-    for _ in range(max_turns):
+    for i in range(max_turns):
         if turns >= harness.MAX_TURNS:
             break
         runtime.context.check_time()
-        ai: AIMessage = await model.ainvoke(harness.compact(messages + new))
+        ai: AIMessage = await (first if i == 0 else model).ainvoke(harness.compact(messages + new))
         turns += 1
         new.append(ai)
         if not ai.tool_calls:
@@ -224,6 +229,9 @@ async def propose_action(state: State, runtime: Rt) -> dict:
     if not ai.tool_calls:
         return {"proposed_action": None, "turns": state["turns"] + 1}
     call = ai.tool_calls[0]
+    if call["name"] == "business_execute_runbook_action" and not {"action", "service"} <= call["args"].keys():
+        # 필수 인자가 빠진 조치는 승인 요청으로 올리지 않는다. 사람이 빈 조치를 승인하게 만들지 않는다
+        return {"proposed_action": None, "turns": state["turns"] + 1}
     args = {**call["args"], "incident_id": state.get("incident_id")} if "incident_id" in call["args"] else call["args"]
     return {"proposed_action": {"tool": call["name"], "args": args, "reason": str(ai.content)},
             "turns": state["turns"] + 1}
@@ -241,7 +249,9 @@ async def verify(state: State, runtime: Rt) -> dict:
         HumanMessage(f"실행한 조치: {json.dumps(state['proposed_action'], ensure_ascii=False)}\n"
                      f"진단 결과: {state['findings']}"),
     ]
-    new, turns, counts, evidence = await _tool_loop("verify", state, runtime, messages, max_turns=3)
+    # 메트릭을 보지 않고 NOT_RECOVERED를 답한 적이 있다 (docs/harness-spec.md). 첫 호출은 조회를 강제한다
+    new, turns, counts, evidence = await _tool_loop("verify", state, runtime, messages, max_turns=3,
+                                                    require_tool_first=True)
     verdict = _final_text(new)
     return {"recovered": verdict.strip().upper().startswith("RECOVERED"), "turns": turns, "tool_counts": counts,
             "evidence": state["evidence"] + evidence}
