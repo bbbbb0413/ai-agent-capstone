@@ -1,5 +1,12 @@
 // backend /api/** 호출. 인증은 로그인 때 받은 HttpOnly 쿠키로 한다 (SSE도 같은 쿠키를 쓴다)
 
+let onUnauthorized = () => {}
+
+/** 쿠키가 만료되거나 지워져 401이 오면 부를 함수 (main.js에서 로그인 화면 이동을 넣는다) */
+export function setUnauthorizedHandler(handler) {
+  onUnauthorized = handler
+}
+
 async function request(method, path, body) {
   const response = await fetch(path, {
     method,
@@ -7,6 +14,10 @@ async function request(method, path, body) {
     headers: body ? { 'Content-Type': 'application/json' } : {},
     body: body ? JSON.stringify(body) : undefined,
   })
+  if (response.status === 401 && path !== '/api/auth/login') {
+    onUnauthorized()
+    throw new Error('로그인이 만료되었다. 다시 로그인한다')
+  }
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
     throw new Error(error.message || `${response.status} ${response.statusText}`)
@@ -16,13 +27,18 @@ async function request(method, path, body) {
 
 export const api = {
   login: (username, password) => request('POST', '/api/auth/login', { username, password }),
+  logout: () => request('POST', '/api/auth/logout'),
+  me: () => request('GET', '/api/auth/me'),
   tenants: () => request('GET', '/api/tenants/me'),
   incidents: () => request('GET', '/api/incidents'),
   incident: (id) => request('GET', `/api/incidents/${id}`),
+  incidentNotices: (id) => request('GET', `/api/incidents/${id}/notices`),
   createTask: (tenantId, question, incidentId) => request('POST', '/api/ai/tasks', { tenantId, question, incidentId }),
   task: (id) => request('GET', `/api/ai/tasks/${id}`),
   taskEvents: (id) => request('GET', `/api/ai/tasks/${id}/events`),
   tasks: () => request('GET', '/api/ai/tasks'),
   approve: (id, decision, comment) => request('POST', `/api/ai/tasks/${id}/approval`, { decision, comment }),
   stream: (id) => new EventSource(`/api/ai/tasks/${id}/stream`),
+  settings: () => request('GET', '/api/settings'),
+  setAutoApprove: (enabled) => request('PUT', '/api/settings/auto-approve', { enabled }),
 }

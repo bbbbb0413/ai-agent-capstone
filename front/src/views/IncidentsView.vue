@@ -5,10 +5,12 @@ import { api } from '../api.js'
 import StatusBadge from '../components/StatusBadge.vue'
 import TaskStats from '../components/TaskStats.vue'
 import { useSession } from '../session.js'
+import { useSettings } from '../settings.js'
 
 const REFRESH_MS = 10_000   // 알림으로 생긴 인시던트와 작업 상태 변화를 새로고침 없이 보여 준다
 
 const session = useSession()
+const settings = useSettings()
 const router = useRouter()
 const incidents = ref([])
 const tasks = ref([])
@@ -21,7 +23,7 @@ let timer
 
 async function load() {
   try {
-    ;[incidents.value, tasks.value] = await Promise.all([api.incidents(), api.tasks()])
+    ;[incidents.value, tasks.value] = await Promise.all([api.incidents(), api.tasks(), settings.load()])
     updatedAt.value = new Date()
     error.value = ''
   } catch (e) {
@@ -46,6 +48,20 @@ async function ask() {
   router.push(`/tasks/${taskId}`)
 }
 
+async function toggleAutoApprove(event) {
+  const enabled = event.target.checked
+  if (enabled && !confirm('자동 승인을 켜면 파드 재시작 같은 조치도 사람 확인 없이 실행된다. 켤까?')) {
+    event.target.checked = false
+    return
+  }
+  try {
+    await settings.setAutoApprove(enabled)
+  } catch (e) {
+    event.target.checked = settings.autoApprove
+    error.value = e.message
+  }
+}
+
 function taskFor(incident) {
   return tasks.value.find((t) => t.incidentId === incident.id)
 }
@@ -55,6 +71,17 @@ function taskFor(incident) {
   <p v-if="error" class="error">{{ error }}</p>
 
   <TaskStats :incidents="incidents" :tasks="tasks" />
+
+  <section v-if="session.isAdmin && settings.autoApproveAllowed" class="card">
+    <label class="toggle">
+      <input type="checkbox" :checked="settings.autoApprove" @change="toggleAutoApprove" />
+      자동 승인 (테스트용)
+    </label>
+    <p class="muted">
+      켜면 조치·담당자 호출·고객 공지 승인 요청을 사람 확인 없이 바로 승인한다.
+      켜기 전부터 승인 대기 중인 작업에는 적용되지 않는다.
+    </p>
+  </section>
 
   <form v-if="session.isMspStaff" class="card" @submit.prevent="ask">
     <h2>Agent에게 묻기</h2>

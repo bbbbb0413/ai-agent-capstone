@@ -12,6 +12,7 @@ public record OpsLensProperties(
         String alertWebhookToken,
         String agentUrl,
         String dispatchMode,
+        boolean autoApproveAllowed,
         Kubernetes kubernetes,
         Gitops gitops) {
 

@@ -35,6 +35,46 @@ export const RUNBOOK_ACTIONS = {
   rollback_deployment: '직전 배포로 롤백',
 }
 
+// backend TaskService.ADMIN_ONLY_TOOLS와 같다. 고객에게 나가거나 돈이 걸린 도구는 MSP 관리자만 승인·거절한다
+export const ADMIN_ONLY_TOOLS = ['business_send_customer_notice', 'business_confirm_sla_credit']
+
+/** 승인 카드에 보여 줄 인자. 도구별로 사람이 읽는 항목 이름을 붙인다 */
+export function approvalFields({ tool, args = {} }) {
+  switch (tool) {
+    case 'business_execute_runbook_action':
+      return [
+        ['조치', RUNBOOK_ACTIONS[args.action] || args.action],
+        ['대상 서비스', args.service],
+        ['레플리카', args.replicas != null ? `${args.replicas}개` : null],
+        ['근거', args.reason],
+        ['인시던트', args.incident_id != null ? `#${args.incident_id}` : null],
+      ].filter(([, value]) => value)
+    case 'business_send_customer_notice':
+      return [['공지 내용', args.message], ['인시던트', args.incident_id != null ? `#${args.incident_id}` : '연결된 인시던트 없음']]
+    case 'business_escalate_incident':
+      return [['호출 사유', args.reason], ['인시던트', `#${args.incident_id}`]]
+    default:
+      return Object.entries(args).map(([key, value]) => [key, typeof value === 'object' ? JSON.stringify(value) : String(value)])
+  }
+}
+
+/** 승인하면 무엇이 바뀌는가 (기획안 5.3: 승인 카드의 '영향') */
+export function approvalImpact({ tool, args = {}, changeMode }) {
+  if (tool === 'business_send_customer_notice') return '고객사 담당자에게 위 내용으로 공지가 발송된다. 발송 후에는 취소할 수 없다.'
+  if (tool === 'business_escalate_incident') return '고객사 온콜 담당자를 호출한다.'
+  if (tool !== 'business_execute_runbook_action') return null
+  const service = args.service || '서비스'
+  const what = {
+    restart_pods: `${service}의 파드를 재시작한다. 재시작하는 동안 처리량이 잠시 줄 수 있다.`,
+    scale_deployment: `${service}의 레플리카 수를 ${args.replicas}개로 바꾼다.`,
+    rollback_deployment: `${service}를 직전 배포(설정·이미지)로 되돌린다. 그 이후의 변경은 사라진다.`,
+  }[args.action] || `${service}에 ${args.action} 조치를 실행한다.`
+  const how = changeMode === 'GITOPS'
+    ? ' 바로 반영되지 않고 설정 저장소에 PR이 만들어진다. PR이 병합되고 ArgoCD가 동기화하면 반영된다.'
+    : changeMode === 'DIRECT' ? ' 승인 즉시 Kubernetes API로 반영된다.' : ''
+  return what + how
+}
+
 const DECISIONS = { APPROVE: '승인', REJECT: '거절' }
 const CHANGE_RESULTS = { SYNCED: '병합·동기화 완료', TIMEOUT: '기한 안에 병합되지 않음' }
 
@@ -90,7 +130,8 @@ export function toTimeline(events) {
         break
       case 'APPROVAL_DECIDED':
         settle((r) => r.kind === 'approval' && r.state === 'wait', 'done')
-        add({ kind: 'decision', stage: '승인', label: `${data.by}님이 ${DECISIONS[data.decision] || data.decision}`,
+        add({ kind: 'decision', stage: '승인',
+              label: data.by === 'auto-approve' ? '자동 승인 (테스트 설정)' : `${data.by}님이 ${DECISIONS[data.decision] || data.decision}`,
               detail: toolLabel(data.tool), state: data.decision === 'APPROVE' ? 'ok' : 'fail' }, createdAt)
         break
       case 'CHANGE_PENDING':

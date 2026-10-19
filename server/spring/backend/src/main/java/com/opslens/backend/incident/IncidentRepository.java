@@ -72,6 +72,18 @@ public class IncidentRepository {
                 .query(IncidentRepository::toIncident).list();
     }
 
+    public List<Notice> notices(String tenantId, long incidentId) {
+        return jdbc.sql("""
+                        SELECT detail ->> 'message' AS message, created_at FROM audit_logs
+                        WHERE tenant_id = ? AND action = 'NOTICE_SENT' AND (detail ->> 'incidentId')::bigint = ?
+                        ORDER BY created_at
+                        """)
+                .params(tenantId, incidentId)
+                .query((rs, rowNum) -> new Notice(rs.getString("message"),
+                        rs.getObject("created_at", OffsetDateTime.class)))
+                .list();
+    }
+
     private static Incident toIncident(ResultSet rs, int rowNum) throws SQLException {
         return new Incident(rs.getLong("id"), rs.getString("tenant_id"), rs.getString("service"),
                 rs.getString("title"), rs.getString("severity"), rs.getString("status"), rs.getString("report"),

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.opslens.backend.audit.AuditLog;
 import com.opslens.backend.auth.CurrentUser;
 import com.opslens.backend.incident.IncidentRepository;
+import com.opslens.backend.settings.SettingsService;
 import com.opslens.backend.tenant.Tenant;
 import com.opslens.backend.tenant.TenantRepository;
 import java.util.Map;
@@ -27,6 +28,8 @@ public class TaskService {
 
     private static final Logger log = LoggerFactory.getLogger(TaskService.class);
 
+    private static final String AUTO_APPROVER = "auto-approve";
+
     private final TaskRepository tasks;
     private final TenantRepository tenants;
     private final IncidentRepository incidents;
@@ -34,9 +37,11 @@ public class TaskService {
     private final AgentClient agent;
     private final TaskEventHub events;
     private final AuditLog audit;
+    private final SettingsService settings;
 
     public TaskService(TaskRepository tasks, TenantRepository tenants, IncidentRepository incidents,
-            TaskDispatcher dispatcher, AgentClient agent, TaskEventHub events, AuditLog audit) {
+            TaskDispatcher dispatcher, AgentClient agent, TaskEventHub events, AuditLog audit,
+            SettingsService settings) {
         this.tasks = tasks;
         this.tenants = tenants;
         this.incidents = incidents;
@@ -44,6 +49,7 @@ public class TaskService {
         this.agent = agent;
         this.events = events;
         this.audit = audit;
+        this.settings = settings;
     }
 
     /** 작업을 저장하고 agent에 넘긴다. 호출한 쪽에는 taskId만 돌려준다 (202). */
@@ -74,13 +80,22 @@ public class TaskService {
         }
 
         tasks.recordApproval(taskId, tool, task.pendingAction().path("args"), decision, comment, user.id());
-        Map<String, String> decided = Map.of("tool", tool, "decision", decision, "by", user.username());
-        tasks.addEvent(taskId, "APPROVAL_DECIDED", decided);
-        events.publish(taskId, "APPROVAL_DECIDED", decided);
-        audit.record(task.tenantId(), user.username(), "APPROVAL_" + decision, Map.of("taskId", taskId, "tool", tool),
-                null);
-        tasks.resume(taskId);
-        agent.resume(taskId, new AgentClient.ResumeRequest(decision, comment, user.username()));
+        decide(task, tool, decision, comment, user.username());
+    }
+
+    /** 사람 대신 바로 승인한다. approvals 테이블은 사람(users)만 기록하므로 감사 로그와 진행 이벤트에만 남긴다. */
+    private void autoApprove(UUID taskId, JsonNode pendingAction) {
+        decide(tasks.get(taskId), pendingAction.path("tool").asText(), "APPROVE", "자동 승인 설정으로 승인",
+                AUTO_APPROVER);
+    }
+
+    private void decide(TaskRecord task, String tool, String decision, String comment, String actor) {
+        Map<String, String> decided = Map.of("tool", tool, "decision", decision, "by", actor);
+        tasks.addEvent(task.id(), "APPROVAL_DECIDED", decided);
+        events.publish(task.id(), "APPROVAL_DECIDED", decided);
+        audit.record(task.tenantId(), actor, "APPROVAL_" + decision, Map.of("taskId", task.id(), "tool", tool), null);
+        tasks.resume(task.id());
+        agent.resume(task.id(), new AgentClient.ResumeRequest(decision, comment, actor));
     }
 
     /**
@@ -113,6 +128,9 @@ public class TaskService {
             tasks.addEvent(taskId, type, data);
         }
         events.publish(taskId, type, data);
+        if ("APPROVAL_REQUIRED".equals(type) && settings.autoApprove()) {
+            autoApprove(taskId, data);
+        }
     }
 
     /** agent는 DB에 쓰지 않는다. 결과와 보고서는 backend가 저장한다. */

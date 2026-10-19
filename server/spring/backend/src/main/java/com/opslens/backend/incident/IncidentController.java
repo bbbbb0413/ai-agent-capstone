@@ -31,4 +31,11 @@ public class IncidentController {
         CurrentUser.from(jwt).requireAccess(incident.tenantId());
         return incident;
     }
+
+    @GetMapping("/{id}/notices")
+    List<Notice> notices(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
+        Incident incident = incidents.get(id);
+        CurrentUser.from(jwt).requireAccess(incident.tenantId());
+        return incidents.notices(incident.tenantId(), id);
+    }
 }

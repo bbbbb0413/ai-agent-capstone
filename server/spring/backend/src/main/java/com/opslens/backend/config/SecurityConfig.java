@@ -49,7 +49,8 @@ public class SecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(a -> a
                         // /error: 오류 응답(403 메시지 등)이 인증 실패(401)로 덮이지 않게 연다
-                        .requestMatchers("/api/auth/login", "/actuator/health", "/error").permitAll()
+                        .requestMatchers("/api/auth/login", "/api/auth/logout", "/actuator/health", "/error")
+                        .permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(o -> o
                         .bearerTokenResolver(new CookieBearerTokenResolver())

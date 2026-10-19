@@ -33,6 +33,7 @@ services:
       ALERT_WEBHOOK_TOKEN: ${ALERT_WEBHOOK_TOKEN:?}
       AGENT_URL: http://agent:8000
       DISPATCH_MODE: ${DISPATCH_MODE:-http}
+      AUTO_APPROVE_ALLOWED: ${AUTO_APPROVE_ALLOWED:-true}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       # 고객사 조치 반영 (ADR 0001). 고객사 자격증명은 backend만 가진다
       TENANT_CREDENTIALS_DIR: /run/opslens/tenants

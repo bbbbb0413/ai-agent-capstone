@@ -4,7 +4,7 @@ import { marked } from 'marked'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { api } from '../api.js'
 import StatusBadge from '../components/StatusBadge.vue'
-import { actionDetail, toTimeline } from '../progress.js'
+import { ADMIN_ONLY_TOOLS, actionDetail, approvalFields, approvalImpact, toolLabel, toTimeline } from '../progress.js'
 import { useSession } from '../session.js'
 
 const props = defineProps({ id: { type: String, required: true } })
@@ -22,6 +22,7 @@ let source
 // 리포트에는 모델 출력과 로그 원문이 섞이므로 HTML로 그리기 전에 반드시 정리한다
 const reportHtml = computed(() => DOMPurify.sanitize(marked.parse(task.value?.answer || answer.value)))
 
+const adminOnly = computed(() => ADMIN_ONLY_TOOLS.includes(approval.value?.tool))
 const timeline = computed(() => toTimeline(events.value))
 const startedAt = computed(() => new Date(task.value?.createdAt || events.value[0]?.createdAt || Date.now()))
 const STATE_MARKS = { running: '', done: '✓', wait: '…', ok: '✓', fail: '✕' }
@@ -119,20 +120,37 @@ async function decide(decision) {
   </section>
 
   <section v-if="approval" class="card approval">
-    <h2>승인 필요: {{ approval.tool }}</h2>
-    <p>{{ approval.reason }}</p>
-    <p v-if="approval.changeMode" class="muted">
-      반영 방식: {{ approval.changeMode === 'GITOPS' ? '설정 저장소 PR (병합 후 ArgoCD 동기화)' : 'Kubernetes API로 바로 실행' }}
-    </p>
-    <pre>{{ JSON.stringify(approval.args, null, 2) }}</pre>
+    <h2>승인 필요: {{ toolLabel(approval.tool) }}</h2>
+    <p v-if="approval.reason">{{ approval.reason }}</p>
+    <table class="summary approval-fields">
+      <tbody>
+        <tr v-for="[name, value] in approvalFields(approval)" :key="name">
+          <th>{{ name }}</th><td class="pre-line">{{ value }}</td>
+        </tr>
+        <tr v-if="approval.changeMode">
+          <th>반영 방식</th>
+          <td>{{ approval.changeMode === 'GITOPS' ? '설정 저장소 PR (병합 후 ArgoCD 동기화)' : 'Kubernetes API로 바로 실행' }}</td>
+        </tr>
+        <tr v-if="approvalImpact(approval)"><th>영향</th><td>{{ approvalImpact(approval) }}</td></tr>
+      </tbody>
+    </table>
     <details v-if="approval.runbook?.length">
       <summary>근거 문서</summary>
       <ul><li v-for="d in approval.runbook" :key="d.uri + d.section">{{ d.title }} · {{ d.section }}</li></ul>
     </details>
-    <div v-if="session.isMspStaff" class="row">
-      <button @click="decide('APPROVE')">승인</button>
-      <button class="secondary" @click="decide('REJECT')">거절</button>
-    </div>
+    <details>
+      <summary>원본 인자</summary>
+      <pre>{{ JSON.stringify(approval.args, null, 2) }}</pre>
+    </details>
+    <template v-if="session.isMspStaff">
+      <p v-if="adminOnly && !session.isAdmin" class="muted">
+        이 조치는 MSP 관리자만 승인하거나 거절할 수 있다. 관리자에게 확인을 요청한다.
+      </p>
+      <div v-else class="row">
+        <button @click="decide('APPROVE')">승인</button>
+        <button class="secondary" @click="decide('REJECT')">거절</button>
+      </div>
+    </template>
   </section>
 
   <section v-if="change && task?.status !== 'DONE'" class="card approval">
