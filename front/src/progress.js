@@ -69,16 +69,28 @@ export function approvalImpact({ tool, args = {}, changeMode }) {
     scale_deployment: `${service}의 레플리카 수를 ${args.replicas}개로 바꾼다.`,
     rollback_deployment: `${service}를 직전 배포(설정·이미지)로 되돌린다. 그 이후의 변경은 사라진다.`,
   }[args.action] || `${service}에 ${args.action} 조치를 실행한다.`
-  const how = changeMode === 'GITOPS'
+  const how = changeMode === 'GITOPS' && args.action !== 'restart_pods'
     ? ' 바로 반영되지 않고 설정 저장소에 PR이 만들어진다. PR이 병합되고 ArgoCD가 동기화하면 반영된다.'
-    : changeMode === 'DIRECT' ? ' 승인 즉시 Kubernetes API로 반영된다.' : ''
+    : ['DIRECT', 'GITOPS'].includes(changeMode) ? ' 승인 즉시 Kubernetes API로 반영된다.' : ''
   return what + how
+}
+
+export function approvalChangeMode({ args = {}, changeMode }) {
+  return changeMode === 'GITOPS' && args.action !== 'restart_pods'
+    ? '설정 저장소 PR (병합 후 ArgoCD 동기화)' : 'Kubernetes API로 바로 실행'
 }
 
 const DECISIONS = { APPROVE: '승인', REJECT: '거절' }
 const CHANGE_RESULTS = { SYNCED: '병합·동기화 완료', TIMEOUT: '기한 안에 병합되지 않음' }
 
 export const toolLabel = (tool) => TOOL_LABELS[tool] || tool
+
+export function actionResultLabel(result) {
+  return {
+    EXECUTED: '조치 실행 완료', PR_CREATED: 'PR 생성 (반영 상태 별도 확인)',
+    SENT: '공지 발송 완료', FAILED: '실행 실패', UNCONFIRMED: '실행 결과 확인 불가', REJECTED: '발송 거절',
+  }[result?.status] || '실행 확인 안 됨'
+}
 
 export function actionDetail(args = {}) {
   const name = RUNBOOK_ACTIONS[args.action] || args.action
@@ -110,12 +122,17 @@ export function toTimeline(events) {
   for (const { type, data = {}, createdAt } of events) {
     switch (type) {
       case 'TOOL_START':
-        add({ kind: 'tool', tool: data.tool, stage: STAGES[data.node], label: toolLabel(data.tool),
+        add({ kind: 'tool', tool: data.tool, callId: data.callId,
+              stage: STAGES[data.node], label: toolLabel(data.tool),
               detail: toolDetail(data.tool, data.args), state: 'running' }, createdAt)
         break
       case 'TOOL_END': {
-        const row = rows.findLast((r) => r.kind === 'tool' && r.tool === data.tool && r.state === 'running')
-        if (row) row.state = 'done'
+        const row = rows.findLast((r) => r.kind === 'tool' && r.tool === data.tool && r.state === 'running'
+          && (!data.callId || r.callId === data.callId))
+        if (row) {
+          row.state = data.status === 'error' ? 'fail' : 'done'
+          if (data.error) row.detail = data.error
+        }
         break
       }
       case 'STEP':
@@ -145,7 +162,9 @@ export function toTimeline(events) {
         break
       case 'DONE':
       case 'FAILED':
-        settle((r) => r.state === 'running', 'done')
+        // 종료 이벤트만으로 아직 결과가 없는 도구를 성공 처리하지 않는다.
+        settle((r) => r.kind === 'tool' && r.state === 'running', 'fail')
+        settle((r) => r.kind === 'step' && r.state === 'running', type === 'DONE' ? 'done' : 'fail')
         add({ kind: 'end', stage: '종료', label: type === 'DONE' ? '작업 완료' : '작업 실패',
               state: type === 'DONE' ? 'ok' : 'fail' }, createdAt)
         break

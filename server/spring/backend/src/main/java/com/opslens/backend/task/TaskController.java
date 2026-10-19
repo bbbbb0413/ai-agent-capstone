@@ -28,7 +28,8 @@ public class TaskController {
 
     record CreateTaskRequest(@NotBlank String tenantId, Long incidentId, @NotBlank String question) {}
 
-    record ApprovalRequest(@Pattern(regexp = "APPROVE|REJECT") String decision, String comment) {}
+    record ApprovalRequest(@NotBlank @Pattern(regexp = "APPROVE|REJECT") String decision, String comment,
+            String approvalId) {}
 
     private final TaskService service;
     private final TaskRepository tasks;
@@ -75,7 +76,7 @@ public class TaskController {
     @ResponseStatus(HttpStatus.ACCEPTED)
     void approve(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id,
             @Valid @RequestBody ApprovalRequest request) {
-        service.approve(id, CurrentUser.from(jwt), request.decision(), request.comment());
+        service.approve(id, CurrentUser.from(jwt), request.decision(), request.comment(), request.approvalId());
     }
 
     @GetMapping

@@ -50,9 +50,12 @@ def build(state: dict[str, Any]) -> dict[str, Any] | None:
         "severity": incident.get("severity"),
         "service": incident.get("service"),
         "action": {"tool": action.get("tool"), "args": action.get("args"),
-                   "decision": _decision(approvals, action["tool"])} if action else None,
+                   "decision": _decision(approvals, action["tool"]),
+                   "result": state.get("action_result")} if action else None,
         "change": {key: change.get(key) for key in ("prNumber", "prUrl", "result")} if change else None,
         "recovered": state.get("recovered"),
         "escalation": _decision(approvals, "business_escalate_incident"),
         "notice": _decision(approvals, "business_send_customer_notice"),
+        "notice_result": state.get("notice_result") or (
+            state.get("action_result") if action.get("tool") == "business_send_customer_notice" else None),
     }

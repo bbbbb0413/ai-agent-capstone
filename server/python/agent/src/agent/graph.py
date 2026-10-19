@@ -13,6 +13,7 @@ import json
 import time
 from dataclasses import dataclass, field
 from typing import Annotated, Any, Literal, TypedDict
+from uuid import NAMESPACE_URL, uuid5
 
 from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph
@@ -50,6 +51,7 @@ class State(TypedDict, total=False):
     report: str
     notice_draft: str
     classification: dict[str, Any] | None  # 에러 유형·원인·근거 조항 (summary.py)
+    notice_result: dict[str, Any] | None
 
 
 @dataclass
@@ -102,7 +104,22 @@ async def load_context(state: State, runtime: Rt) -> dict:
     return {"context": context, "tool_counts": counts}
 
 
-def route_triage(state: State) -> Literal["escalate", "diagnose"]:
+_DOCUMENT_QUESTION_MARKERS = (
+    "sla", "계약", "약관", "정책", "런북", "runbook", "조항", "매뉴얼", "문서", "회고", "postmortem",
+)
+
+
+def _needs_document_lookup(state: State) -> bool:
+    """문서성 질문만 RAG로 바로 보낸다. 모든 질문에 RAG를 강제하지는 않는다."""
+    if state.get("type") != "QUESTION" or state.get("incident_id") is not None:
+        return False
+    question = state.get("question", "").lower()
+    return any(marker in question for marker in _DOCUMENT_QUESTION_MARKERS)
+
+
+def route_triage(state: State) -> Literal["escalate", "diagnose", "retrieve_runbook"]:
+    if _needs_document_lookup(state):
+        return "retrieve_runbook"
     incident = state.get("context", {}).get("incident") or {}
     return "escalate" if incident.get("severity") == "P1" and not state.get("approvals") else "diagnose"
 
@@ -120,9 +137,17 @@ async def execute(state: State, runtime: Rt) -> dict:
     action, counts = state["proposed_action"], dict(state["tool_counts"])
     result = await runtime.context.toolbox.call("propose_action", action["tool"], action["args"], counts,
                                                 incident_id=state.get("incident_id"))
-    evidence = state["evidence"] + [{"tool": action["tool"], "summary": str(result.content)[:500]}]
+    evidence = state["evidence"] + [{"tool": action["tool"], "status": result.status,
+                                      "summary": str(result.content)[:500]}]
     parsed = parse_json(result)
-    outcome = parsed if isinstance(parsed, dict) and parsed.get("status") else None
+    if result.status == "error":
+        outcome = {"status": "FAILED", "error": str(parsed)[:500]}
+    elif isinstance(parsed, dict) and parsed.get("status"):
+        outcome = parsed
+    elif isinstance(parsed, dict) and parsed.get("sent") is True:
+        outcome = {"status": "SENT", **parsed}
+    else:
+        outcome = {"status": "UNCONFIRMED", "detail": str(parsed)[:500]}
     change = None
     if outcome and outcome["status"] == "PR_CREATED":
         change = {key: outcome.get(key) for key in ("action", "service", "changeMode", "prNumber", "prUrl", "files")}
@@ -131,9 +156,12 @@ async def execute(state: State, runtime: Rt) -> dict:
 
 def route_execute(state: State) -> Literal["verify", "await_change", "report"]:
     # 고객 공지처럼 시스템을 바꾸지 않는 조치, 실행에 실패한 조치는 회복 확인 없이 보고서로 간다
-    if state["proposed_action"]["tool"] != "business_execute_runbook_action" or not state.get("action_result"):
+    if state["proposed_action"]["tool"] != "business_execute_runbook_action":
         return "report"
-    return "await_change" if state.get("change") else "verify"
+    status = (state.get("action_result") or {}).get("status")
+    if status == "PR_CREATED" and state.get("change"):
+        return "await_change"
+    return "verify" if status == "EXECUTED" else "report"
 
 
 # ── LLM Node ──────────────────────────────────────────────────
@@ -157,7 +185,8 @@ async def _tool_loop(node: str, state: State, runtime: Rt, messages: list[AnyMes
         for call in ai.tool_calls:
             result = await box.call(node, call["name"], call["args"], counts, call["id"], state.get("incident_id"))
             new.append(result)
-            evidence.append({"tool": call["name"], "args": call["args"], "summary": str(result.content)[:500]})
+            evidence.append({"tool": call["name"], "args": call["args"], "status": result.status,
+                             "summary": str(result.content)[:500]})
     return new, turns, counts, evidence
 
 
@@ -192,6 +221,10 @@ def route_diagnose(state: State) -> Literal["retrieve_runbook", "report"]:
 
 
 async def propose_action(state: State, runtime: Rt) -> dict:
+    # 변경 도구는 incident_id가 필수다. 연결되지 않은 질문은 근거와 권고를 보고서로
+    # 반환하고, 유효한 인시던트가 연결된 작업에서만 실행안을 제안한다.
+    if state.get("incident_id") is None:
+        return {"proposed_action": None}
     runtime.context.check_time()
     if state["turns"] >= harness.MAX_TURNS:
         return {"proposed_action": None}
@@ -294,6 +327,7 @@ async def report(state: State, runtime: Rt) -> dict:
     화면 요약 표에 쓸 분류는 보고서와 같은 입력으로 동시에 만든다.
     """
     payload = json.dumps({
+        "type": state.get("type"), "incident_id": state.get("incident_id"),
         "request": state["question"], "plan": state.get("plan"), "findings": state.get("findings"),
         "evidence": state.get("evidence", []), "runbook": state.get("runbook", []),
         "action": state.get("proposed_action"), "approvals": state.get("approvals", []),
@@ -302,8 +336,12 @@ async def report(state: State, runtime: Rt) -> dict:
         "context": state.get("context", {}),
     }, ensure_ascii=False, default=str)
 
+    information_question = state.get("type") == "QUESTION" and state.get("incident_id") is None
+
     async def write() -> str:
-        messages = [SystemMessage(harness.prompt("system") + "\n\n" + harness.prompt("report")), HumanMessage(payload)]
+        report_prompt = "answer" if information_question else "report"
+        messages = [SystemMessage(harness.prompt("system") + "\n\n" + harness.prompt(report_prompt)),
+                    HumanMessage(payload)]
         chunks: list[str] = []
         async for chunk in harness.chat_model().astream(messages):
             if chunk.content:
@@ -312,7 +350,11 @@ async def report(state: State, runtime: Rt) -> dict:
         return "".join(chunks)
 
     await backend.emit(state["task_id"], "STEP", {"node": "report"})
-    text, classification = await asyncio.gather(write(), summary.classify(payload))
+    # 인시던트와 무관한 일반 질문에는 장애 원인 분류표가 의미가 없고, 오히려 없는 원인을 만들 수 있다.
+    if information_question:
+        text, classification = await write(), None
+    else:
+        text, classification = await asyncio.gather(write(), summary.classify(payload))
     body, _, notice = text.partition("## 고객 공지 문안")
     return {"report": body.strip(), "notice_draft": notice.strip(), "classification": classification}
 
@@ -327,6 +369,7 @@ def route_report(state: State) -> Literal["notice_approval", "__end__"]:
 
 def _approval_request(tool: str, args: dict, reason: str, state: State) -> dict:
     request = {"tool": tool, "args": args, "reason": reason,
+               "approvalId": str(uuid5(NAMESPACE_URL, f"{state['task_id']}:{tool}:{len(state.get('approvals', []))}")),
                "evidence": state.get("evidence", [])[-5:], "runbook": state.get("runbook", [])[:3]}
     if tool == "business_execute_runbook_action":
         # 화면의 승인 카드에 반영 방식을 보여 준다. 방식은 backend가 정한 고객사 값이다
@@ -380,10 +423,15 @@ async def notice_approval(state: State, runtime: Rt) -> dict:
     decision = interrupt(_approval_request("business_send_customer_notice", args, "고객 공지 발송", state))
     counts = dict(state["tool_counts"])
     if decision.get("decision") == "APPROVE":
-        await runtime.context.toolbox.call("notice", "business_send_customer_notice", args, counts,
-                                           incident_id=state["incident_id"])
+        result = await runtime.context.toolbox.call("notice", "business_send_customer_notice", args, counts,
+                                                    incident_id=state["incident_id"])
+        outcome = parse_json(result)
+        notice_result = ({"status": "SENT"} if result.status != "error" and isinstance(outcome, dict)
+                         and outcome.get("sent") is True else {"status": "FAILED", "error": str(outcome)[:500]})
+    else:
+        notice_result = {"status": "REJECTED"}
     return {"approvals": state["approvals"] + [{**decision, "tool": "business_send_customer_notice"}],
-            "tool_counts": counts}
+            "tool_counts": counts, "notice_result": notice_result}
 
 
 # ── Graph ─────────────────────────────────────────────────────

@@ -43,8 +43,12 @@ public class IncidentRepository {
                 .param(fingerprint).update();
     }
 
-    public void saveReport(long id, String report) {
-        jdbc.sql("UPDATE incidents SET report = ? WHERE id = ?").params(report, id).update();
+    public void saveReport(String tenantId, long id, String report) {
+        int updated = jdbc.sql("UPDATE incidents SET report = ? WHERE id = ? AND tenant_id = ?")
+                .params(report, id, tenantId).update();
+        if (updated != 1) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "unknown incident " + id);
+        }
     }
 
     public Incident get(long id) {

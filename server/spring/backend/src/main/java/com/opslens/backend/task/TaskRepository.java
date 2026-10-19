@@ -89,9 +89,27 @@ public class TaskRepository {
                 .param(id).update() == 1;
     }
 
-    public void resume(UUID id) {
-        jdbc.sql("UPDATE ai_tasks SET status = 'RUNNING', pending_action = NULL, updated_at = now() WHERE id = ?")
-                .param(id).update();
+    /** 승인 대상을 비교해 동시에 온 승인 중 하나만 차지한다. 전달 실패 시 복원할 수 있게 인자를 남긴다. */
+    public boolean claimApproval(UUID id, JsonNode expected) {
+        return jdbc.sql("""
+                        UPDATE ai_tasks SET status = 'RUNNING', updated_at = now()
+                        WHERE id = ? AND status = 'WAITING_APPROVAL' AND pending_action = ?::jsonb
+                        """)
+                .params(id, toJson(expected)).update() == 1;
+    }
+
+    public void clearApproval(UUID id, JsonNode expected) {
+        jdbc.sql("""
+                        UPDATE ai_tasks SET pending_action = NULL
+                        WHERE id = ? AND status = 'RUNNING' AND pending_action = ?::jsonb
+                        """).params(id, toJson(expected)).update();
+    }
+
+    public boolean restoreApproval(UUID id, JsonNode expected) {
+        return jdbc.sql("""
+                        UPDATE ai_tasks SET status = 'WAITING_APPROVAL', updated_at = now()
+                        WHERE id = ? AND status = 'RUNNING' AND pending_action = ?::jsonb
+                        """).params(id, toJson(expected)).update() == 1;
     }
 
     public void complete(UUID id, String status, String answer, JsonNode sources, JsonNode summary,

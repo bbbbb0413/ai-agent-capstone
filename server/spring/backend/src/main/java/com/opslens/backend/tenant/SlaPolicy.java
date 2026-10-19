@@ -16,11 +16,19 @@ public class SlaPolicy {
 
     public record SlaCredit(String tier, long downtimeMinutes, int creditPercent) {}
 
-    public SlaTerms terms(Tenant tenant, OffsetDateTime incidentStartedAt) {
-        OffsetDateTime deadline = incidentStartedAt.plusMinutes(tenant.responseMinutes());
+    public SlaTerms terms(Tenant tenant, String severity, OffsetDateTime incidentStartedAt) {
+        int responseMinutes = tenant.responseMinutes();
+        if ("P2".equals(severity)) {
+            responseMinutes = switch (tenant.slaTier()) {
+                case "GOLD" -> 60;
+                case "SILVER" -> 240;
+                default -> responseMinutes;
+            };
+        }
+        OffsetDateTime deadline = incidentStartedAt.plusMinutes(responseMinutes);
         long remaining = Math.max(0, Duration.between(OffsetDateTime.now(), deadline).toMinutes());
         return new SlaTerms(tenant.slaTier(), tenant.availabilityTarget().toPlainString() + "%",
-                tenant.responseMinutes(), deadline, remaining);
+                responseMinutes, deadline, remaining);
     }
 
     // 데모 계약서(data/documents/{tenant}/sla-contract.md) 제4조와 같은 기준이다

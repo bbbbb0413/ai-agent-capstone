@@ -10,7 +10,11 @@ import org.springframework.web.client.RestClient;
 @Component
 public class AgentClient {
 
-    public record ResumeRequest(String decision, String comment, String approver) {}
+    public record ResumeRequest(String decision, String comment, String approver, String approvalId) {
+        public ResumeRequest(String decision, String comment, String approver) {
+            this(decision, comment, approver, null);
+        }
+    }
 
     private final RestClient http;
 
