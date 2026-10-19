@@ -30,3 +30,5 @@ PDF 표 6-3의 권장값을 기준으로 둔 값과, 팀이 바꾼 값과 이유
 | 2026-10-19 | 회복 확인 에러율 쿼리 | `sum(error)/sum(total)` → `(sum(error) or vector(0))/sum(total)` (`prompts/verify.md`) | 시나리오 A에서 롤백 후 새 파드에 에러가 하나도 없어 에러 시계열이 없었고, 쿼리 결과가 비어 모델이 NOT_RECOVERED로 판단해 재진단함 | 시나리오 A 재실행 |
 | 2026-10-19 | 조치 제안 필수 인자 확인 | 없음 → `action`·`service`가 없으면 승인 요청을 만들지 않음 (`graph.propose_action`) | 위 재진단 뒤 propose_action이 인자 없는 `execute_runbook_action`을 승인 요청으로 올림 | 시나리오 A 재실행 |
 | 2026-10-19 | 회복 확인 첫 호출 도구 강제 | 선택 → `tool_choice="required"` (첫 턴만) | 시나리오 A 재실행에서 PR 병합·동기화 후 verify가 메트릭을 한 번도 조회하지 않고 NOT_RECOVERED로 답함. 그 결과 재진단 → 두 번째 롤백 PR이 수정 커밋을 되돌려 장애가 재발 | 시나리오 A 재실행 |
+| 2026-10-19 | 회복 확인 쿼리 | 모델이 PromQL 작성(첫 호출 강제) → 코드가 표준 쿼리로 조회, 모델은 수치로 판단만 (`graph.VERIFY_QUERIES`) | 첫 호출을 강제해도 시나리오 B에서 모델이 없는 메트릭 이름(`reservation_api_requests_seconds_count`)과 깨진 이스케이프로 조회해 두 쿼리 모두 실패, NOT_RECOVERED. 메트릭이 비면 10초 더 기다려 한 번 다시 조회한다 | 시나리오 B 재실행 |
+| 2026-10-19 | 보고서 입력 | 회복 여부만 → 회복 확인 결론·수치(`verification`), 조치 결과, PR 정보 추가 (`prompts/report.md`) | 시나리오 A 보고서가 "확인 필요", "로그 미제공"으로 채워지고, 회복된 뒤에도 공지 문안이 "동기화되면 확인하겠다"고 씀 | 시나리오 B 재실행 |

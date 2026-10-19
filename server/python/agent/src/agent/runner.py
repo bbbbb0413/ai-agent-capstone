@@ -3,6 +3,7 @@
 - 실행 시간 한도(120초)는 구간별로 잰다. 승인·반영(PR 병합)을 기다리는 시간과 회복 확인 대기는 들어가지 않는다.
   누적 시간은 checkpointer와 별도로 agent 스키마의 task_budget 테이블에 둔다.
 - 같은 task_id가 다시 오면(Kafka 중복 소비) 이미 checkpoint가 있으므로 건너뛴다 (멱등).
+- 실행 중에 agent가 재시작되면 task_budget.running이 true로 남는다. 시작할 때 그 작업을 checkpoint에서 이어 간다.
 """
 
 import asyncio
@@ -34,6 +35,23 @@ class Runner:
                     elapsed_seconds DOUBLE PRECISION NOT NULL DEFAULT 0
                 )
             """)
+            await conn.execute("ALTER TABLE task_budget ADD COLUMN IF NOT EXISTS running BOOLEAN NOT NULL DEFAULT false")
+
+    async def interrupted(self) -> list[str]:
+        """이전 프로세스가 실행하다 멈춘 작업 (기획안 8장 Recovery: agent 재시작 시 checkpointer에서 재개)."""
+        async with self.pool.connection() as conn:
+            rows = await (await conn.execute("SELECT task_id FROM task_budget WHERE running")).fetchall()
+        return [row["task_id"] for row in rows]
+
+    async def recover(self, task_id: str) -> str:
+        snapshot = await self.graph.aget_state({"configurable": {"thread_id": task_id}})
+        if not snapshot.values or not snapshot.next or snapshot.interrupts:
+            await self._set_running(task_id, False)  # 이미 끝났거나 사람을 기다리는 중이다
+            return "SKIPPED"
+        log.info("task %s recovering from checkpoint at %s", task_id, snapshot.next)
+        values = snapshot.values
+        config = self._config(task_id, values["tenant_id"], values["trace_id"])
+        return await self._drive(task_id, None, values, config, raise_errors=False)
 
     async def run(self, message: dict[str, Any], *, raise_errors: bool = False, retry: bool = False) -> str:
         """retry=True(Kafka retry 토픽)이면 실패한 Node부터 checkpoint로 이어서 실행한다."""
@@ -60,14 +78,20 @@ class Runner:
 
     async def _drive(self, task_id: str, payload: Any, values: dict, config: dict, raise_errors: bool) -> str:
         elapsed = await self._elapsed(task_id)
+        await self._set_running(task_id, True)
         started = time.monotonic()
         context: Context | None = None
+        finished = True  # 종료 신호로 끊긴 경우만 False로 두고, 다음 시작 때 recover가 이어 간다
         try:
             tools = await load_tools(values["tenant_id"], task_id, values["trace_id"])
             context = Context(toolbox=ToolBox(tools, values["tenant_id"], task_id), elapsed_before=elapsed)
             # 회복 확인 대기(verify, 재진입 포함 최대 2번)는 한도에서 빠지므로 그만큼 여유를 둔다
-            remaining = max(1.0, harness.TASK_SECONDS - elapsed) + 2 * harness.VERIFY_SETTLE_SECONDS
+            remaining = max(1.0, harness.TASK_SECONDS - elapsed) + 2 * (harness.VERIFY_SETTLE_SECONDS
+                                                                         + harness.VERIFY_RETRY_SECONDS)
             result = await asyncio.wait_for(self.graph.ainvoke(payload, config, context=context), timeout=remaining)
+        except asyncio.CancelledError:
+            finished = False
+            raise
         except (TimeoutError, harness.HarnessLimit) as e:
             await backend.result(task_id, status="FAILED", answer=f"Harness 한도로 중단했다: {str(e) or '시간 초과'}")
             return "FAILED"
@@ -79,6 +103,8 @@ class Runner:
             return "FAILED"
         finally:
             await self._add_elapsed(task_id, time.monotonic() - started - (context.waited if context else 0.0))
+            if finished:
+                await self._set_running(task_id, False)
 
         if interrupts := result.get("__interrupt__"):
             value = interrupts[0].value
@@ -106,6 +132,13 @@ class Runner:
             row = await (await conn.execute(
                 "SELECT elapsed_seconds FROM task_budget WHERE task_id = %s", (task_id,))).fetchone()
         return row["elapsed_seconds"] if row else 0.0  # 연결 풀은 dict_row를 쓴다
+
+    async def _set_running(self, task_id: str, running: bool) -> None:
+        async with self.pool.connection() as conn:
+            await conn.execute("""
+                INSERT INTO task_budget (task_id, running) VALUES (%s, %s)
+                ON CONFLICT (task_id) DO UPDATE SET running = EXCLUDED.running
+            """, (task_id, running))
 
     async def _add_elapsed(self, task_id: str, seconds: float) -> None:
         async with self.pool.connection() as conn:

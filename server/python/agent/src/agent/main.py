@@ -39,6 +39,8 @@ async def lifespan(app: FastAPI):
     await checkpointer.setup()
     app.state.runner = runner = Runner(graph_module.build(checkpointer), pool)
     await runner.setup()
+    for task_id in await runner.interrupted():
+        _spawn(_limited(task_id, runner.recover(task_id)))
     if settings.dispatch_mode == "kafka":
         _spawn(kafka_worker.consume(runner))
     yield

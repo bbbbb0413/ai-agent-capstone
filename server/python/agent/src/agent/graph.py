@@ -46,6 +46,7 @@ class State(TypedDict, total=False):
     tool_counts: dict[str, int]
     attempts: int                   # verify 실패 후 진단 재진입 횟수
     recovered: bool
+    verification: str               # verify의 결론과 확인한 수치 (보고서 근거)
     report: str
     notice_draft: str
     classification: dict[str, Any] | None  # 에러 유형·원인·근거 조항 (summary.py)
@@ -138,22 +139,17 @@ def route_execute(state: State) -> Literal["verify", "await_change", "report"]:
 # ── LLM Node ──────────────────────────────────────────────────
 
 
-async def _tool_loop(node: str, state: State, runtime: Rt, messages: list[AnyMessage], max_turns: int,
-                     require_tool_first: bool = False) -> tuple[list[AnyMessage], int, dict[str, int], list[dict]]:
-    """모델이 허용목록 안에서 도구를 고르고, Harness가 실행한다. 턴·시간·도구 한도를 지킨다.
-
-    require_tool_first=True면 첫 호출에서 도구를 반드시 고르게 한다. 조회 없이 결론부터 내지 못하게 한다.
-    """
+async def _tool_loop(node: str, state: State, runtime: Rt, messages: list[AnyMessage],
+                     max_turns: int) -> tuple[list[AnyMessage], int, dict[str, int], list[dict]]:
+    """모델이 허용목록 안에서 도구를 고르고, Harness가 실행한다. 턴·시간·도구 한도를 지킨다."""
     box = runtime.context.toolbox
-    tools = box.for_node(node)
-    model = harness.chat_model(tools)
-    first = harness.chat_model(tools, tool_choice="required") if require_tool_first else model
+    model = harness.chat_model(box.for_node(node))
     turns, counts, evidence, new = state["turns"], dict(state["tool_counts"]), [], []
-    for i in range(max_turns):
+    for _ in range(max_turns):
         if turns >= harness.MAX_TURNS:
             break
         runtime.context.check_time()
-        ai: AIMessage = await (first if i == 0 else model).ainvoke(harness.compact(messages + new))
+        ai: AIMessage = await model.ainvoke(harness.compact(messages + new))
         turns += 1
         new.append(ai)
         if not ai.tool_calls:
@@ -223,20 +219,63 @@ def route_propose(state: State) -> Literal["approval", "report"]:
     return "approval" if state.get("proposed_action") else "report"
 
 
+# 회복 확인의 표준 메트릭. 알림 규칙(infra/prometheus/alert-rules.yml)과 같은 기준을 조치 직후 15초 창으로 본다.
+# 에러가 하나도 없으면 에러 시계열이 없으므로 `or vector(0)`을 붙인다. 요청 자체가 없으면 결과가 비어 None이 된다.
+VERIFY_QUERIES = {
+    "error_rate": '(sum(rate(demo_orders_seconds_count{outcome="error"}[15s])) or vector(0))'
+                  ' / sum(rate(demo_orders_seconds_count[15s]))',
+    "p95_seconds": 'histogram_quantile(0.95, sum by (le) (rate(demo_orders_seconds_bucket[15s])))',
+}
+ERROR_RATE_THRESHOLD = 0.2
+P95_THRESHOLD_SECONDS = 1.0
+
+
+async def _metric(box: ToolBox, expr: str, counts: dict[str, int]) -> float | None:
+    result = parse_json(await box.call("verify", "grafana_query_prometheus",
+                                       {"expr": expr, "queryType": "instant", "endTime": "now"}, counts))
+    try:
+        return float(result["data"][0]["value"][1])
+    except (TypeError, KeyError, IndexError, ValueError):
+        return None
+
+
 async def verify(state: State, runtime: Rt) -> dict:
+    """조치 후 메트릭을 다시 보고 회복 여부를 판단한다 (Reflection).
+
+    쿼리는 코드가 정해진 식으로 조회하고, 모델은 그 수치로 판단만 한다. 모델에게 PromQL을 맡겼을 때
+    메트릭 이름을 지어내거나(reservation_api_requests_…) 조회 없이 결론을 낸 적이 있다 (docs/harness-spec.md).
+    """
+    box, counts = runtime.context.toolbox, dict(state["tool_counts"])
     await backend.emit(state["task_id"], "STEP", {"node": "verify", "waitSeconds": harness.VERIFY_SETTLE_SECONDS})
     await runtime.context.settle(harness.VERIFY_SETTLE_SECONDS)  # 조치가 메트릭에 반영될 시간
-    messages = [
-        SystemMessage(harness.prompt("system") + "\n\n" + harness.prompt("verify")),
-        HumanMessage(f"실행한 조치: {json.dumps(state['proposed_action'], ensure_ascii=False)}\n"
-                     f"진단 결과: {state['findings']}"),
-    ]
-    # 메트릭을 보지 않고 NOT_RECOVERED를 답한 적이 있다 (docs/harness-spec.md). 첫 호출은 조회를 강제한다
-    new, turns, counts, evidence = await _tool_loop("verify", state, runtime, messages, max_turns=3,
-                                                    require_tool_first=True)
-    verdict = _final_text(new)
-    return {"recovered": verdict.strip().upper().startswith("RECOVERED"), "turns": turns, "tool_counts": counts,
-            "evidence": state["evidence"] + evidence}
+    error_rate = await _metric(box, VERIFY_QUERIES["error_rate"], counts)
+    if error_rate is None:  # 재시작한 파드의 메트릭이 아직 수집되지 않았다. 한 번만 더 기다린다
+        await runtime.context.settle(harness.VERIFY_RETRY_SECONDS)
+        error_rate = await _metric(box, VERIFY_QUERIES["error_rate"], counts)
+    metrics = {"error_rate": error_rate, "p95_seconds": await _metric(box, VERIFY_QUERIES["p95_seconds"], counts),
+               "window": "조치 직후 15초", "thresholds": {"error_rate": ERROR_RATE_THRESHOLD,
+                                                        "p95_seconds": P95_THRESHOLD_SECONDS}}
+    evidence = state["evidence"] + [{"tool": "grafana_query_prometheus", "args": VERIFY_QUERIES,
+                                     "summary": json.dumps(metrics, ensure_ascii=False)}]
+
+    turns = state["turns"]
+    if turns < harness.MAX_TURNS:
+        runtime.context.check_time()
+        ai: AIMessage = await harness.chat_model().ainvoke([
+            SystemMessage(harness.prompt("system") + "\n\n" + harness.prompt("verify")),
+            HumanMessage(f"실행한 조치: {json.dumps(state['proposed_action'], ensure_ascii=False)}\n"
+                         f"진단 결과: {state['findings']}\n"
+                         f"조치 후 메트릭: {json.dumps(metrics, ensure_ascii=False)}"),
+        ])
+        turns += 1
+        verdict = str(ai.content)
+        recovered = verdict.strip().upper().startswith("RECOVERED")
+    else:  # 턴 한도를 다 썼으면 알림 기준으로 코드가 판단한다
+        recovered = (error_rate is not None and error_rate < ERROR_RATE_THRESHOLD
+                     and (metrics["p95_seconds"] or 0) < P95_THRESHOLD_SECONDS)
+        verdict = f"{'RECOVERED' if recovered else 'NOT_RECOVERED'} (턴 한도로 기준값 판단)\n{json.dumps(metrics)}"
+    return {"recovered": recovered, "verification": verdict, "turns": turns, "tool_counts": counts,
+            "evidence": evidence}
 
 
 def route_verify(state: State) -> Literal["report", "diagnose", "final_escalate"]:
@@ -258,7 +297,9 @@ async def report(state: State, runtime: Rt) -> dict:
         "request": state["question"], "plan": state.get("plan"), "findings": state.get("findings"),
         "evidence": state.get("evidence", []), "runbook": state.get("runbook", []),
         "action": state.get("proposed_action"), "approvals": state.get("approvals", []),
-        "recovered": state.get("recovered"), "context": state.get("context", {}),
+        "recovered": state.get("recovered"), "verification": state.get("verification"),
+        "action_result": state.get("action_result"), "change": state.get("change"),
+        "context": state.get("context", {}),
     }, ensure_ascii=False, default=str)
 
     async def write() -> str:

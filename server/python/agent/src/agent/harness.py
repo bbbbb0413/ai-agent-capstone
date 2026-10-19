@@ -20,8 +20,9 @@ from agent.config import settings
 MAX_TURNS = 8            # 작업 하나에서 모델을 부르는 최대 횟수
 TASK_SECONDS = 120       # 실행 시간 한도. 승인·반영 대기와 회복 확인 대기(VERIFY_SETTLE_SECONDS)는 빼고 잰다
 MAX_SAME_TOOL = 3        # 같은 Node 안에서 같은 도구 호출 한도
-# 조치가 메트릭에 반영될 때까지 기다리는 시간. prompts/verify.md의 rate 창(15s)보다 길어야 한다
+# 조치가 메트릭에 반영될 때까지 기다리는 시간. graph.VERIFY_QUERIES의 rate 창(15s)보다 길어야 한다
 VERIFY_SETTLE_SECONDS = 20
+VERIFY_RETRY_SECONDS = 10   # 조치 후 메트릭이 아직 없으면 한 번 더 기다리는 시간 (재시작한 파드의 첫 수집)
 # gpt-5-mini가 조치 도구를 호출하지 않고 권고문만 쓰는 경우가 있었다 (low 2/2, medium 1/5, docs/harness-spec.md).
 # 그래서 propose_action은 도구 호출을 강제하고, 어떤 도구를 고를지는 medium으로 판단한다
 PROPOSE_REASONING_EFFORT = "medium"
@@ -42,7 +43,7 @@ NODE_TOOLS: dict[str, set[str]] = {
     "retrieve_runbook": {"rag_search_documents"},
     "propose_action": {"business_execute_runbook_action", "business_send_customer_notice"},
     "escalate": {"business_escalate_incident"},
-    "verify": {"grafana_query_prometheus", "grafana_query_prometheus_histogram", "grafana_query_loki_logs"},
+    "verify": {"grafana_query_prometheus"},   # 코드가 정해진 쿼리로만 호출한다 (graph.VERIFY_QUERIES)
     "notice": {"business_send_customer_notice"},
 }
 
