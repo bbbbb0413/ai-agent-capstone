@@ -26,7 +26,7 @@ WRITE = {"readOnlyHint": False, "destructiveHint": True}
 mcp = FastMCP("business")
 
 
-async def _call(method: str, path: str, **kwargs: Any) -> Any:
+async def _call(method: str, path: str, timeout: float = 10, **kwargs: Any) -> Any:
     headers = get_http_headers()
     tenant = headers.get("x-tenant-id")
     if not tenant:
@@ -37,7 +37,7 @@ async def _call(method: str, path: str, **kwargs: Any) -> Any:
         "X-Trace-Id": headers.get("x-trace-id", ""),
     }
     try:
-        async with httpx.AsyncClient(base_url=BACKEND_URL, timeout=10) as client:
+        async with httpx.AsyncClient(base_url=BACKEND_URL, timeout=timeout) as client:
             response = await client.request(method, f"/internal/tenants/{tenant}{path}", headers=forward, **kwargs)
     except httpx.HTTPError as e:
         raise ToolError(f"backend에 연결하지 못했다({type(e).__name__}). 잠시 후 다시 시도한다") from e
@@ -80,7 +80,13 @@ async def get_oncall_contacts() -> list[dict[str, Any]]:
 
 @mcp.tool(annotations=READ)
 async def get_service_inventory() -> list[dict[str, Any]]:
-    """현재 고객사가 운영하는 서비스 이름, 의존 대상(DB, 외부 API 등), 현재 레플리카 수와 이미지를 돌려준다."""
+    """현재 고객사 서비스의 카탈로그(시스템 구조)와 실행 상태를 돌려준다. 조치를 고를 때 구조 검토에 쓴다.
+    - runtime: 실행 환경(kubernetes 등). runtimeSupported가 false면 OpsLens가 조치할 수 없다
+    - dependencies: 의존 대상의 종류(database, external_api), 소유(tenant, third_party), 연락처, DB 최대 연결 수
+    - contractReplicas: 계약상 레플리카 범위, replicas/readyReplicas: 지금 값, poolSize: 커넥션 풀 크기
+    - safeMaxReplicas: 확장 안전 상한(계약 상한과 DB 연결 한도 중 작은 값). 이보다 크게 확장하면 거부된다
+    - zeroDowntimeRestart: true면 하나씩 재시작해 중단이 없고, false면 재시작하는 동안 서비스가 멈춘다
+    - supportedActions: 지금 이 서비스에 할 수 있는 조치(실행 환경 지원 ∩ 계약 허용)"""
     return await _call("GET", "/services")
 
 
@@ -123,8 +129,10 @@ async def execute_runbook_action(
     반영 방식은 고객사 운영 방식에 따라 backend가 정한다. 결과 status가 EXECUTED면 바로 반영된 것이고,
     PR_CREATED면 설정 저장소 PR이 만들어진 것이다(병합·동기화 후 반영된다).
     계약상 허용되지 않은 조치는 거부되고, 오류 메시지에 허용 조치 목록이 담긴다."""
-    return await _call("POST", "/actions", json={"incidentId": incident_id, "action": action, "service": service,
-                                                  "replicas": replicas, "reason": reason})
+    # 순차 재시작은 파드마다 새 파드가 Ready가 되기를 기다려서 오래 걸린다 (파드당 최대 60초)
+    return await _call("POST", "/actions", timeout=150, json={"incidentId": incident_id, "action": action,
+                                                              "service": service, "replicas": replicas,
+                                                              "reason": reason})
 
 
 @mcp.tool(annotations=WRITE)

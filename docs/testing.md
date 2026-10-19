@@ -20,6 +20,7 @@ python3 scripts/e2e.py --auto-approve  # backend 자동 승인 설정을 그대�
 | 키 | 시나리오 | 기대 결과 |
 |---|---|---|
 | `isolation` | D. 고객사 격리 | B사 담당자·B사 작업·B사 ServiceAccount로 A사 자원 접근 거부, 감사 로그 |
+| `guard` | backend 방어선 | Agent를 거치지 않고 내부 API로 요청: A사 확장 6(안전 상한 4)·축소 1(하한 2), B사 Docker 서비스 재시작, B사 롤백이 모두 422로 거부되고 클러스터가 바뀌지 않는다 |
 | `question` | 문서 질문 | RAG로 계약 조항을 찾아 답하고 출처를 단다 |
 | `b` | B. 파드 멈춤 (B사, DIRECT) | `restart_pods`를 Kubernetes API로 실행, 회복 |
 | `b2` | B2. 외부 결제 API 지연 (B사) | 재시작하지 않고 고객 공지 |

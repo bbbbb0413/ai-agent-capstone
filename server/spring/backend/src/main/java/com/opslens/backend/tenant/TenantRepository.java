@@ -14,8 +14,6 @@ import org.springframework.web.server.ResponseStatusException;
 @Repository
 public class TenantRepository {
 
-    public record Service(String name, List<String> dependsOn) {}
-
     public record Contact(String username, String role) {}
 
     private final JdbcClient jdbc;
@@ -36,13 +34,6 @@ public class TenantRepository {
         return jdbc.sql("SELECT * FROM tenants WHERE id = ANY(?) ORDER BY id")
                 .param(ids.toArray(String[]::new))
                 .query(TenantRepository::toTenant).list();
-    }
-
-    public List<Service> services(String tenantId) {
-        return jdbc.sql("SELECT name, depends_on FROM services WHERE tenant_id = ? ORDER BY name")
-                .param(tenantId)
-                .query((rs, n) -> new Service(rs.getString("name"), strings(rs.getArray("depends_on"))))
-                .list();
     }
 
     /** 에스컬레이션 대상: 담당 엔지니어와 MSP 관리자 */

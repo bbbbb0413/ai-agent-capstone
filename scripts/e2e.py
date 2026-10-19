@@ -320,6 +320,45 @@ asyncio.run(main())
     return r
 
 
+def internal_action(tenant: str, body: dict) -> tuple[int, str]:
+    """business-mcp가 부르는 backend 내부 조치 API를 직접 부른다. Agent·승인을 거치지 않는 방어선 검사용."""
+    payload = json.dumps(body).replace("'", "")
+    out = in_backend(f'curl -s -w "\\n%{{http_code}}" -H "Authorization: Bearer $SERVICE_TOKEN" '
+                     f'-H "X-Tenant-Id: {tenant}" -H "Content-Type: application/json" '
+                     f"-d '{payload}' http://localhost:8080/internal/tenants/{tenant}/actions")
+    text, _, code = out.rpartition("\n")
+    try:
+        message = json.loads(text).get("message") or text
+    except ValueError:
+        message = text
+    return int(code), str(message)
+
+
+def scenario_guard(args) -> Result:
+    """backend 방어선 (SPEC 6.2). AI가 잘못 제안해도 계약·구조 제약을 넘는 조치는 실행되지 않는다."""
+    r = Result("backend 방어선 (계약·구조 제약)")
+    incident = {t: sql(f"select max(id) from app.incidents where tenant_id = '{t}'") for t in ("tenant-a", "tenant-b")}
+    if not all(incident.values()):
+        r.check(False, "검사에 쓸 인시던트가 없다 (시나리오를 한 번 이상 돌린 뒤 실행한다)")
+        return r
+    cases = [
+        ("guard-scale", "tenant-a", {"action": "scale_deployment", "service": "order-api", "replicas": 6},
+         "2~4", "A사 확장 6 → 안전 상한 4로 거부"),
+        ("guard-min", "tenant-a", {"action": "scale_deployment", "service": "order-api", "replicas": 1},
+         "2~4", "A사 축소 1 → 계약 하한 2로 거부"),
+        ("guard-runtime", "tenant-b", {"action": "restart_pods", "service": "settlement-batch"},
+         "docker", "B사 Docker 서비스 재시작 → 지원하지 않는 실행 환경으로 거부"),
+        ("guard-contract", "tenant-b", {"action": "rollback_deployment", "service": "reservation-api"},
+         "허용되지 않는다", "B사 롤백 → 계약상 불가로 거부"),
+    ]
+    for _, tenant, body, expect, label in cases:
+        code, message = internal_action(tenant, {**body, "incidentId": int(incident[tenant])})
+        r.check(code == 422 and expect in message, f"{label} ({code}: {message[:70]})")
+    replicas = kubectl("-n", "tenant-a", "get", "deploy", "order-api", "-o", "jsonpath={.spec.replicas}")
+    r.check(replicas == "2", f"거부된 요청은 클러스터를 바꾸지 않았다 (A사 레플리카 {replicas})")
+    return r
+
+
 def scenario_question(args) -> Result:
     r = Result("문서 질문 (RAG)")
     started = time.time()
@@ -417,6 +456,7 @@ def reset_b() -> None:
 
 SCENARIOS = {
     "isolation": ("D. 고객사 격리 (권한·감사 로그)", scenario_isolation),
+    "guard": ("backend 방어선 (안전 상한·실행 환경·계약)", scenario_guard),
     "question": ("문서 질문 → RAG 답변", scenario_question),
     "b": ("B. 파드 멈춤 → 재시작 (DIRECT)", scenario_b),
     "b2": ("B2. 외부 결제 지연 → 고객 공지", scenario_b2),

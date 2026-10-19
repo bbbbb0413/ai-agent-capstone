@@ -73,7 +73,7 @@ public class OrderSimulator {
             }
             case WORKER_HANG -> {
                 log.error("order rejected: 503 worker pool saturated (active=200/200, queued=1000/1000), "
-                        + "oldest worker blocked {}s in PaymentGatewayClient.awaitLock", random.nextInt(120, 600));
+                        + "oldest worker blocked {}s waiting for internal lock ReservationCache.refreshLock (deadlock suspected)", random.nextInt(120, 600));
                 return false;
             }
             case NONE -> {

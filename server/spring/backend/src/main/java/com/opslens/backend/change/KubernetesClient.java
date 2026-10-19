@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManagerFactory;
 import org.springframework.http.HttpStatus;
@@ -28,16 +29,18 @@ import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * 고객사 Kubernetes API를 고객사 ServiceAccount로 호출한다. CLI(kubectl)는 쓰지 않는다 (ADR 0001 D2).
+ * Kubernetes 실행 환경 어댑터. 고객사 Kubernetes API를 고객사 ServiceAccount로 호출한다. CLI(kubectl)는 쓰지 않는다 (ADR 0001 D2).
  * 토큰은 고객사 네임스페이스에만 권한이 있어서, 다른 고객사 네임스페이스 호출은 API 서버가 거부한다.
- * 서비스 이름이 곧 Deployment 이름이고, 파드는 app=<서비스> 라벨을 단다 (gitops/tenants/*).
+ * 네임스페이스는 서비스 카탈로그의 target_namespace다. 서비스 이름이 곧 Deployment 이름이고, 파드는 app=<서비스> 라벨을 단다.
  */
 @Component
-public class KubernetesClient {
+public class KubernetesClient implements RuntimeAdapter {
 
     private static final MediaType MERGE_PATCH = MediaType.parseMediaType("application/merge-patch+json");
     private static final MediaType JSON_PATCH = MediaType.parseMediaType("application/json-patch+json");
     private static final String REVISION = "deployment.kubernetes.io/revision";
+    /** 순차 재시작에서 새 파드 하나가 Ready가 되기를 기다리는 최대 시간 */
+    private static final Duration POD_READY_TIMEOUT = Duration.ofSeconds(60);
 
     private final RestClient.Builder builder;
     private final Path credentials;
@@ -47,32 +50,48 @@ public class KubernetesClient {
         this.credentials = Path.of(props.kubernetes().credentialsDir());
     }
 
-    public record Deployment(String name, int replicas, int readyReplicas, String image, Map<String, String> env) {}
-
-    public record Revision(int revision, String image, Map<String, String> env, String createdAt) {}
-
-    public Deployment deployment(Tenant tenant, String service) {
-        return toDeployment(call(tenant, c -> c.get().uri(deploymentPath(tenant, service))
-                .retrieve().body(JsonNode.class)));
+    @Override
+    public String runtime() {
+        return "kubernetes";
     }
 
-    /** 파드를 지운다. Deployment가 새 파드를 만든다. ArgoCD가 관리하는 원하는 상태는 바뀌지 않는다. */
-    public List<String> restartPods(Tenant tenant, String service) {
-        JsonNode pods = call(tenant, c -> c.get()
-                .uri("/api/v1/namespaces/{ns}/pods?labelSelector={selector}", tenant.namespace(), "app=" + service)
-                .retrieve().body(JsonNode.class));
-        List<String> deleted = new ArrayList<>();
-        for (JsonNode pod : pods.path("items")) {
-            String name = pod.path("metadata").path("name").asText();
-            call(tenant, c -> c.delete().uri("/api/v1/namespaces/{ns}/pods/{name}", tenant.namespace(), name)
+    @Override
+    public Set<String> supportedActions() {
+        return Set.of("restart_pods", "scale_deployment", "rollback_deployment");
+    }
+
+    @Override
+    public Workload status(Tenant tenant, ServiceCatalog.Entry service) {
+        JsonNode d = call(tenant, c -> c.get().uri(deploymentPath(service)).retrieve().body(JsonNode.class));
+        JsonNode container = d.path("spec").path("template").path("spec").path("containers").path(0);
+        return new Workload(d.path("metadata").path("name").asText(), d.path("spec").path("replicas").asInt(),
+                d.path("status").path("readyReplicas").asInt(), container.path("image").asText(), env(container));
+    }
+
+    /**
+     * 파드를 지워 재시작한다. Deployment가 새 파드를 만들고, ArgoCD가 관리하는 원하는 상태는 바뀌지 않는다.
+     * 레플리카가 2개 이상이면 하나씩 지우고, 지운 파드가 사라지고 Ready 파드 수가 원래대로 돌아온 뒤 다음 파드를 지운다.
+     * 한꺼번에 지우면 레플리카가 여럿이어도 잠깐 전체가 멈춘다 (SPEC-fault-based-actions 1.3).
+     */
+    @Override
+    public Restart restart(Tenant tenant, ServiceCatalog.Entry service) {
+        List<String> pods = podNames(tenant, service);
+        boolean rolling = pods.size() >= 2;
+        List<String> restarted = new ArrayList<>();
+        for (String name : pods) {
+            call(tenant, c -> c.delete().uri("/api/v1/namespaces/{ns}/pods/{name}", service.targetNamespace(), name)
                     .retrieve().toBodilessEntity());
-            deleted.add(name);
+            restarted.add(name);
+            if (rolling) {
+                awaitReplaced(tenant, service, name, pods.size(), restarted);
+            }
         }
-        return deleted;
+        return new Restart(restarted, rolling);
     }
 
-    public void scale(Tenant tenant, String service, int replicas) {
-        call(tenant, c -> c.patch().uri(deploymentPath(tenant, service) + "/scale").contentType(MERGE_PATCH)
+    @Override
+    public void scale(Tenant tenant, ServiceCatalog.Entry service, int replicas) {
+        call(tenant, c -> c.patch().uri(deploymentPath(service) + "/scale").contentType(MERGE_PATCH)
                 .body(Map.of("spec", Map.of("replicas", replicas))).retrieve().toBodilessEntity());
     }
 
@@ -80,7 +99,8 @@ public class KubernetesClient {
      * 장애 시작 전 마지막 배포의 바로 이전 ReplicaSet 파드 템플릿으로 되돌린다 (kubectl rollout undo와 비슷하다).
      * 기준을 장애 시작 시각으로 잡아서, 롤백을 두 번 해도 원래 장애 배포로 돌아가지 않는다.
      */
-    public Revision rollback(Tenant tenant, String service, OffsetDateTime incidentStartedAt) {
+    @Override
+    public Revision rollback(Tenant tenant, ServiceCatalog.Entry service, OffsetDateTime incidentStartedAt) {
         List<JsonNode> sets = replicaSets(tenant, service);
         List<JsonNode> byCreation = new ArrayList<>(sets);
         byCreation.sort(Comparator.comparing((JsonNode rs) -> createdAt(rs)).reversed());
@@ -93,47 +113,85 @@ public class KubernetesClient {
         }
         if (culprit < 0 || culprit + 1 >= byCreation.size()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "%s에 장애 시작 전 배포보다 이전 이력이 없다".formatted(service));
+                    "%s에 장애 시작 전 배포보다 이전 이력이 없다".formatted(service.name()));
         }
         JsonNode previous = byCreation.get(culprit + 1);
         if (sets.get(0).path("metadata").path("name").equals(previous.path("metadata").path("name"))) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "%s는 이미 장애 시작 전 배포(revision %d)로 되돌려져 있다".formatted(service, revisionOf(previous)));
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "%s는 이미 장애 시작 전 배포(revision %d)로 되돌려져 있다"
+                    .formatted(service.name(), revisionOf(previous)));
         }
         ObjectNode template = previous.path("spec").path("template").deepCopy();
         ((ObjectNode) template.path("metadata").path("labels")).remove("pod-template-hash");
-        call(tenant, c -> c.patch().uri(deploymentPath(tenant, service)).contentType(JSON_PATCH)
+        call(tenant, c -> c.patch().uri(deploymentPath(service)).contentType(JSON_PATCH)
                 .body(List.of(Map.of("op", "replace", "path", "/spec/template", "value", template)))
                 .retrieve().toBodilessEntity());
         return toRevision(previous);
     }
 
     /** 최근 배포 이력 (최신순). DIRECT 고객사의 list_recent_changes에 쓴다. */
-    public List<Revision> history(Tenant tenant, String service) {
+    @Override
+    public List<Revision> history(Tenant tenant, ServiceCatalog.Entry service) {
         return replicaSets(tenant, service).stream().map(KubernetesClient::toRevision).toList();
     }
 
-    private List<JsonNode> replicaSets(Tenant tenant, String service) {
-        JsonNode sets = call(tenant, c -> c.get()
-                .uri("/apis/apps/v1/namespaces/{ns}/replicasets?labelSelector={selector}", tenant.namespace(), "app=" + service)
-                .retrieve().body(JsonNode.class));
+    // ── 순차 재시작 ────────────────────────────────────────────
+
+    private List<String> podNames(Tenant tenant, ServiceCatalog.Entry service) {
+        List<String> names = new ArrayList<>();
+        pods(tenant, service).path("items").forEach(p -> names.add(p.path("metadata").path("name").asText()));
+        return names;
+    }
+
+    private JsonNode pods(Tenant tenant, ServiceCatalog.Entry service) {
+        return call(tenant, c -> c.get().uri("/api/v1/namespaces/{ns}/pods?labelSelector={selector}",
+                service.targetNamespace(), "app=" + service.name()).retrieve().body(JsonNode.class));
+    }
+
+    /** 종료 중이 아닌 Ready 파드가 원래 수만큼 될 때까지 기다린다. 지운 파드는 종료 중이라 세지 않는다. */
+    private void awaitReplaced(Tenant tenant, ServiceCatalog.Entry service, String deleted, int expected,
+            List<String> restarted) {
+        long deadline = System.nanoTime() + POD_READY_TIMEOUT.toNanos();
+        while (System.nanoTime() < deadline) {
+            int ready = 0;
+            for (JsonNode pod : pods(tenant, service).path("items")) {
+                boolean terminating = !pod.path("metadata").path("deletionTimestamp").isMissingNode()
+                        || deleted.equals(pod.path("metadata").path("name").asText());
+                for (JsonNode condition : pod.path("status").path("conditions")) {
+                    if (!terminating && "Ready".equals(condition.path("type").asText())
+                            && "True".equals(condition.path("status").asText())) {
+                        ready++;
+                    }
+                }
+            }
+            if (ready >= expected) {
+                return;
+            }
+            try {
+                Thread.sleep(2_000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        throw new ResponseStatusException(HttpStatus.GATEWAY_TIMEOUT,
+                "순차 재시작 중 새 파드가 %d초 안에 Ready가 되지 않아 멈췄다. 재시작한 파드: %s. 남은 파드는 재시작하지 않았다"
+                        .formatted(POD_READY_TIMEOUT.toSeconds(), restarted));
+    }
+
+    private List<JsonNode> replicaSets(Tenant tenant, ServiceCatalog.Entry service) {
+        JsonNode sets = call(tenant, c -> c.get().uri("/apis/apps/v1/namespaces/{ns}/replicasets?labelSelector={selector}",
+                service.targetNamespace(), "app=" + service.name()).retrieve().body(JsonNode.class));
         List<JsonNode> items = new ArrayList<>();
         sets.path("items").forEach(items::add);
         items.sort(Comparator.comparingInt(KubernetesClient::revisionOf).reversed());
         return items;
     }
 
-    private static String deploymentPath(Tenant tenant, String service) {
-        return "/apis/apps/v1/namespaces/" + tenant.namespace() + "/deployments/" + service;
+    private static String deploymentPath(ServiceCatalog.Entry service) {
+        return "/apis/apps/v1/namespaces/" + service.targetNamespace() + "/deployments/" + service.name();
     }
 
     // ── 응답 변환 ──────────────────────────────────────────────
-
-    private static Deployment toDeployment(JsonNode d) {
-        JsonNode container = d.path("spec").path("template").path("spec").path("containers").path(0);
-        return new Deployment(d.path("metadata").path("name").asText(), d.path("spec").path("replicas").asInt(),
-                d.path("status").path("readyReplicas").asInt(), container.path("image").asText(), env(container));
-    }
 
     private static Revision toRevision(JsonNode rs) {
         JsonNode container = rs.path("spec").path("template").path("spec").path("containers").path(0);
