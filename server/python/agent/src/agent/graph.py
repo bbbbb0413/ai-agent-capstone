@@ -146,12 +146,26 @@ async def no_issue(state: State) -> dict:
 
 
 async def retrieve_runbook(state: State, runtime: Rt) -> dict:
-    counts = dict(state["tool_counts"])
-    result = await runtime.context.toolbox.call(
-        "retrieve_runbook", "rag_search_documents",
-        {"query": state.get("findings") or state["question"], "top_k": 4}, counts)
-    docs = parse_json(result)
-    return {"runbook": docs if isinstance(docs, list) else [], "tool_counts": counts}
+    """MSP 표준 런북(장애 형태별 조치)과 이 고객사 문서(서비스 런북·계약)를 따로 찾아 합친다.
+
+    한 번에 찾으면 표준 런북이 상위를 채워 서비스별 주의 사항과 계약 조항이 밀려난다 (SPEC-fault-based-actions 1단계).
+    계약의 허용 조치 조항은 증상과 문장이 달라 증상으로는 검색되지 않는다. 그래서 정해진 질문으로 따로 찾는다.
+    이 Node는 정해진 검색만 하므로, 재진단 뒤 다시 와도 검색할 수 있게 같은 도구 한도를 방문마다 새로 센다.
+    """
+    counts = {k: v for k, v in state["tool_counts"].items() if not k.startswith("retrieve_runbook:")}
+    query = state.get("findings") or state["question"]
+    searches = [
+        {"query": query, "top_k": 2, "scope": "common"},
+        {"query": query, "top_k": 2, "scope": "tenant"},
+        {"query": "MSP가 사전 동의 없이 수행할 수 있는 허용 조치와 고객사 승인이 필요한 조치", "top_k": 1,
+         "scope": "tenant", "doc_type": "sla"},
+    ]
+    docs: list[dict[str, Any]] = []
+    for args in searches:
+        found = parse_json(await runtime.context.toolbox.call("retrieve_runbook", "rag_search_documents", args, counts))
+        docs += found if isinstance(found, list) else []
+    unique = list({(d.get("uri"), d.get("section")): d for d in docs}.values())  # 검색이 겹치면 한 번만
+    return {"runbook": unique, "tool_counts": {**state["tool_counts"], **counts}}
 
 
 async def execute(state: State, runtime: Rt) -> dict:
@@ -235,7 +249,10 @@ async def _recent_log_patterns(box: ToolBox, counts: dict[str, int], incident_id
     args = {"logql": '{app="demo-app", level=~"ERROR|WARN"}', "limit": 200, "direction": "backward",
             "startRfc3339": (now - timedelta(minutes=10)).isoformat(timespec="seconds"),
             "endRfc3339": now.isoformat(timespec="seconds")}
-    result = await box.call("diagnose", "grafana_query_loki_logs", args, counts, incident_id=incident_id)
+    # 200줄이면 결과 길이 제한(4000자)을 넘어 잘리고 JSON이 깨져 "로그 없음"으로 처리된 적이 있다.
+    # 이 결과는 모델에 바로 가지 않고 아래에서 요약하므로 길이 제한을 넉넉히 둔다 (마스킹은 그대로)
+    result = await box.call("diagnose", "grafana_query_loki_logs", args, counts, incident_id=incident_id,
+                            max_chars=200_000)
     rows = parse_json(result)
     rows = rows.get("data", []) if isinstance(rows, dict) else rows if isinstance(rows, list) else []
     patterns: dict[str, dict[str, Any]] = {}

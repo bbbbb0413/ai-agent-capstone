@@ -2,6 +2,7 @@
 
 - docs 스키마를 읽기 전용 계정으로만 조회한다. 업무 데이터는 바꾸지 않는다.
 - 고객사 필터는 요청 헤더(X-Tenant-Id)로 서버가 강제한다. 모델이 인자로 다른 고객사를 고를 수 없다.
+- MSP 공통 문서(tenant_id = '_common', 표준 런북)는 모든 고객사가 함께 검색·조회한다. 다른 고객사 문서는 계속 볼 수 없다.
 - 질문 Embedding은 색인(indexer)과 같은 모델을 쓴다.
 """
 
@@ -23,6 +24,7 @@ EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "text-embedding-3-small")
 SERVICE_TOKEN = os.environ.get("SERVICE_TOKEN", "")
 
 READ = {"readOnlyHint": True, "destructiveHint": False}
+COMMON = "_common"  # data/documents/_common/ (indexer가 디렉터리 이름을 tenant_id로 쓴다)
 
 mcp = FastMCP("rag")
 _openai: AsyncOpenAI | None = None
@@ -54,38 +56,43 @@ async def search_documents(
     query: str,
     doc_type: Literal["sla", "runbook", "postmortem"] | None = None,
     top_k: int = 5,
+    scope: Literal["all", "common", "tenant"] = "all",
 ) -> list[dict[str, Any]]:
-    """현재 고객사의 근거 문서에서 질문과 가까운 조항을 찾는다.
-    doc_type: sla(SLA 계약서), runbook(장애 대응 런북), postmortem(과거 장애 회고). 비우면 전체에서 찾는다.
-    결과마다 문서 id, 제목, 조항(section), 버전, 본문, 유사도(score, 1에 가까울수록 가깝다), 원문 주소(uri)를 돌려준다.
-    답변에 근거를 붙일 때 section과 uri를 함께 인용한다."""
+    """현재 고객사의 근거 문서와 MSP 공통 문서(표준 런북)에서 질문과 가까운 조항을 찾는다.
+    doc_type: sla(SLA 계약서), runbook(런북: 표준 런북과 서비스 런북), postmortem(과거 장애 회고). 비우면 전체에서 찾는다.
+    결과마다 문서 id, 제목, 조항(section), 버전, 본문, 유사도(score, 1에 가까울수록 가깝다), 원문 주소(uri),
+    범위(scope: common=MSP 표준, tenant=이 고객사)를 돌려준다. 답변에 근거를 붙일 때 section과 uri를 함께 인용한다.
+    scope 인자로 검색 범위를 좁힐 수 있다: all(둘 다), common(표준 런북만), tenant(이 고객사 문서만)."""
     tenant = _tenant()
+    owners = {"all": [tenant, COMMON], "common": [COMMON], "tenant": [tenant]}[scope]
     top_k = max(1, min(top_k, 10))
     embedding = (await _embedder().embeddings.create(model=EMBEDDING_MODEL, input=query)).data[0].embedding
 
     async with await _connect() as conn:
         rows = await (await conn.execute(
             """
-            SELECT doc_id, doc_type, title, section, version, content, 1 - (embedding <=> %(e)s::vector) AS score
+            SELECT tenant_id, doc_id, doc_type, title, section, version, content,
+                   1 - (embedding <=> %(e)s::vector) AS score
             FROM chunks
-            WHERE tenant_id = %(t)s AND (%(d)s::text IS NULL OR doc_type = %(d)s)
+            WHERE tenant_id = ANY(%(o)s) AND (%(d)s::text IS NULL OR doc_type = %(d)s)
             ORDER BY embedding <=> %(e)s::vector
             LIMIT %(k)s
             """,
-            {"e": embedding, "t": tenant, "d": doc_type, "k": top_k},
+            {"e": embedding, "o": owners, "d": doc_type, "k": top_k},
         )).fetchall()
 
     return [
         {"doc_id": doc_id, "doc_type": kind, "title": title, "section": section, "version": version,
-         "content": content, "score": round(float(score), 3), "uri": f"docs://{tenant}/{doc_id}"}
-        for doc_id, kind, title, section, version, content, score in rows
+         "content": content, "score": round(float(score), 3), "uri": f"docs://{owner}/{doc_id}",
+         "scope": "common" if owner == COMMON else "tenant"}
+        for owner, doc_id, kind, title, section, version, content, score in rows
     ]
 
 
 @mcp.resource("docs://{tenant}/{doc_id}", mime_type="text/markdown")
 async def read_document(tenant: str, doc_id: str) -> str:
-    """근거 패널에 보여줄 문서 원문. 요청한 고객사와 문서의 고객사가 다르면 거부한다."""
-    if tenant != _tenant():
+    """근거 패널에 보여줄 문서 원문. 공통 문서가 아닌데 요청한 고객사와 문서의 고객사가 다르면 거부한다."""
+    if tenant not in (_tenant(), COMMON):
         raise ResourceError("다른 고객사의 문서는 읽을 수 없다")
     async with await _connect() as conn:
         rows = await (await conn.execute(

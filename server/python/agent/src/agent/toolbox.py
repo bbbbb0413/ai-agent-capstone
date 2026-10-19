@@ -48,8 +48,12 @@ class ToolBox:
         return [tool for name, tool in self.by_name.items() if name in harness.NODE_TOOLS[node]]
 
     async def call(self, node: str, name: str, args: dict[str, Any], counts: dict[str, int],
-                   call_id: str = "direct", incident_id: int | None = None) -> ToolMessage:
-        """counts(Node·도구별 호출 횟수)는 호출한 쪽이 State에 저장한다."""
+                   call_id: str = "direct", incident_id: int | None = None,
+                   max_chars: int = harness.TOOL_RESULT_CHARS) -> ToolMessage:
+        """counts(Node·도구별 호출 횟수)는 호출한 쪽이 State에 저장한다.
+
+        max_chars: 결과 길이 제한. 모델에 바로 넘기지 않고 코드가 먼저 요약하는 결과만 늘린다(진단 로그 미리 조회).
+        """
         if name not in harness.NODE_TOOLS[node] or name not in self.by_name:
             return self._error(call_id, name, f"'{name}'은 이 단계({node})에서 쓸 수 없는 도구다")
         key = f"{node}:{name}"  # 한도는 Node마다 따로 센다. 진단에서 다 쓰면 회복 확인에서 조회할 수 없다
@@ -79,7 +83,7 @@ class ToolBox:
             raise  # 연결 오류 등은 기존 Runner 재시도 정책으로 처리한다
         status = output.status if isinstance(output, ToolMessage) else "success"
         content = output.content if isinstance(output, ToolMessage) else output
-        text = harness.truncate(harness.mask(_as_text(content)))
+        text = harness.truncate(harness.mask(_as_text(content)), max_chars)
         await backend.emit(self.task_id, "TOOL_END", {
             **event, "status": status, **({"error": text[:500]} if status == "error" else {}),
         })
