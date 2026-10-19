@@ -26,6 +26,8 @@ VERIFY_RETRY_SECONDS = 10   # 조치 후 메트릭이 아직 없으면 한 번 �
 # gpt-5-mini가 조치 도구를 호출하지 않고 권고문만 쓰는 경우가 있었다 (low 2/2, medium 1/5, docs/harness-spec.md).
 # 그래서 propose_action은 도구 호출을 강제하고, 어떤 도구를 고를지는 medium으로 판단한다
 PROPOSE_REASONING_EFFORT = "medium"
+# 진단 첫 턴에 계획 글만 쓰고 도구 없이 끝나면 그 글이 진단 결과가 되었다. 첫 턴만 도구 호출을 강제한다
+DIAGNOSE_FORCE_FIRST_TOOL = settings.diagnose_force_first_tool
 
 # ── Tools / Context ───────────────────────────────────────────
 TOOL_RESULT_CHARS = 4_000      # 도구 결과는 이 길이로 자른다

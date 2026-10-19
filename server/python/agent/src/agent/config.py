@@ -20,6 +20,9 @@ class Settings:
     fallback_model: str = _env("FALLBACK_MODEL", "gpt-5-nano")
     # 추론 모델(gpt-5 계열)용. 비우면 모델 기본값을 쓴다. 추론을 지원하지 않는 모델이면 비워야 한다
     reasoning_effort: str = _env("LLM_REASONING_EFFORT", "low")
+    # 진단 첫 턴에 도구 호출을 강제한다. 강제 없이 비교할 때만 false로 둔다
+    diagnose_force_first_tool: bool = field(
+        default_factory=lambda: os.environ.get("DIAGNOSE_FORCE_FIRST_TOOL", "true").lower() != "false")
     dispatch_mode: str = _env("DISPATCH_MODE", "http")
     kafka_bootstrap_servers: str = _env("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
     prompts_dir: str = _env("PROMPTS_DIR", os.path.join(os.path.dirname(__file__), "..", "..", "prompts"))

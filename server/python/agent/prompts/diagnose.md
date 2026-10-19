@@ -1,6 +1,6 @@
 ## 진단 단계
 
-1. 먼저 조사 계획을 3단계 이내로 적는다.
+1. 첫 도구를 부르면서 같은 메시지에 조사 계획을 3단계 이내로 적는다. 계획만 쓰고 도구 없이 끝내지 않는다.
 2. 메트릭으로 이상이 시작된 시각을 찾는다. 에러율은 `demo_orders_seconds_count`의 outcome="error" 비율, 응답시간은 `demo_orders_seconds_bucket`의 p95로 본다.
 3. 그 시각 전후의 ERROR·WARN 로그를 검색해 반복되는 메시지를 찾는다.
    - 로그 라벨은 `app="demo-app"`, `level`(ERROR, WARN, INFO)이다. 고객사 구분은 데이터소스가 하므로 tenant label은 넣지 않는다.

@@ -2,6 +2,7 @@
 
 LLM이 도구를 고르는 Node: diagnose, propose_action, verify, report
 코드가 정해진 도구를 부르는 Node: load_context, retrieve_runbook, execute
+코드가 바로 답하는 Node: no_issue (인식된 장애가 없는 질문)
 사람의 결정을 기다리는 Node(interrupt): approval, escalate, notice_approval, await_change
   await_change는 GitOps 고객사의 PR이 병합되고 ArgoCD 동기화가 끝나기를 기다린다. backend가 동기화 알림을 받아 재개한다.
 
@@ -15,7 +16,7 @@ from dataclasses import dataclass, field
 from typing import Annotated, Any, Literal, TypedDict
 from uuid import NAMESPACE_URL, uuid5
 
-from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.runtime import Runtime
@@ -101,6 +102,12 @@ async def load_context(state: State, runtime: Rt) -> dict:
         incidents = parse_json(await box.call("load_context", "business_list_incidents", {"status": "OPEN"}, counts))
         if isinstance(incidents, list):
             context["incident"] = next((i for i in incidents if i.get("id") == incident_id), None)
+    else:
+        # 질문 작업: 인식된 장애가 있는지 본다. 조회에 실패하면(None) 장애가 없다고 단정하지 않는다
+        incidents = parse_json(await box.call("load_context", "business_list_incidents", {"status": "OPEN"}, counts))
+        if incidents == "":
+            incidents = []  # MCP 어댑터는 빈 목록을 빈 내용으로 넘긴다
+        context["open_incidents"] = incidents if isinstance(incidents, list) else None
     return {"context": context, "tool_counts": counts}
 
 
@@ -117,11 +124,23 @@ def _needs_document_lookup(state: State) -> bool:
     return any(marker in question for marker in _DOCUMENT_QUESTION_MARKERS)
 
 
-def route_triage(state: State) -> Literal["escalate", "diagnose", "retrieve_runbook"]:
+def route_triage(state: State) -> Literal["escalate", "diagnose", "retrieve_runbook", "no_issue"]:
     if _needs_document_lookup(state):
         return "retrieve_runbook"
-    incident = state.get("context", {}).get("incident") or {}
+    context = state.get("context", {})
+    if not state.get("incident_id") and context.get("open_incidents") == []:
+        return "no_issue"
+    incident = context.get("incident") or {}
     return "escalate" if incident.get("severity") == "P1" and not state.get("approvals") else "diagnose"
+
+
+async def no_issue(state: State) -> dict:
+    """인식된 장애(열린 인시던트)가 없는 질문에는 진단·조치 없이 이상 없음으로 답한다 (docs/기능별-변경사항.md 7장)."""
+    tenant = (state.get("context", {}).get("tenant") or {}).get("name") or state["tenant_id"]
+    text = (f"## 이상 없음\n\n현재 {tenant}에 인식된 장애(처리 중인 인시던트)가 없다.\n\n"
+            "알림 기준에 못 미치는 문제는 여기에 나타나지 않는다. 문제가 계속되면 담당 엔지니어에게 확인을 요청한다.")
+    await backend.emit(state["task_id"], "TOKEN", {"text": text})
+    return {"report": text}
 
 
 async def retrieve_runbook(state: State, runtime: Rt) -> dict:
@@ -167,17 +186,21 @@ def route_execute(state: State) -> Literal["verify", "await_change", "report"]:
 # ── LLM Node ──────────────────────────────────────────────────
 
 
-async def _tool_loop(node: str, state: State, runtime: Rt, messages: list[AnyMessage],
-                     max_turns: int) -> tuple[list[AnyMessage], int, dict[str, int], list[dict]]:
-    """모델이 허용목록 안에서 도구를 고르고, Harness가 실행한다. 턴·시간·도구 한도를 지킨다."""
+async def _tool_loop(node: str, state: State, runtime: Rt, messages: list[AnyMessage], max_turns: int,
+                     force_first_tool: bool = False) -> tuple[list[AnyMessage], int, dict[str, int], list[dict]]:
+    """모델이 허용목록 안에서 도구를 고르고, Harness가 실행한다. 턴·시간·도구 한도를 지킨다.
+
+    force_first_tool이면 첫 턴은 도구를 반드시 하나 이상 부른다. 어떤 도구를 부를지는 모델이 고른다.
+    """
     box = runtime.context.toolbox
     model = harness.chat_model(box.for_node(node))
+    first = harness.chat_model(box.for_node(node), tool_choice="required") if force_first_tool else model
     turns, counts, evidence, new = state["turns"], dict(state["tool_counts"]), [], []
-    for _ in range(max_turns):
+    for i in range(max_turns):
         if turns >= harness.MAX_TURNS:
             break
         runtime.context.check_time()
-        ai: AIMessage = await model.ainvoke(harness.compact(messages + new))
+        ai: AIMessage = await (first if i == 0 else model).ainvoke(harness.compact(messages + new))
         turns += 1
         new.append(ai)
         if not ai.tool_calls:
@@ -207,8 +230,12 @@ async def diagnose(state: State, runtime: Rt) -> dict:
                          f"{json.dumps(state.get('context', {}), ensure_ascii=False, default=str)}"),
         ]
     history = list(state.get("messages", [])) + intro
-    new, turns, counts, evidence = await _tool_loop("diagnose", state, runtime, history, harness.MAX_TURNS)
+    new, turns, counts, evidence = await _tool_loop("diagnose", state, runtime, history, harness.MAX_TURNS,
+                                                    force_first_tool=harness.DIAGNOSE_FORCE_FIRST_TOOL)
     findings = _final_text(new) or "원인 미확정: 턴 한도 안에 근거를 모으지 못했다"
+    if not any(isinstance(m, ToolMessage) and m.status != "error" for m in new):
+        # 근거 없는 글(조사 계획 등)이 런북 검색어와 조치 제안의 입력이 되지 않게 한다
+        findings = "원인 미확정: 도구로 근거를 모으지 못했다"
     update = {"messages": intro + new, "findings": findings, "turns": turns, "tool_counts": counts,
               "evidence": state["evidence"] + evidence}
     if not state.get("plan") and new and isinstance(new[0], AIMessage):
@@ -444,6 +471,7 @@ def build(checkpointer):
         ("retrieve_runbook", retrieve_runbook), ("propose_action", propose_action), ("approval", approval),
         ("execute", execute), ("await_change", await_change), ("verify", verify), ("bump_attempt", bump_attempt),
         ("final_escalate", escalate), ("report", report), ("notice_approval", notice_approval),
+        ("no_issue", no_issue),
     ]:
         g.add_node(name, node)
 
@@ -463,4 +491,5 @@ def build(checkpointer):
     g.add_edge("final_escalate", "report")
     g.add_conditional_edges("report", route_report)
     g.add_edge("notice_approval", END)
+    g.add_edge("no_issue", END)
     return g.compile(checkpointer=checkpointer)

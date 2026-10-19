@@ -15,6 +15,7 @@ PDF 표 6-3의 권장값을 기준으로 둔 값과, 팀이 바꾼 값과 이유
 | Recovery | Kafka 작업 재시도 | 3회 | — | 이후 `tasks.dlt`, 작업은 FAILED |
 | Recovery | 모델 호출 타임아웃 | 30초 | — | 타임아웃도 재시도 대상이라 한 턴이 최대 90초까지 걸린다 |
 | Agent Loop | 추론 강도 | low (propose_action만 medium) | — | `LLM_REASONING_EFFORT`. 비우면 모델 기본값. propose는 `harness.PROPOSE_REASONING_EFFORT` |
+| Agent Loop | 도구 호출 강제 | propose_action 전체, diagnose 첫 턴 | — | diagnose는 `DIAGNOSE_FORCE_FIRST_TOOL`(기본 true). 진단 도구는 조회 전용이라 강제해도 부작용이 없다 |
 
 ## 변경 이력
 
@@ -32,3 +33,4 @@ PDF 표 6-3의 권장값을 기준으로 둔 값과, 팀이 바꾼 값과 이유
 | 2026-10-19 | 회복 확인 첫 호출 도구 강제 | 선택 → `tool_choice="required"` (첫 턴만) | 시나리오 A 재실행에서 PR 병합·동기화 후 verify가 메트릭을 한 번도 조회하지 않고 NOT_RECOVERED로 답함. 그 결과 재진단 → 두 번째 롤백 PR이 수정 커밋을 되돌려 장애가 재발 | 시나리오 A 재실행 |
 | 2026-10-19 | 회복 확인 쿼리 | 모델이 PromQL 작성(첫 호출 강제) → 코드가 표준 쿼리로 조회, 모델은 수치로 판단만 (`graph.VERIFY_QUERIES`) | 첫 호출을 강제해도 시나리오 B에서 모델이 없는 메트릭 이름(`reservation_api_requests_seconds_count`)과 깨진 이스케이프로 조회해 두 쿼리 모두 실패, NOT_RECOVERED. 메트릭이 비면 10초 더 기다려 한 번 다시 조회한다 | 시나리오 B 재실행 |
 | 2026-10-19 | 보고서 입력 | 회복 여부만 → 회복 확인 결론·수치(`verification`), 조치 결과, PR 정보 추가 (`prompts/report.md`) | 시나리오 A 보고서가 "확인 필요", "로그 미제공"으로 채워지고, 회복된 뒤에도 공지 문안이 "동기화되면 확인하겠다"고 씀 | 시나리오 B 재실행 |
+| 2026-10-19 | diagnose 첫 턴 도구 강제 | 선택 → 첫 턴만 `tool_choice="required"`, 성공한 도구 결과가 없으면 `원인 미확정` | 첫 턴에 조사 계획만 쓰고 도구 없이 끝나 계획 글이 런북 검색어와 조치 제안의 입력이 됨 ([기능별-변경사항.md](기능별-변경사항.md) 8장) | diagnose Node 단독 3회(A사, 최근 2시간 안에 DB 커넥션 풀 장애 구간이 있고 측정 시점에는 회복된 상태): 첫 턴 도구 호출 3/3, 원인 정답(HikariPool) 3/3, 2~4턴, 11~19초. 계획 글은 3회 모두 비어 있음. 시나리오 A·B 5회는 미실행 |
