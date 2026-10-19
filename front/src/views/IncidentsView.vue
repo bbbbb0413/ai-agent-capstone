@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api.js'
+import TaskStats from '../components/TaskStats.vue'
 import { useSession } from '../session.js'
 
 const session = useSession()
@@ -34,6 +35,8 @@ function taskFor(incident) {
 
 <template>
   <p v-if="error" class="error">{{ error }}</p>
+
+  <TaskStats :incidents="incidents" :tasks="tasks" />
 
   <form v-if="session.isMspStaff" class="card" @submit.prevent="ask">
     <h2>Agent에게 묻기</h2>

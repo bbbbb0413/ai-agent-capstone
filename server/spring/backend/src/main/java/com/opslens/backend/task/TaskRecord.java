@@ -19,6 +19,7 @@ public record TaskRecord(
         JsonNode pendingAction,
         String answer,
         JsonNode sources,
+        JsonNode summary,
         String traceUrl,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt) {

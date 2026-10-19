@@ -126,12 +126,21 @@ def chat_model(tools: list[BaseTool] | None = None, reasoning_effort: str | None
 
     reasoning_effort를 주지 않으면 LLM_REASONING_EFFORT를 쓴다. tool_choice="required"면 도구를 반드시 고른다.
     """
+    return _resilient(lambda llm: llm.bind_tools(tools, tool_choice=tool_choice) if tools else llm,
+                      reasoning_effort)
+
+
+def structured_model(schema: type) -> Runnable:
+    """응답을 schema(pydantic 모델)로 강제한다. 재시도와 대체 모델은 chat_model과 같다."""
+    return _resilient(lambda llm: llm.with_structured_output(schema))
+
+
+def _resilient(wrap, reasoning_effort: str | None = None) -> Runnable:
     effort = reasoning_effort or settings.reasoning_effort or None
 
     def build(model: str) -> Runnable:
         llm = ChatOpenAI(model=model, max_retries=0, timeout=30, reasoning_effort=effort)
-        bound = llm.bind_tools(tools, tool_choice=tool_choice) if tools else llm
-        return bound.with_retry(retry_if_exception_type=_RETRYABLE, stop_after_attempt=3)
+        return wrap(llm).with_retry(retry_if_exception_type=_RETRYABLE, stop_after_attempt=3)
 
     return build(settings.llm_model).with_fallbacks([build(settings.fallback_model)])
 

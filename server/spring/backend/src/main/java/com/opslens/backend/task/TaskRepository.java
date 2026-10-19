@@ -94,13 +94,14 @@ public class TaskRepository {
                 .param(id).update();
     }
 
-    public void complete(UUID id, String status, String answer, JsonNode sources, String traceUrl) {
+    public void complete(UUID id, String status, String answer, JsonNode sources, JsonNode summary,
+            String traceUrl) {
         jdbc.sql("""
-                        UPDATE ai_tasks SET status = ?, answer = ?, sources = ?::jsonb, trace_url = ?,
-                               pending_action = NULL, updated_at = now()
+                        UPDATE ai_tasks SET status = ?, answer = ?, sources = ?::jsonb, summary = ?::jsonb,
+                               trace_url = ?, pending_action = NULL, updated_at = now()
                         WHERE id = ?
                         """)
-                .params(status, answer, toJson(sources), traceUrl, id).update();
+                .params(status, answer, toJson(sources), toJson(summary), traceUrl, id).update();
     }
 
     public void recordApproval(UUID taskId, String toolName, JsonNode args, String decision, String comment,
@@ -117,7 +118,7 @@ public class TaskRepository {
                 rs.getObject("incident_id", Long.class), rs.getString("type"), rs.getString("question"),
                 rs.getString("status"), rs.getObject("requested_by", Long.class),
                 readJson(rs.getString("pending_action")), rs.getString("answer"),
-                readJson(rs.getString("sources")), rs.getString("trace_url"),
+                readJson(rs.getString("sources")), readJson(rs.getString("summary")), rs.getString("trace_url"),
                 rs.getObject("created_at", OffsetDateTime.class), rs.getObject("updated_at", OffsetDateTime.class));
     }
 

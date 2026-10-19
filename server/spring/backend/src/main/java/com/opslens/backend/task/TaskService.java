@@ -18,7 +18,8 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class TaskService {
 
-    public record TaskResult(String status, String answer, JsonNode sources, String traceUrl, String report) {}
+    public record TaskResult(String status, String answer, JsonNode sources, JsonNode summary, String traceUrl,
+            String report) {}
 
     /** 고객에게 나가거나 돈이 걸린 도구는 MSP 관리자만 승인한다 (직무 분리). */
     private static final Set<String> ADMIN_ONLY_TOOLS =
@@ -55,7 +56,7 @@ public class TaskService {
             dispatcher.dispatch(new TaskMessage(taskId, tenantId, tenant.slaTier(), incidentId, type, question, traceId));
         } catch (RuntimeException e) {
             log.warn("task {} dispatch failed", taskId, e);
-            tasks.complete(taskId, TaskRecord.FAILED, "작업을 agent에 전달하지 못했다", null, null);
+            tasks.complete(taskId, TaskRecord.FAILED, "작업을 agent에 전달하지 못했다", null, null, null);
         }
         return taskId;
     }
@@ -110,7 +111,7 @@ public class TaskService {
     public void complete(UUID taskId, TaskResult result) {
         TaskRecord task = tasks.get(taskId);
         String status = TaskRecord.DONE.equals(result.status()) ? TaskRecord.DONE : TaskRecord.FAILED;
-        tasks.complete(taskId, status, result.answer(), result.sources(), result.traceUrl());
+        tasks.complete(taskId, status, result.answer(), result.sources(), result.summary(), result.traceUrl());
         if (task.incidentId() != null && result.report() != null) {
             incidents.saveReport(task.incidentId(), result.report());
         }

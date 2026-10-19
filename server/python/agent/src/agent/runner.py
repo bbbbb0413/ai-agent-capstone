@@ -13,7 +13,7 @@ from typing import Any
 from langgraph.types import Command
 from psycopg_pool import AsyncConnectionPool
 
-from agent import harness
+from agent import harness, summary
 from agent.backend import backend
 from agent.graph import Context
 from agent.toolbox import ToolBox, load_tools
@@ -91,7 +91,7 @@ class Runner:
         sources = [{"doc": d.get("uri"), "section": d.get("section")} for d in result.get("runbook", [])]
         # TODO: LangSmith trace 링크를 trace_id로 찾아 trace_url에 넣는다
         await backend.result(task_id, status="DONE", answer=result.get("report"), sources=sources,
-                             report=result.get("report"))
+                             summary=summary.build(result), report=result.get("report"))
         return "DONE"
 
     @staticmethod

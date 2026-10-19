@@ -20,9 +20,10 @@ class Backend:
         await self.http.post(f"/internal/tasks/{task_id}/events", json={"type": event_type, "data": data})
 
     async def result(self, task_id: str, *, status: str, answer: str | None, sources: list[dict] | None = None,
-                     report: str | None = None, trace_url: str | None = None) -> None:
+                     summary: dict | None = None, report: str | None = None, trace_url: str | None = None) -> None:
         await self.http.post(f"/internal/tasks/{task_id}/result", json={
-            "status": status, "answer": answer, "sources": sources, "report": report, "traceUrl": trace_url,
+            "status": status, "answer": answer, "sources": sources, "summary": summary, "report": report,
+            "traceUrl": trace_url,
         })
 
     async def close(self) -> None:

@@ -20,7 +20,7 @@ from langgraph.graph.message import add_messages
 from langgraph.runtime import Runtime
 from langgraph.types import interrupt
 
-from agent import harness
+from agent import harness, summary
 from agent.backend import backend
 from agent.toolbox import ToolBox, parse_json
 
@@ -48,6 +48,7 @@ class State(TypedDict, total=False):
     recovered: bool
     report: str
     notice_draft: str
+    classification: dict[str, Any] | None  # 에러 유형·원인·근거 조항 (summary.py)
 
 
 @dataclass
@@ -238,25 +239,29 @@ async def bump_attempt(state: State) -> dict:
 
 
 async def report(state: State, runtime: Rt) -> dict:
-    """보고서를 TOKEN 이벤트로 흘려보내며 작성한다. 마지막의 '고객 공지 문안' 절은 notice_approval에서 쓴다."""
-    model = harness.chat_model()
-    messages = [
-        SystemMessage(harness.prompt("system") + "\n\n" + harness.prompt("report")),
-        HumanMessage(json.dumps({
-            "request": state["question"], "plan": state.get("plan"), "findings": state.get("findings"),
-            "evidence": state.get("evidence", []), "runbook": state.get("runbook", []),
-            "action": state.get("proposed_action"), "approvals": state.get("approvals", []),
-            "recovered": state.get("recovered"), "context": state.get("context", {}),
-        }, ensure_ascii=False, default=str)),
-    ]
-    chunks: list[str] = []
-    async for chunk in model.astream(messages):
-        if chunk.content:
-            chunks.append(str(chunk.content))
-            await backend.emit(state["task_id"], "TOKEN", {"text": chunk.content})
-    text = "".join(chunks)
+    """보고서를 TOKEN 이벤트로 흘려보내며 작성한다. 마지막의 '고객 공지 문안' 절은 notice_approval에서 쓴다.
+
+    화면 요약 표에 쓸 분류는 보고서와 같은 입력으로 동시에 만든다.
+    """
+    payload = json.dumps({
+        "request": state["question"], "plan": state.get("plan"), "findings": state.get("findings"),
+        "evidence": state.get("evidence", []), "runbook": state.get("runbook", []),
+        "action": state.get("proposed_action"), "approvals": state.get("approvals", []),
+        "recovered": state.get("recovered"), "context": state.get("context", {}),
+    }, ensure_ascii=False, default=str)
+
+    async def write() -> str:
+        messages = [SystemMessage(harness.prompt("system") + "\n\n" + harness.prompt("report")), HumanMessage(payload)]
+        chunks: list[str] = []
+        async for chunk in harness.chat_model().astream(messages):
+            if chunk.content:
+                chunks.append(str(chunk.content))
+                await backend.emit(state["task_id"], "TOKEN", {"text": chunk.content})
+        return "".join(chunks)
+
+    text, classification = await asyncio.gather(write(), summary.classify(payload))
     body, _, notice = text.partition("## 고객 공지 문안")
-    return {"report": body.strip(), "notice_draft": notice.strip()}
+    return {"report": body.strip(), "notice_draft": notice.strip(), "classification": classification}
 
 
 def route_report(state: State) -> Literal["notice_approval", "__end__"]:
