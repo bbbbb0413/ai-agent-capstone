@@ -1,6 +1,39 @@
-# 작업 결과·승인 회귀 검증
+# 테스트
 
-## 변경된 동작
+| 종류 | 무엇을 확인하나 | 실행 | 걸리는 시간 |
+|---|---|---|---|
+| 전체 시나리오 E2E | 장애 주입부터 승인·조치·회복 확인·보고서까지 실제 스택에서 | `python3 scripts/e2e.py` | 전체 약 15분 |
+| 단위·DB 테스트 | 프론트 타임라인, Agent 도구 결과·분기, backend 소유권·승인·SLA | 아래 2장 | 1분 안팎 |
+
+## 1. 전체 시나리오 E2E (`scripts/e2e.py`)
+
+compose 스택과 kind 클러스터(`scripts/cluster-up.sh`)가 떠 있어야 한다. 시나리오 A는 backend에 `GITHUB_TOKEN`이 있어야 한다.
+
+```bash
+python3 scripts/e2e.py                 # 전체: 사전 점검 → 격리 → 문서 질문 → B → B2 → A
+python3 scripts/e2e.py b a             # 고른 시나리오만 (사전 점검은 항상)
+python3 scripts/e2e.py --list          # 시나리오 목록
+python3 scripts/e2e.py a --no-merge    # 롤백 PR은 사람이 병합 (병합될 때까지 기다린다)
+python3 scripts/e2e.py --auto-approve  # backend 자동 승인 설정을 그대로 쓴다
+```
+
+| 키 | 시나리오 | 기대 결과 |
+|---|---|---|
+| `isolation` | D. 고객사 격리 | B사 담당자·B사 작업·B사 ServiceAccount로 A사 자원 접근 거부, 감사 로그 |
+| `question` | 문서 질문 | RAG로 계약 조항을 찾아 답하고 출처를 단다 |
+| `b` | B. 파드 멈춤 (B사, DIRECT) | `restart_pods`를 Kubernetes API로 실행, 회복 |
+| `b2` | B2. 외부 결제 API 지연 (B사) | 재시작하지 않고 고객 공지 |
+| `a` | A. 잘못된 설정 배포 (A사, GITOPS) | 롤백 PR → 병합 → ArgoCD 동기화 → 회복, 풀 크기 20 원복 |
+
+- **승인:** 스크립트가 제안을 검사해 기대한 조치만 승인하고, 나머지는 거절한다. 잘못된 조치가 실행되지 않게 하기 위해서다. 실행하는 동안 backend 자동 승인을 끄고, 끝나면 되돌린다.
+- **판정:** 기대한 조치를 한 번만 제안했는지, 반영 방식, 회복 확인, 보고서·공지, 정리 상태를 본다. 승인 요청은 저장된 이벤트로 판정하므로 자동 승인으로 진행돼도 기준이 같다.
+- **결과:** 화면 요약 표와 `.local/e2e/<시각>.md`(작업 링크·보고서 포함, git에 올리지 않음).
+- **주의:** 지금은 시나리오 A가 실행할 때마다 `main`에 커밋 3개(장애, 되돌리기, 병합)를 남긴다. 임시 브랜치로 바꿀 예정이다([SPEC 5.8](specs/SPEC-fault-based-actions.md)). 실행이 겹치면 두 번째 실행은 시작하지 않는다.
+- 장애 형태 × 고객사 교차 매트릭스로 확장하는 계획: [specs/SPEC-fault-based-actions.md](specs/SPEC-fault-based-actions.md)
+
+## 2. 작업 결과·승인 회귀 검증
+
+### 변경된 동작
 
 - MCP 도구의 오류 상태와 호출 ID를 메시지와 TOOL_END 이벤트에 보존한다. 완료된 작업 안에서도 실패한 도구는 실패로 표시한다.
 - 리포트와 요약에 조치 결과, PR 생성, 동기화 상태를 전달한다. 승인은 실행 성공과 구분한다.
@@ -14,7 +47,7 @@
 
 Harness 시간·턴 한도, 원인 미확정 시 RAG 분기, 시나리오 초기화 동작은 변경하지 않는다.
 
-## 자동 테스트
+### 자동 테스트
 
 프론트 타임라인·조치 결과·승인 영향 안내:
 
@@ -42,7 +75,7 @@ docker run --rm opslens-backend-tests ./gradlew --no-daemon test
 
 DB 통합 테스트는 OPSLENS_TEST_DATABASE_URL을 지정했을 때만 실행한다. 반드시 별도의 폐기 가능한 PostgreSQL을 사용한다. 테스트는 생성한 review_UUID 스키마를 정리한다. 동시 승인 두 건 중 한 건만 성공하는지, 재시도 복원이 새 승인 정보를 덮어쓰지 않는지, 다른 고객사 보고서 수정이 차단되는지 확인한다.
 
-## 로컬 실행 확인
+### 로컬 실행 확인
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build backend agent frontend
