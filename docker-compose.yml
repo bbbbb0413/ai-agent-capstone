@@ -203,6 +203,8 @@ services:
     command:
       - -header-name=X-Tenant
       - -label=tenant
+      # Grafana Explore의 메트릭·라벨 목록(/api/v1/labels, /api/v1/label/*/values)에도 tenant를 강제해 허용한다
+      - -enable-label-apis
       - -upstream=http://prometheus:9090
       - -insecure-listen-address=0.0.0.0:8080
     depends_on:
@@ -232,6 +234,7 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
       - prom-label-proxy
       - loki

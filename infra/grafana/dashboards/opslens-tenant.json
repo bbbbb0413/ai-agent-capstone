@@ -1,0 +1,148 @@
+{
+  "uid": "opslens-tenant",
+  "title": "OpsLens 고객사 서비스 현황",
+  "description": "고객사를 고르면 그 고객사 데이터소스로만 조회한다 (prom-label-proxy, Loki X-Scope-OrgID).",
+  "tags": ["opslens"],
+  "timezone": "browser",
+  "refresh": "10s",
+  "time": { "from": "now-30m", "to": "now" },
+  "schemaVersion": 41,
+  "templating": {
+    "list": [
+      {
+        "name": "tenant",
+        "label": "고객사",
+        "type": "custom",
+        "query": "tenant-a,tenant-b",
+        "current": { "text": "tenant-a", "value": "tenant-a" },
+        "options": [
+          { "text": "tenant-a", "value": "tenant-a", "selected": true },
+          { "text": "tenant-b", "value": "tenant-b", "selected": false }
+        ]
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "에러율 (최근 1분)",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 5 },
+      "datasource": { "type": "prometheus", "uid": "prom-${tenant}" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prom-${tenant}" },
+          "expr": "sum(rate(demo_orders_seconds_count{outcome=\"error\"}[1m])) / sum(rate(demo_orders_seconds_count[1m])) or vector(0)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 1,
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 0.2 } ] }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "p95 응답시간 (최근 1분)",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 5 },
+      "datasource": { "type": "prometheus", "uid": "prom-${tenant}" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prom-${tenant}" },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(demo_orders_seconds_bucket[1m])))"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 2,
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "처리량",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 5 },
+      "datasource": { "type": "prometheus", "uid": "prom-${tenant}" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prom-${tenant}" },
+          "expr": "sum(rate(demo_orders_seconds_count[1m]))"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps", "decimals": 1 } }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "수집 상태",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 5 },
+      "datasource": { "type": "prometheus", "uid": "prom-${tenant}" },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prom-${tenant}" }, "expr": "min(up)" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [ { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } } ]
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "요청 결과별 처리량",
+      "gridPos": { "x": 0, "y": 5, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prom-${tenant}" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prom-${tenant}" },
+          "expr": "sum by (outcome) (rate(demo_orders_seconds_count[1m]))",
+          "legendFormat": "{{outcome}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps" } }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "p95 응답시간",
+      "gridPos": { "x": 12, "y": 5, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prom-${tenant}" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prom-${tenant}" },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(demo_orders_seconds_bucket[1m])))",
+          "legendFormat": "p95"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "thresholdsStyle": { "mode": "line" } },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] }
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "logs",
+      "title": "로그 (WARN·ERROR 포함 전체)",
+      "gridPos": { "x": 0, "y": 13, "w": 24, "h": 10 },
+      "datasource": { "type": "loki", "uid": "loki-${tenant}" },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "loki", "uid": "loki-${tenant}" }, "expr": "{tenant=\"${tenant}\"}" }
+      ],
+      "options": { "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true }
+    }
+  ]
+}

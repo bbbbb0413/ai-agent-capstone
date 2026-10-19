@@ -1,4 +1,11 @@
-# 대시보드 JSON을 infra/grafana/dashboards에 두면 자동으로 불러온다 (TODO: 고객사별 대시보드)
+# infra/grafana/dashboards/*.json 을 OpsLens 폴더로 자동 등록한다
 apiVersion: 1
 
-providers: []
+providers:
+  - name: opslens
+    folder: OpsLens
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards

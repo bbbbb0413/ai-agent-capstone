@@ -27,15 +27,30 @@ public class OrderSimulator {
         this.registry = registry;
     }
 
+    private final java.util.concurrent.atomic.AtomicInteger processed = new java.util.concurrent.atomic.AtomicInteger();
+    private final java.util.concurrent.atomic.AtomicInteger failed = new java.util.concurrent.atomic.AtomicInteger();
+
     @Scheduled(fixedRateString = "${demo.traffic-interval-ms}")
     void placeOrder() {
         long started = System.nanoTime();
-        String outcome = handle() ? "success" : "error";
+        boolean ok = handle();
+        processed.incrementAndGet();
+        if (!ok) {
+            failed.incrementAndGet();
+        }
+        String outcome = ok ? "success" : "error";
         Timer.builder("demo.orders")
                 .description("주문 처리 시간")
                 .tag("outcome", outcome)
                 .register(registry)
                 .record(System.nanoTime() - started, java.util.concurrent.TimeUnit.NANOSECONDS);
+    }
+
+    /** 정상 상태에서도 로그가 쌓이도록 10초마다 처리 현황을 남긴다. */
+    @Scheduled(fixedRate = 10_000, initialDelay = 10_000)
+    void logSummary() {
+        log.info("orders processed in last 10s: total={}, failed={}, fault={}, poolSize={}",
+                processed.getAndSet(0), failed.getAndSet(0), faults.fault(), faults.poolSize());
     }
 
     private boolean handle() {
