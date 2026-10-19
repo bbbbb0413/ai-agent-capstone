@@ -2,6 +2,7 @@ package com.opslens.backend.change;
 
 import com.opslens.backend.tenant.Tenant;
 import com.opslens.backend.tenant.TenantRepository;
+import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -14,7 +15,7 @@ import org.springframework.web.server.ResponseStatusException;
  * Agent가 정한 조치 의도를 고객사의 반영 방식으로 실행한다 (ADR 0001 D3·D4). Agent와 MCP 도구는 반영 방식을 모른다.
  *   restart_pods        일회성 조치. 원하는 상태가 그대로라 GITOPS 고객사도 API로 바로 실행한다
  *   scale_deployment    원하는 상태 변경. GITOPS면 PR, DIRECT면 API
- *   rollback_deployment 원하는 상태 변경. GITOPS면 되돌리기 PR, DIRECT면 직전 ReplicaSet으로 되돌린다
+ *   rollback_deployment 원하는 상태 변경. 장애 시작 전 마지막 변경을 GITOPS면 되돌리기 PR로, DIRECT면 ReplicaSet으로 되돌린다
  */
 @Service
 public class ChangeService {
@@ -35,7 +36,9 @@ public class ChangeService {
         this.gitops = gitops;
     }
 
-    public Map<String, Object> execute(Tenant tenant, String action, String service, Integer replicas, String reason) {
+    /** incidentStartedAt: 롤백 대상을 고르는 기준. 장애 시작 전 마지막 변경을 되돌린다. */
+    public Map<String, Object> execute(Tenant tenant, String action, String service, Integer replicas, String reason,
+            OffsetDateTime incidentStartedAt) {
         requireService(tenant, service);
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("action", action);
@@ -61,10 +64,10 @@ public class ChangeService {
             }
             case "rollback_deployment" -> {
                 if (tenant.gitops()) {
-                    putPullRequest(result, gitops.rollback(tenant, service, reason));
+                    putPullRequest(result, gitops.rollback(tenant, service, reason, incidentStartedAt));
                 } else {
                     result.put("status", EXECUTED);
-                    result.put("rolledBackTo", kubernetes.rollback(tenant, service));
+                    result.put("rolledBackTo", kubernetes.rollback(tenant, service, incidentStartedAt));
                 }
             }
             default -> throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
