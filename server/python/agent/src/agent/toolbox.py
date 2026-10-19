@@ -65,10 +65,10 @@ class ToolBox:
         if incident_id is not None and "incident_id" in args:
             args = {**args, "incident_id": incident_id}  # 모델이 다른 인시던트 번호를 넣지 못하게 한다
 
-        await backend.emit(self.task_id, "TOOL_START", {"tool": name, "args": args})
+        await backend.emit(self.task_id, "TOOL_START", {"tool": name, "node": node, "args": args})
         output = await tool.ainvoke(args)  # MCP 오류는 어댑터가 문자열로 돌려준다 (handle_tool_errors)
         text = harness.truncate(harness.mask(_as_text(output)))
-        await backend.emit(self.task_id, "TOOL_END", {"tool": name})
+        await backend.emit(self.task_id, "TOOL_END", {"tool": name, "node": node})
         return ToolMessage(content=harness.as_untrusted(text), tool_call_id=call_id, name=name)
 
     @staticmethod

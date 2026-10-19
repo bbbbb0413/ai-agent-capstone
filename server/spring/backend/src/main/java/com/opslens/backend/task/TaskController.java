@@ -58,6 +58,13 @@ public class TaskController {
         return task;
     }
 
+    /** 저장된 진행 이벤트. 끝난 작업이나 다시 연 화면에서 진행 과정을 그린다 (실시간 이벤트는 /stream). */
+    @GetMapping("/{id}/events")
+    List<TaskEvent> events(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+        CurrentUser.from(jwt).requireAccess(tasks.get(id).tenantId());
+        return tasks.listEvents(id);
+    }
+
     @GetMapping(path = "/{id}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     SseEmitter stream(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
         CurrentUser.from(jwt).requireAccess(tasks.get(id).tenantId());

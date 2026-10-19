@@ -18,9 +18,9 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @Component
 public class TaskEventHub {
 
-    /** 화면이 받는 이벤트 (기획안 5.3) */
+    /** agent가 보내는 이벤트 (기획안 5.3). STEP은 도구 없이 진행되는 단계(회복 확인 대기, 보고서 작성)를 알린다 */
     public static final Set<String> EVENT_TYPES =
-            Set.of("TOKEN", "TOOL_START", "TOOL_END", "APPROVAL_REQUIRED", "CHANGE_PENDING", "DONE", "FAILED");
+            Set.of("TOKEN", "STEP", "TOOL_START", "TOOL_END", "APPROVAL_REQUIRED", "CHANGE_PENDING", "DONE", "FAILED");
     private static final Set<String> TERMINAL = Set.of("DONE", "FAILED");
 
     private final Map<UUID, List<SseEmitter>> emitters = new ConcurrentHashMap<>();

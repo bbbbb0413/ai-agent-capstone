@@ -21,6 +21,7 @@ export const api = {
   incident: (id) => request('GET', `/api/incidents/${id}`),
   createTask: (tenantId, question, incidentId) => request('POST', '/api/ai/tasks', { tenantId, question, incidentId }),
   task: (id) => request('GET', `/api/ai/tasks/${id}`),
+  taskEvents: (id) => request('GET', `/api/ai/tasks/${id}/events`),
   tasks: () => request('GET', '/api/ai/tasks'),
   approve: (id, decision, comment) => request('POST', `/api/ai/tasks/${id}/approval`, { decision, comment }),
   stream: (id) => new EventSource(`/api/ai/tasks/${id}/stream`),

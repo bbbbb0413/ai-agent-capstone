@@ -58,7 +58,33 @@ pre { white-space: pre-wrap; word-break: break-word; }
 .markdown pre { padding: 12px; border-radius: 6px; background: var(--bg); overflow-x: auto; }
 .markdown pre code { padding: 0; }
 .markdown blockquote { margin: 0; padding-left: 12px; border-left: 3px solid var(--border); color: var(--muted); }
-.activity { font-size: 14px; color: var(--muted); }
+a { color: var(--accent); }
+.row-between { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.updated { font-size: 12px; font-weight: 400; }
+.badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; line-height: 18px; white-space: nowrap; border: 1px solid currentColor; }
+.badge.ok { color: var(--ok); }
+.badge.bad { color: var(--danger); }
+.badge.warn { color: var(--warn); }
+.badge.info { color: var(--accent); }
+.badge.neutral { color: var(--muted); }
+h2 .badge { vertical-align: middle; margin-left: 6px; }
+.badge-link { text-decoration: none; font-size: 13px; white-space: nowrap; }
+.badge-link:hover { text-decoration: underline; }
+.timeline { list-style: none; margin: 0; padding: 0; font-size: 14px; }
+.timeline li { display: grid; grid-template-columns: 20px 52px 96px 1fr; gap: 8px; align-items: baseline; padding: 5px 0; border-bottom: 1px solid var(--border); }
+.timeline li:last-child { border-bottom: 0; }
+.timeline .mark { text-align: center; font-weight: 700; color: var(--muted); }
+.timeline .ok .mark, .timeline .done .mark { color: var(--ok); }
+.timeline .fail .mark { color: var(--danger); }
+.timeline .wait .mark { color: var(--warn); }
+.timeline .wait .what { color: var(--warn); }
+.timeline .running .mark::before { content: ""; display: inline-block; width: 10px; height: 10px; border: 2px solid var(--accent); border-right-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
+.timeline .time { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+.timeline .stage { color: var(--muted); font-size: 12px; font-weight: 600; }
+.timeline .what { min-width: 0; }
+.timeline .detail { display: block; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.timeline .what a { margin-left: 6px; font-size: 13px; }
+@keyframes spin { to { transform: rotate(360deg); } }
 .muted { color: var(--muted); }
 .back { display: inline-block; margin-bottom: 12px; color: var(--accent); text-decoration: none; font-size: 14px; }
 .back:hover { text-decoration: underline; }

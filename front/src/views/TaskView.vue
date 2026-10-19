@@ -3,13 +3,15 @@ import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { api } from '../api.js'
+import StatusBadge from '../components/StatusBadge.vue'
+import { actionDetail, toTimeline } from '../progress.js'
 import { useSession } from '../session.js'
 
 const props = defineProps({ id: { type: String, required: true } })
 const session = useSession()
 const task = ref(null)
 const answer = ref('')
-const activity = ref([])
+const events = ref([])     // 저장된 진행 이력 + 실시간 이벤트
 const approval = ref(null)
 const change = ref(null)   // GitOps PR 병합·동기화 대기 (CHANGE_PENDING)
 const error = ref('')
@@ -20,12 +22,12 @@ let source
 // 리포트에는 모델 출력과 로그 원문이 섞이므로 HTML로 그리기 전에 반드시 정리한다
 const reportHtml = computed(() => DOMPurify.sanitize(marked.parse(task.value?.answer || answer.value)))
 
+const timeline = computed(() => toTimeline(events.value))
+const startedAt = computed(() => new Date(task.value?.createdAt || events.value[0]?.createdAt || Date.now()))
+const STATE_MARKS = { running: '', done: '✓', wait: '…', ok: '✓', fail: '✕' }
+const elapsed = (at) => `+${Math.max(0, Math.round((new Date(at) - startedAt.value) / 1000))}초`
+
 const summary = computed(() => task.value?.summary)
-const RUNBOOK_ACTIONS = {
-  restart_pods: '파드 재시작',
-  scale_deployment: '레플리카 확장',
-  rollback_deployment: '직전 배포로 롤백',
-}
 const DECISIONS = { APPROVE: '승인', REJECT: '거절' }
 const CHANGE_RESULTS = { SYNCED: '병합·동기화 완료', TIMEOUT: '기한 안에 병합되지 않음' }
 
@@ -33,10 +35,7 @@ const actionLabel = computed(() => {
   const action = summary.value?.action
   if (!action) return '제안 없음'
   if (action.tool === 'business_send_customer_notice') return '고객 공지 발송'
-  const { action: kind, service, replicas } = action.args || {}
-  const name = RUNBOOK_ACTIONS[kind] || kind || action.tool
-  const detail = [service, replicas != null ? `replicas=${replicas}` : null].filter(Boolean).join(', ')
-  return detail ? `${name} (${detail})` : name
+  return actionDetail(action.args) || action.tool
 })
 const recoveredLabel = computed(() => {
   const recovered = summary.value?.recovered
@@ -53,12 +52,34 @@ async function refresh() {
 function subscribe() {
   source = api.stream(props.id)
   source.addEventListener('TOKEN', (e) => (answer.value += JSON.parse(e.data).text))
-  source.addEventListener('TOOL_START', (e) => activity.value.push(`${JSON.parse(e.data).tool} 실행 중…`))
-  source.addEventListener('TOOL_END', (e) => activity.value.push(`${JSON.parse(e.data).tool} 완료`))
-  source.addEventListener('APPROVAL_REQUIRED', (e) => (approval.value = JSON.parse(e.data)))
-  source.addEventListener('CHANGE_PENDING', (e) => (change.value = JSON.parse(e.data)))
+  const record = (type, handle) =>
+    source.addEventListener(type, (e) => {
+      const data = JSON.parse(e.data)
+      events.value.push({ type, data, createdAt: new Date().toISOString() })
+      handle?.(data)
+    })
+  record('STEP')
+  record('TOOL_START')
+  record('TOOL_END')
+  const setStatus = (status) => task.value && (task.value.status = status)
+  record('APPROVAL_REQUIRED', (data) => {
+    approval.value = data
+    setStatus('WAITING_APPROVAL')
+  })
+  record('APPROVAL_DECIDED', () => {
+    approval.value = null
+    setStatus('RUNNING')
+  })
+  record('CHANGE_PENDING', (data) => {
+    change.value = data
+    setStatus('CHANGE_PENDING')
+  })
+  record('CHANGE_FINISHED', () => {
+    change.value = null
+    setStatus('RUNNING')
+  })
   for (const type of ['DONE', 'FAILED']) {
-    source.addEventListener(type, async () => {
+    record(type, async () => {
       source.close()
       await refresh()
     })
@@ -68,6 +89,7 @@ function subscribe() {
 onMounted(async () => {
   try {
     await refresh()
+    events.value = await api.taskEvents(props.id)
     if (task.value.status === 'WAITING_APPROVAL') approval.value = task.value.pendingAction
     if (task.value.status === 'CHANGE_PENDING') change.value = task.value.pendingAction
     if (!['DONE', 'FAILED'].includes(task.value.status)) subscribe()
@@ -92,7 +114,7 @@ async function decide(decision) {
   <RouterLink to="/" class="back">← 인시던트 목록</RouterLink>
   <p v-if="error" class="error">{{ error }}</p>
   <section v-if="task" class="card">
-    <h2>작업 {{ task.type }} · {{ task.tenantId }} · {{ task.status }}</h2>
+    <h2>작업 {{ task.type }} · {{ task.tenantId }} <StatusBadge kind="task" :value="task.status" /></h2>
     <p class="muted">{{ task.question }}</p>
   </section>
 
@@ -150,7 +172,21 @@ async function decide(decision) {
 
   <section class="card">
     <h2>진행 상황</h2>
-    <ul class="activity"><li v-for="(line, i) in activity" :key="i">{{ line }}</li></ul>
+    <ol v-if="timeline.length" class="timeline">
+      <li v-for="(row, i) in timeline" :key="i" :class="row.state">
+        <span class="mark">{{ STATE_MARKS[row.state] }}</span>
+        <span class="time" :title="new Date(row.at).toLocaleString()">{{ elapsed(row.at) }}</span>
+        <span class="stage">{{ row.stage !== timeline[i - 1]?.stage ? row.stage : '' }}</span>
+        <span class="what">
+          {{ row.label }}<template v-if="row.state === 'running' && row.kind === 'tool'"> 중…</template>
+          <a v-if="row.link" :href="row.link" target="_blank" rel="noopener">열기</a>
+          <span v-if="row.detail" class="muted detail" :title="row.detail">{{ row.detail }}</span>
+        </span>
+      </li>
+    </ol>
+    <p v-else class="muted">
+      {{ ['DONE', 'FAILED'].includes(task?.status) ? '진행 기록이 없다 (진행 이력 저장 전에 끝난 작업)' : '시작을 기다리는 중…' }}
+    </p>
   </section>
 
   <section class="card">

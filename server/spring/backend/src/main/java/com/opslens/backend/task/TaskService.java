@@ -74,6 +74,9 @@ public class TaskService {
         }
 
         tasks.recordApproval(taskId, tool, task.pendingAction().path("args"), decision, comment, user.id());
+        Map<String, String> decided = Map.of("tool", tool, "decision", decision, "by", user.username());
+        tasks.addEvent(taskId, "APPROVAL_DECIDED", decided);
+        events.publish(taskId, "APPROVAL_DECIDED", decided);
         audit.record(task.tenantId(), user.username(), "APPROVAL_" + decision, Map.of("taskId", taskId, "tool", tool),
                 null);
         tasks.resume(taskId);
@@ -90,6 +93,8 @@ public class TaskService {
         }
         audit.record(task.tenantId(), actor, "CHANGE_" + decision,
                 Map.of("taskId", task.id(), "change", task.pendingAction(), "comment", comment), null);
+        tasks.addEvent(task.id(), "CHANGE_FINISHED", Map.of("result", decision));
+        events.publish(task.id(), "CHANGE_FINISHED", Map.of("result", decision));
         agent.resume(task.id(), new AgentClient.ResumeRequest(decision, comment, actor));
         return true;
     }
@@ -104,6 +109,9 @@ public class TaskService {
         } else if ("CHANGE_PENDING".equals(type)) {
             tasks.waitForChange(taskId, data);
         }
+        if (!"TOKEN".equals(type)) {
+            tasks.addEvent(taskId, type, data);
+        }
         events.publish(taskId, type, data);
     }
 
@@ -115,6 +123,7 @@ public class TaskService {
         if (task.incidentId() != null && result.report() != null) {
             incidents.saveReport(task.incidentId(), result.report());
         }
+        tasks.addEvent(taskId, status, Map.of());
         events.publish(taskId, status, Map.of("taskId", taskId, "status", status));
     }
 }

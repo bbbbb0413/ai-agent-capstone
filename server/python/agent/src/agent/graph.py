@@ -216,6 +216,7 @@ def route_propose(state: State) -> Literal["approval", "report"]:
 
 
 async def verify(state: State, runtime: Rt) -> dict:
+    await backend.emit(state["task_id"], "STEP", {"node": "verify", "waitSeconds": harness.VERIFY_SETTLE_SECONDS})
     await runtime.context.settle(harness.VERIFY_SETTLE_SECONDS)  # 조치가 메트릭에 반영될 시간
     messages = [
         SystemMessage(harness.prompt("system") + "\n\n" + harness.prompt("verify")),
@@ -259,6 +260,7 @@ async def report(state: State, runtime: Rt) -> dict:
                 await backend.emit(state["task_id"], "TOKEN", {"text": chunk.content})
         return "".join(chunks)
 
+    await backend.emit(state["task_id"], "STEP", {"node": "report"})
     text, classification = await asyncio.gather(write(), summary.classify(payload))
     body, _, notice = text.partition("## 고객 공지 문안")
     return {"report": body.strip(), "notice_draft": notice.strip(), "classification": classification}

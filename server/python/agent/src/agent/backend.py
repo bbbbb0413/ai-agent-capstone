@@ -16,7 +16,8 @@ class Backend:
         )
 
     async def emit(self, task_id: str, event_type: str, data: dict[str, Any]) -> None:
-        """진행 이벤트(TOKEN, TOOL_START, TOOL_END, APPROVAL_REQUIRED). backend가 SSE로 화면에 중계한다."""
+        """진행 이벤트(TOKEN, STEP, TOOL_START, TOOL_END, APPROVAL_REQUIRED, CHANGE_PENDING).
+        backend가 SSE로 화면에 중계하고, TOKEN을 뺀 나머지는 진행 이력으로 저장한다."""
         await self.http.post(f"/internal/tasks/{task_id}/events", json={"type": event_type, "data": data})
 
     async def result(self, task_id: str, *, status: str, answer: str | None, sources: list[dict] | None = None,

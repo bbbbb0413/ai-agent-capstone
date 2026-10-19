@@ -104,6 +104,19 @@ public class TaskRepository {
                 .params(status, answer, toJson(sources), toJson(summary), traceUrl, id).update();
     }
 
+    public void addEvent(UUID taskId, String type, Object data) {
+        jdbc.sql("INSERT INTO task_events (task_id, type, data) VALUES (?, ?, ?::jsonb)")
+                .params(taskId, type, toJson(json.valueToTree(data))).update();
+    }
+
+    public List<TaskEvent> listEvents(UUID taskId) {
+        return jdbc.sql("SELECT type, data, created_at FROM task_events WHERE task_id = ? ORDER BY id")
+                .param(taskId)
+                .query((rs, rowNum) -> new TaskEvent(rs.getString("type"), readJson(rs.getString("data")),
+                        rs.getObject("created_at", OffsetDateTime.class)))
+                .list();
+    }
+
     public void recordApproval(UUID taskId, String toolName, JsonNode args, String decision, String comment,
             long decidedBy) {
         jdbc.sql("""
