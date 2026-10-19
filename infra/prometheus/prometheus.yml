@@ -10,16 +10,5 @@ alerting:
     - static_configs:
         - targets: ["alertmanager:9093"]
 
-scrape_configs:
-  # tenant label은 prom-label-proxy가 고객사별 조회 범위를 강제할 때 쓴다
-  - job_name: demo-app
-    metrics_path: /actuator/prometheus
-    static_configs:
-      - targets: ["demo-app-a:8080"]
-        labels:
-          tenant: tenant-a
-          service: order-api
-      - targets: ["demo-app-b:8080"]
-        labels:
-          tenant: tenant-b
-          service: reservation-api
+# 고객사 서비스 메트릭은 kind 클러스터의 수집기(gitops/cluster/metrics-agent.yaml)가
+# tenant·service 라벨을 붙여 remote write로 보낸다. 여기서 직접 수집하는 대상은 없다.

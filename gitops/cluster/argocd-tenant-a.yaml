@@ -1,0 +1,20 @@
+# A사(GitOps)의 원하는 상태: 이 저장소 main 브랜치의 gitops/tenants/tenant-a.
+# selfHeal: 누군가 클러스터를 직접 바꿔도 Git 상태로 되돌린다 (ADR 0001 D3의 근거가 되는 동작).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tenant-a
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/bbbbb0413/ai-agent-capstone.git
+    targetRevision: main
+    path: gitops/tenants/tenant-a
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: tenant-a
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

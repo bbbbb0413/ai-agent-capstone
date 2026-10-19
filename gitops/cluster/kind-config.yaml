@@ -1,0 +1,13 @@
+# 고객사 환경 클러스터. 노드 컨테이너를 compose 네트워크(opslens_default)에도 연결해
+# OpsLens backend가 API 서버를, 고객사 서비스가 compose의 Loki·Prometheus를 이름으로 찾게 한다.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: opslens-tenants
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: ClusterConfiguration
+        apiServer:
+          certSANs:
+            - opslens-tenants-control-plane   # compose 네트워크에서 쓰는 API 서버 주소

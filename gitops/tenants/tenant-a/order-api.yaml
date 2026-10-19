@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-api
+  labels:
+    app: order-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: order-api
+  template:
+    metadata:
+      labels:
+        app: order-api
+    spec:
+      containers:
+        - name: order-api
+          image: opslens/demo-app:0.1.0
+          imagePullPolicy: IfNotPresent   # kind에 미리 올린 로컬 이미지를 쓴다
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TENANT_ID
+              value: tenant-a
+            - name: LOKI_URL
+              value: http://loki:3100/loki/api/v1/push
+            # 커넥션 풀 크기. 20보다 작으면 커넥션 풀이 고갈된다 (시나리오 A: 잘못된 설정 배포)
+            - name: DEMO_POOL_SIZE
+              value: "20"
+            - name: SERVICE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: demo-app-admin
+                  key: token
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 50m, memory: 192Mi }
+            limits: { memory: 384Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-api
+spec:
+  # OpsLens backend(compose)가 kind 노드 이름과 이 포트로 서비스 관리 API에 닿는다
+  type: NodePort
+  selector:
+    app: order-api
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30081

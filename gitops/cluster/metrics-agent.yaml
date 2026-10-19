@@ -1,0 +1,101 @@
+# 고객사 서비스의 메트릭을 수집해 compose의 Prometheus로 보내는 수집기 (Prometheus agent 모드).
+# compose에서는 파드 IP에 닿을 수 없어서, 클러스터 안에서 수집한 뒤 remote write로 밀어 넣는다.
+# tenant 라벨은 네임스페이스에서, service 라벨은 파드의 app 라벨에서 붙인다 (알림 규칙이 두 라벨을 쓴다).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: observability
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: metrics-agent
+  namespace: observability
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: metrics-agent
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: metrics-agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: metrics-agent
+subjects:
+  - kind: ServiceAccount
+    name: metrics-agent
+    namespace: observability
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: metrics-agent
+  namespace: observability
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 5s
+    scrape_configs:
+      - job_name: tenant-pods
+        metrics_path: /actuator/prometheus
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: [tenant-a, tenant-b]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            regex: .+
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_container_port_number]
+            regex: "8080"
+            action: keep
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: tenant
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            target_label: service
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+    remote_write:
+      - url: http://prometheus:9090/api/v1/write
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: metrics-agent
+  namespace: observability
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: metrics-agent
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: metrics-agent
+    spec:
+      serviceAccountName: metrics-agent
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v3.13.4
+          args:
+            - --agent
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.agent.path=/prometheus
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { memory: 256Mi }
+      volumes:
+        - name: config
+          configMap:
+            name: metrics-agent

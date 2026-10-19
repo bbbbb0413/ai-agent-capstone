@@ -6,6 +6,7 @@ demo:
   tenant-id: ${TENANT_ID:tenant-local}
   admin-token: ${SERVICE_TOKEN:}
   loki-url: ${LOKI_URL:http://localhost:3100/loki/api/v1/push}
+  pool-size: ${DEMO_POOL_SIZE:20}   # 20보다 작으면 시작부터 커넥션 풀 고갈 (잘못된 설정 배포 시나리오)
   traffic-interval-ms: 200   # 자체 생성 트래픽 주기
 
 management:

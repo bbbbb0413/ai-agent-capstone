@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reservation-api
+  labels:
+    app: reservation-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: reservation-api
+  template:
+    metadata:
+      labels:
+        app: reservation-api
+    spec:
+      containers:
+        - name: reservation-api
+          image: opslens/demo-app:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TENANT_ID
+              value: tenant-b
+            - name: LOKI_URL
+              value: http://loki:3100/loki/api/v1/push
+            - name: SERVICE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: demo-app-admin
+                  key: token
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 50m, memory: 192Mi }
+            limits: { memory: 384Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: reservation-api
+spec:
+  # OpsLens backend(compose)가 kind 노드 이름과 이 포트로 서비스 관리 API에 닿는다
+  type: NodePort
+  selector:
+    app: reservation-api
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30082

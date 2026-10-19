@@ -1,0 +1,7 @@
+# B사(직접 운영)의 초기 배포. ArgoCD는 이 경로를 보지 않는다.
+# 처음 한 번 scripts/cluster-up.sh가 적용하고, 이후 조치는 OpsLens가 Kubernetes API로 직접 한다.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: tenant-b
+resources:
+  - reservation-api.yaml

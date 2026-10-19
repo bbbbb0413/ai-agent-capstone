@@ -172,29 +172,13 @@ services:
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_NUM_PARTITIONS: 3
 
-  # ── 관측 스택 (고객사 환경 시뮬레이션) ───────────────────────
-  demo-app-a:
-    build: ./server/spring/demo-app
-    environment:
-      <<: *service-token
-      TENANT_ID: tenant-a
-      LOKI_URL: http://loki:3100/loki/api/v1/push
-    depends_on:
-      - loki
-
-  demo-app-b:
-    build: ./server/spring/demo-app
-    environment:
-      <<: *service-token
-      TENANT_ID: tenant-b
-      LOKI_URL: http://loki:3100/loki/api/v1/push
-    depends_on:
-      - loki
-
+  # ── 관측 스택 ───────────────────────────────────────────
+  # 고객사 서비스는 kind 클러스터(gitops/)에서 돈다. 메트릭은 클러스터 안 수집기가 remote write로 보낸다.
   prometheus:
     image: prom/prometheus:v3.13.4
     command:
       - --config.file=/etc/prometheus/prometheus.yml
+      - --web.enable-remote-write-receiver
     volumes:
       - ./infra/prometheus:/etc/prometheus:ro
 
