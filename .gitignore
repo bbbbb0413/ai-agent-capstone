@@ -13,6 +13,13 @@ AI-Agent Capstone(+MCP).pdf
 node_modules/
 dist/
 build/
+# IDE(Java 확장)가 만드는 컴파일 결과
+bin/
+.project
+.classpath
+.settings/
+.vscode/
+.idea/
 .gradle/
 .venv/
 __pycache__/
