@@ -39,13 +39,15 @@ async def consume(runner: Runner) -> None:
         while True:
             batch = await consumer.getmany(timeout_ms=1000, max_records=settings.workers)
             records = sorted((r for rs in batch.values() for r in rs), key=lambda r: PRIORITY[r.topic])
-            if not records:
-                continue
+            # Gold가 있으면 Silver를 멈추고, Gold가 없으면(빈 배치 포함) 다시 연다.
+            # 빈 배치에서 열지 않으면 Gold 처리 뒤 Silver가 계속 멈춰 있어 Silver 작업이 QUEUED에 갇힌다
             silver = [tp for tp in consumer.assignment() if tp.topic == SILVER]
             if any(r.topic == GOLD for r in records):
                 consumer.pause(*silver)
             else:
                 consumer.resume(*silver)
+            if not records:
+                continue
             await asyncio.gather(*(_handle(runner, producer, r) for r in records))
             await consumer.commit()
     finally:

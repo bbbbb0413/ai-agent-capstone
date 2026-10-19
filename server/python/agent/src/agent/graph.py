@@ -11,8 +11,10 @@ interrupt가 있는 Node는 재개될 때 처음부터 다시 실행된다. 그�
 
 import asyncio
 import json
+import re
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any, Literal, TypedDict
 from uuid import NAMESPACE_URL, uuid5
 
@@ -220,14 +222,52 @@ def _final_text(messages: list[AnyMessage]) -> str:
     return ""
 
 
+_LOG_NUMBERS = re.compile(r"\d+")
+
+
+async def _recent_log_patterns(box: ToolBox, counts: dict[str, int], incident_id: int | None) -> tuple[str, dict]:
+    """최근 10분 ERROR·WARN 로그를 코드가 먼저 조회해 반복 메시지별로 센다.
+
+    모델이 로그를 조회하지 않거나 단어로 미리 걸러 원인 로그(결제 API timeout 등)를 놓친 적이 있다 (docs/harness-spec.md).
+    숫자를 지운 메시지를 패턴으로 묶는다. 마스킹과 tool_output 경계는 ToolBox가 이미 적용했다.
+    """
+    now = datetime.now(timezone.utc)
+    args = {"logql": '{app="demo-app", level=~"ERROR|WARN"}', "limit": 200, "direction": "backward",
+            "startRfc3339": (now - timedelta(minutes=10)).isoformat(timespec="seconds"),
+            "endRfc3339": now.isoformat(timespec="seconds")}
+    result = await box.call("diagnose", "grafana_query_loki_logs", args, counts, incident_id=incident_id)
+    rows = parse_json(result)
+    rows = rows.get("data", []) if isinstance(rows, dict) else rows if isinstance(rows, list) else []
+    patterns: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        line = str(row.get("line", "")).strip() if isinstance(row, dict) else ""
+        if line:
+            key = _LOG_NUMBERS.sub("#", line)[:200]
+            item = patterns.setdefault(key, {"count": 0, "level": (row.get("labels") or {}).get("level"),
+                                             "example": line[:300]})
+            item["count"] += 1
+    top = sorted(patterns.values(), key=lambda p: -p["count"])[:6]
+    summary_text = (json.dumps(top, ensure_ascii=False) if top
+                    else "최근 10분 ERROR·WARN 로그 없음" if result.status != "error" else "로그 조회 실패")
+    return summary_text, {"tool": "grafana_query_loki_logs", "args": args, "status": result.status,
+                          "summary": summary_text[:500]}
+
+
 async def diagnose(state: State, runtime: Rt) -> dict:
+    prefetch: list[dict] = []
     if state.get("messages"):
         intro = [HumanMessage("조치 후에도 회복되지 않았다. 조치 이후 시간대를 다시 조사한다.")]
     else:
+        counts = dict(state["tool_counts"])
+        logs, logged = await _recent_log_patterns(runtime.context.toolbox, counts, state.get("incident_id"))
+        state = {**state, "tool_counts": counts}
+        prefetch = [logged]
         intro = [
             SystemMessage(harness.prompt("system") + "\n\n" + harness.prompt("diagnose")),
             HumanMessage(f"요청: {state['question']}\n\n고객사 컨텍스트(backend 계산값):\n"
-                         f"{json.dumps(state.get('context', {}), ensure_ascii=False, default=str)}"),
+                         f"{json.dumps(state.get('context', {}), ensure_ascii=False, default=str)}\n\n"
+                         f"최근 10분 ERROR·WARN 로그의 반복 메시지(코드가 조회, 많은 순):\n"
+                         f"{harness.as_untrusted(logs)}"),
         ]
     history = list(state.get("messages", [])) + intro
     new, turns, counts, evidence = await _tool_loop("diagnose", state, runtime, history, harness.MAX_TURNS,
@@ -237,7 +277,7 @@ async def diagnose(state: State, runtime: Rt) -> dict:
         # 근거 없는 글(조사 계획 등)이 런북 검색어와 조치 제안의 입력이 되지 않게 한다
         findings = "원인 미확정: 도구로 근거를 모으지 못했다"
     update = {"messages": intro + new, "findings": findings, "turns": turns, "tool_counts": counts,
-              "evidence": state["evidence"] + evidence}
+              "evidence": state["evidence"] + prefetch + evidence}
     if not state.get("plan") and new and isinstance(new[0], AIMessage):
         update["plan"] = str(new[0].content)
     return update
@@ -318,6 +358,8 @@ async def verify(state: State, runtime: Rt) -> dict:
     evidence = state["evidence"] + [{"tool": "grafana_query_prometheus", "args": VERIFY_QUERIES,
                                      "summary": json.dumps(metrics, ensure_ascii=False)}]
 
+    by_threshold = (error_rate is not None and error_rate < ERROR_RATE_THRESHOLD
+                    and (metrics["p95_seconds"] or 0) < P95_THRESHOLD_SECONDS)
     turns = state["turns"]
     if turns < harness.MAX_TURNS:
         runtime.context.check_time()
@@ -329,10 +371,11 @@ async def verify(state: State, runtime: Rt) -> dict:
         ])
         turns += 1
         verdict = str(ai.content)
-        recovered = verdict.strip().upper().startswith("RECOVERED")
+        # 모델이 "회복 여부 확인: RECOVERED"처럼 첫 줄 형식을 어긴 적이 있다. 판정 단어를 어디서든 찾고, 없으면 기준값으로 정한다
+        token = re.search(r"NOT_RECOVERED|RECOVERED", verdict.upper())
+        recovered = token.group() == "RECOVERED" if token else by_threshold
     else:  # 턴 한도를 다 썼으면 알림 기준으로 코드가 판단한다
-        recovered = (error_rate is not None and error_rate < ERROR_RATE_THRESHOLD
-                     and (metrics["p95_seconds"] or 0) < P95_THRESHOLD_SECONDS)
+        recovered = by_threshold
         verdict = f"{'RECOVERED' if recovered else 'NOT_RECOVERED'} (턴 한도로 기준값 판단)\n{json.dumps(metrics)}"
     return {"recovered": recovered, "verification": verdict, "turns": turns, "tool_counts": counts,
             "evidence": evidence}
