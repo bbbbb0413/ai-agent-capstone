@@ -68,6 +68,13 @@ class ToolOutcomeTests(unittest.IsolatedAsyncioTestCase):
 
 
 class ReportTests(unittest.IsolatedAsyncioTestCase):
+    def test_unlinked_sla_question_routes_directly_to_document_search(self):
+        state = {"type": "QUESTION", "incident_id": None, "question": "A사 P1/P2 SLA 응답 기한은?",
+                 "context": {}}
+        self.assertEqual(graph.route_triage(state), "retrieve_runbook")
+        state["question"] = "A사 서비스 상태가 어때?"
+        self.assertEqual(graph.route_triage(state), "diagnose")
+
     async def test_unlinked_question_does_not_propose_an_invalid_execution(self):
         with patch("agent.graph.harness.chat_model") as model:
             update = await graph.propose_action({"type": "QUESTION", "incident_id": None}, None)
@@ -96,6 +103,22 @@ class ReportTests(unittest.IsolatedAsyncioTestCase):
         built = summary.build({**state, **update})
         self.assertEqual(built["action"]["result"]["status"], "PR_CREATED")
         self.assertEqual(built["change"]["result"], "SYNCED")
+
+    async def test_unlinked_information_question_skips_incident_classification(self):
+        state = {"type": "QUESTION", "incident_id": None, "question": "SLA는?", "task_id": "test",
+                 "evidence": [], "runbook": [{"uri": "docs://tenant-a/sla"}], "context": {},
+                 "approvals": []}
+
+        class StubModel:
+            async def astream(self, messages):
+                yield SimpleNamespace(content="## 답변\nP1은 15분")
+
+        with patch("agent.graph.harness.chat_model", return_value=StubModel()), \
+                patch("agent.graph.backend.emit", new=AsyncMock()), \
+                patch("agent.graph.summary.classify", new=AsyncMock()) as classify:
+            update = await graph.report(state, None)
+        self.assertIsNone(update["classification"])
+        classify.assert_not_awaited()
 
     async def test_notice_failure_is_not_reported_as_sent(self):
         state = {"task_id": "test", "incident_id": 1, "notice_draft": "test", "tool_counts": {}, "approvals": []}

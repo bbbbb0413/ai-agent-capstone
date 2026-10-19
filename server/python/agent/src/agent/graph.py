@@ -103,7 +103,22 @@ async def load_context(state: State, runtime: Rt) -> dict:
     return {"context": context, "tool_counts": counts}
 
 
-def route_triage(state: State) -> Literal["escalate", "diagnose"]:
+_DOCUMENT_QUESTION_MARKERS = (
+    "sla", "계약", "약관", "정책", "런북", "runbook", "조항", "매뉴얼", "문서", "회고", "postmortem",
+)
+
+
+def _needs_document_lookup(state: State) -> bool:
+    """문서성 질문만 RAG로 바로 보낸다. 모든 질문에 RAG를 강제하지는 않는다."""
+    if state.get("type") != "QUESTION" or state.get("incident_id") is not None:
+        return False
+    question = state.get("question", "").lower()
+    return any(marker in question for marker in _DOCUMENT_QUESTION_MARKERS)
+
+
+def route_triage(state: State) -> Literal["escalate", "diagnose", "retrieve_runbook"]:
+    if _needs_document_lookup(state):
+        return "retrieve_runbook"
     incident = state.get("context", {}).get("incident") or {}
     return "escalate" if incident.get("severity") == "P1" and not state.get("approvals") else "diagnose"
 
@@ -273,6 +288,7 @@ async def report(state: State, runtime: Rt) -> dict:
     화면 요약 표에 쓸 분류는 보고서와 같은 입력으로 동시에 만든다.
     """
     payload = json.dumps({
+        "type": state.get("type"), "incident_id": state.get("incident_id"),
         "request": state["question"], "plan": state.get("plan"), "findings": state.get("findings"),
         "evidence": state.get("evidence", []), "runbook": state.get("runbook", []),
         "action": state.get("proposed_action"), "approvals": state.get("approvals", []),
@@ -280,8 +296,12 @@ async def report(state: State, runtime: Rt) -> dict:
         "recovered": state.get("recovered"), "context": state.get("context", {}),
     }, ensure_ascii=False, default=str)
 
+    information_question = state.get("type") == "QUESTION" and state.get("incident_id") is None
+
     async def write() -> str:
-        messages = [SystemMessage(harness.prompt("system") + "\n\n" + harness.prompt("report")), HumanMessage(payload)]
+        report_prompt = "answer" if information_question else "report"
+        messages = [SystemMessage(harness.prompt("system") + "\n\n" + harness.prompt(report_prompt)),
+                    HumanMessage(payload)]
         chunks: list[str] = []
         async for chunk in harness.chat_model().astream(messages):
             if chunk.content:
@@ -290,7 +310,11 @@ async def report(state: State, runtime: Rt) -> dict:
         return "".join(chunks)
 
     await backend.emit(state["task_id"], "STEP", {"node": "report"})
-    text, classification = await asyncio.gather(write(), summary.classify(payload))
+    # 인시던트와 무관한 일반 질문에는 장애 원인 분류표가 의미가 없고, 오히려 없는 원인을 만들 수 있다.
+    if information_question:
+        text, classification = await write(), None
+    else:
+        text, classification = await asyncio.gather(write(), summary.classify(payload))
     body, _, notice = text.partition("## 고객 공지 문안")
     return {"report": body.strip(), "notice_draft": notice.strip(), "classification": classification}
 
