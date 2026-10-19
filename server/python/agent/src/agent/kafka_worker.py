@@ -60,7 +60,7 @@ async def _handle(runner: Runner, producer: AIOKafkaProducer, record: ConsumerRe
     if record.topic == RETRY:
         await asyncio.sleep(2 ** attempts)  # 재시도 간격을 점점 늘린다
     try:
-        await runner.run(message, raise_errors=True)
+        await runner.run(message, raise_errors=True, retry=record.topic == RETRY)
     except Exception as e:
         attempts += 1
         out = [("task_id", str(message["taskId"]).encode()), ("trace_id", message["traceId"].encode()),

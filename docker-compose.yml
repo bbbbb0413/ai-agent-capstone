@@ -99,6 +99,9 @@ services:
       - streamable-http
       - --address
       - 0.0.0.0:9103
+      # Host 헤더 검사는 기본이 루프백뿐이라 docker network의 서비스 이름을 허용한다
+      - --allowed-hosts
+      - mcp-grafana:9103
       - --disable-write
       - --disable-dashboard
       - --disable-incident
@@ -107,6 +110,8 @@ services:
       - --disable-admin
       - --disable-sql
     environment:
+      # 호출자 인증: agent가 Authorization: Bearer <SERVICE_TOKEN>을 실어야 도구를 쓸 수 있다
+      MCP_GRAFANA_SERVER_TOKEN: ${SERVICE_TOKEN}
       GRAFANA_URL: http://grafana:3000
       # TODO: Viewer 권한 서비스 계정 토큰(GRAFANA_SERVICE_ACCOUNT_TOKEN)으로 바꾼다
       GRAFANA_USERNAME: admin

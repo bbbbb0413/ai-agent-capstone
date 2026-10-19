@@ -1,0 +1,4 @@
+# 대시보드 JSON을 infra/grafana/dashboards에 두면 자동으로 불러온다 (TODO: 고객사별 대시보드)
+apiVersion: 1
+
+providers: []

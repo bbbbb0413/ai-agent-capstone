@@ -28,7 +28,9 @@ async def load_tools(tenant_id: str, task_id: str, trace_id: str) -> list[BaseTo
         {
             "business": {"url": settings.business_mcp_url, "transport": "streamable_http", "headers": headers},
             "rag": {"url": settings.rag_mcp_url, "transport": "streamable_http", "headers": headers},
-            "grafana": {"url": settings.grafana_mcp_url, "transport": "streamable_http"},
+            # 관측 데이터의 고객사 격리는 헤더가 아니라 데이터소스 강제(harness)로 한다
+            "grafana": {"url": settings.grafana_mcp_url, "transport": "streamable_http",
+                        "headers": {"Authorization": headers["Authorization"]}},
         },
         tool_name_prefix=True,
     )

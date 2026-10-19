@@ -35,10 +35,15 @@ class Runner:
                 )
             """)
 
-    async def run(self, message: dict[str, Any], *, raise_errors: bool = False) -> str:
+    async def run(self, message: dict[str, Any], *, raise_errors: bool = False, retry: bool = False) -> str:
+        """retry=True(Kafka retry 토픽)이면 실패한 Node부터 checkpoint로 이어서 실행한다."""
         task_id = str(message["taskId"])
         config = self._config(task_id, message["tenantId"], message["traceId"])
-        if (await self.graph.aget_state(config)).values:
+        snapshot = await self.graph.aget_state(config)
+        if snapshot.values:
+            if retry and snapshot.next and not snapshot.interrupts:
+                log.info("task %s retrying from checkpoint at %s", task_id, snapshot.next)
+                return await self._drive(task_id, None, snapshot.values, config, raise_errors)
             log.info("task %s already started, skipping duplicate", task_id)
             return "DUPLICATE"
         state = {
