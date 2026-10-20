@@ -7,11 +7,23 @@
    - 외부 API 지연·timeout 로그가 있으면 원인 후보에 외부 의존을 반드시 넣는다.
    - 더 넓은 시간대가 필요할 때만 직접 조회한다. 로그 라벨은 `app="demo-app"`, `level`(ERROR, WARN, INFO)이고, 줄 필터(`|=`)로 미리 거르지 않는다.
 4. `business_list_recent_changes`로 해당 서비스의 최근 배포·설정 변경을 본다. 이상 시작 직전에 변경이 있었으면 무엇이 바뀌었는지(환경변수, 이미지, 레플리카) 근거에 적는다. 변경이 없거나 한참 전이면 "직전 변경 없음"으로 적는다.
-5. 메트릭, 로그, 변경 이력을 합쳐 가능성 높은 원인을 1~3개 고른다.
-6. 장애 형태와 병목 위치를 정한다. 다음 단계가 이 두 줄로 런북 조항과 조치를 고른다.
+5. 지연이 있으면 서비스 목록의 `dependencies`마다 `business_get_dependency_health`로 상태를 본다. 의존 대상이 `DEGRADED`·`DOWN`이면 병목은 그 대상(DB 또는 외부)이고, 모두 `HEALTHY`인데 지연이 있으면 병목은 앱(처리 대기)이다.
+6. 메트릭, 로그, 변경 이력, 의존 대상 상태를 합쳐 가능성 높은 원인을 1~3개 고른다.
+7. 장애 형태와 병목 위치를 정한다. 다음 단계가 이 두 줄로 런북 조항과 조치를 고른다. 요청과 함께 준 지표와 로그 신호 건수로 아래 표에서 맞는 행을 고른다. 표와 다른 형태로 정하려면 그 근거를 적는다.
+
+| 에러율(`error_rate`) | 로그 신호 | 장애 형태 |
+|---|---|---|
+| 0.05 이상 | `connection_pool_exhausted`, 직전 설정 변경 있음 | RB-STD-01 커넥션 풀 고갈 |
+| 0.05 이상 | `worker_pool_saturated` | RB-STD-02 작업 스레드 고갈 |
+| 0.05 미만 | `request_queue_backlog`, 의존 대상 모두 HEALTHY | RB-STD-03 트래픽 급증 |
+| 상관없음 | `external_api_timeout` | RB-STD-04 외부 의존 지연 |
+| 상관없음 | `slow_query` 또는 DB 의존 대상 DEGRADED·DOWN | RB-STD-05 DB 자체 지연 |
+| 위에 맞는 행이 없음 | | RB-STD-07 원인 미확정 |
+
    - 장애 형태: 공통 런북 조항 하나. RB-STD-01 커넥션 풀 고갈(직전 설정 변경 뒤 `connection pool exhausted`), RB-STD-02 작업 스레드 고갈(`503 worker pool saturated`, 직전 변경 없음), RB-STD-03 트래픽 급증(`request queue backlog`, 5xx 없이 p95 상승), RB-STD-04 외부 의존 지연(외부 API timeout 경고), RB-STD-05 DB 자체 지연(`slow query`, 풀 설정 그대로), RB-STD-07 원인 미확정
    - 병목: `앱`(파드 내부: 풀, 스레드, 처리 슬롯), `DB`, `외부`(외부 API) 중 하나
    - 서비스 목록에 의존 대상이 있다는 것만으로 병목을 `DB`나 `외부`로 정하지 않는다. 그 대상의 오류·지연 로그가 근거다.
+   - RB-STD-02와 RB-STD-03은 요청과 함께 준 현재 지표의 `error_rate`로 가른다. 에러율이 오르고 `503 worker pool saturated`가 있으면 RB-STD-02, 에러율이 0에 가깝고 `request queue backlog`가 있으면 RB-STD-03이다.
 
 도구 없이 답할 때는 다음 형식만 쓰고 10줄을 넘기지 않는다. 조사 계획이나 쿼리 설명은 다시 쓰지 않는다. 이 답은 다음 단계의 입력이라 길면 작업 시간 한도를 넘긴다.
 

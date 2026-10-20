@@ -13,7 +13,8 @@ from agent import harness
 
 log = logging.getLogger(__name__)
 
-ErrorType = Literal["DB 커넥션 풀 고갈", "트래픽 급증", "파드 응답 불능", "외부 API 지연", "기타", "원인 미확정"]
+ErrorType = Literal["DB 커넥션 풀 고갈", "트래픽 급증", "파드 응답 불능", "외부 API 지연", "DB 자체 지연", "기타",
+                    "원인 미확정"]
 
 
 class Classification(BaseModel):

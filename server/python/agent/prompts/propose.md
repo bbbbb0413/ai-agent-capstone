@@ -4,11 +4,22 @@
 
 1. **장애 형태를 정한다.** 진단 결과의 근거(로그 메시지, 메트릭, 직전 변경)를 공통 런북 RB-STD 조항의 증상·구분과 맞춰 하나를 고른다.
    - 근거는 로그와 메트릭이다. 서비스 목록의 `dependencies`에 의존 대상이 있다는 것만으로 그 대상을 원인으로 보지 않는다. 그 대상의 오류 로그(예: `payment API timeout`, `slow query`)가 있을 때만 의존 대상 문제(RB-STD-04·05)다.
-   - 예: `503 worker pool saturated`, `oldest worker blocked`가 반복되고 직전 변경이 없으면 RB-STD-02(재시작)다. 외부 API timeout 경고가 반복되면 RB-STD-04다.
+   - 함께 준 지표와 로그 신호(코드가 조회)로 아래 표에서 행을 고른다. 진단 결과와 표가 다르면 표를 따른다(진단 결과에 표와 다른 근거가 적혀 있을 때만 예외).
+
+   | 에러율(`error_rate`) | 로그 신호 | 장애 형태 |
+   |---|---|---|
+   | 0.05 이상 | `connection_pool_exhausted`, 직전 설정 변경 있음 | RB-STD-01 커넥션 풀 고갈 |
+   | 0.05 이상 | `worker_pool_saturated` | RB-STD-02 작업 스레드 고갈 |
+   | 0.05 미만 | `request_queue_backlog`, 의존 대상 모두 HEALTHY | RB-STD-03 트래픽 급증 |
+   | 상관없음 | `external_api_timeout` | RB-STD-04 외부 의존 지연 |
+   | 상관없음 | `slow_query` 또는 DB 의존 대상 DEGRADED·DOWN | RB-STD-05 DB 자체 지연 |
+   | 위에 맞는 행이 없음 | | RB-STD-07 원인 미확정 |
+
 2. **후보 조치를 정한다.** 그 조항의 조치를 따른다. 1차·2차 조치가 나뉘어 있으면 1차 조치부터 제안한다. 서비스 런북의 주의(예: 단일 레플리카 재시작은 전체 중단)는 조치를 바꾸지 않고 이유에 적는다.
 3. **할 수 있는지 확인한다.** 서비스 목록의 계산값을 본다: `supportedActions`(계약과 실행 환경이 모두 허용하는 조치), `safeMaxReplicas`(확장 상한), `stateful`, `autoscaling`(HPA).
    - 트래픽 급증(RB-STD-03)이고 `autoscaling`이 있으면 레플리카를 직접 바꾸지 않는다. `atMax`가 false면 HPA가 늘리는 중이므로 **도구를 부르지 않고** "HPA가 확장 중"이라는 이유만 적는다. `atMax`가 true이고 `canRaiseMax`가 true면 `adjust_autoscaler`로 최대치를 `safeMaxReplicas`까지 올린다. `canRaiseMax`가 false면 에스컬레이션한다(`ACTION_BLOCKED`, `STRUCTURE`).
    - 도구를 부르지 않는 것은 위 경우뿐이다. 그 밖에는 반드시 도구 하나를 호출한다.
+   - **2단계 조치를 할 수 없으면 다른 조치로 대신하지 않는다.** `supportedActions`에 있는 다른 조치(예: 재시작)가 그 장애 형태를 고치지 못하면 고르지 않고 에스컬레이션한다. 예: 트래픽 급증에 확장이 계약상 불가하면 재시작이 아니라 `ACTION_BLOCKED`, `required_action="scale_deployment"`, `blocked_by="CONTRACT"`다. 재시작은 처리 용량을 늘리지 않는다.
 4. **호출한다.**
    - 할 수 있으면 조치를 호출한다. `service`에는 장애가 난 서비스 이름을 넣는다.
      - 파드 재시작: `business_execute_runbook_action(action="restart_pods", service=…)`

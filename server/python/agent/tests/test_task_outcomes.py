@@ -97,6 +97,16 @@ class ToolOutcomeTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(graph._autoscaler_scaling(ctx(2, 3), "order-api"))    # 부하와 무관한 장애
         self.assertFalse(graph._autoscaler_scaling({"services": [{"name": "reservation-api"}]}, "reservation-api"))
 
+    def test_action_that_does_not_fit_the_cited_clause_is_sent_back(self):
+        from langchain_core.messages import AIMessage
+        def ai(action, reason):
+            return AIMessage(content="", tool_calls=[{"name": "business_execute_runbook_action", "id": "c1",
+                                                      "args": {"action": action, "reason": reason}}])
+        self.assertIn("ACTION_BLOCKED", graph._clause_mismatch(ai("restart_pods", "RB-STD-03 트래픽 급증, 큐를 비운다")))
+        self.assertIsNone(graph._clause_mismatch(ai("adjust_autoscaler", "RB-STD-03에 따라 최대치를 올린다")))
+        self.assertIsNone(graph._clause_mismatch(ai("restart_pods", "RB-STD-02 작업 스레드 고갈")))
+        self.assertIsNone(graph._clause_mismatch(ai("restart_pods", "조항 인용 없음")))
+
     def test_flow_escalation_category_follows_the_reason(self):
         base = {"incident_id": 1, "proposed_action": {"args": {"action": "restart_pods", "service": "order-api"}}}
         self.assertEqual(graph._escalation_args({**base, "attempts": 0})["category"], "P1")

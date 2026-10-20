@@ -57,6 +57,7 @@ class State(TypedDict, total=False):
     notice_result: dict[str, Any] | None
     escalation_result: dict[str, Any] | None   # 에스컬레이션 발송 대기열 등록 결과 (받는 사람, 메시지, status QUEUED)
     no_action_reason: str | None    # 조치하지 않기로 한 이유 (HPA가 확장 중일 때만 생긴다)
+    signals: dict[str, Any]         # 진단 시작 때 코드가 조회한 지표와 로그 신호 건수 (장애 형태 판정표의 입력)
 
 
 @dataclass
@@ -244,6 +245,14 @@ def _final_text(messages: list[AnyMessage]) -> str:
 _LOG_NUMBERS = re.compile(r"\d+")
 
 
+# 장애 형태를 가르는 알려진 로그 신호 (공통 런북 RB-STD 조항의 증상). 코드는 있는지와 건수만 센다. 판단은 모델이 한다
+LOG_SIGNALS = {
+    "connection_pool_exhausted": "Connection is not available",   # RB-STD-01
+    "worker_pool_saturated": "503 worker pool saturated",         # RB-STD-02
+    "request_queue_backlog": "request queue backlog",             # RB-STD-03
+    "external_api_timeout": "payment API timeout",                # RB-STD-04
+    "slow_query": "slow query",                                   # RB-STD-05
+}
 LOG_WINDOW = timedelta(minutes=10)
 LOG_LEAD = timedelta(minutes=2)   # 알림(for 30s + 평가 주기)은 이상 시작보다 1분 남짓 늦게 인시던트를 만든다
 
@@ -290,8 +299,20 @@ async def _recent_log_patterns(box: ToolBox, counts: dict[str, int], incident_id
     top = sorted(patterns.values(), key=lambda p: -p["count"])[:6]
     summary_text = (json.dumps(top, ensure_ascii=False) if top
                     else "조회 구간에 ERROR·WARN 로그 없음" if result.status != "error" else "로그 조회 실패")
+    signals = {name: sum(p["count"] for key, p in patterns.items() if pattern in key)
+               for name, pattern in LOG_SIGNALS.items()}
     return summary_text, {"tool": "grafana_query_loki_logs", "args": args, "status": result.status,
-                          "summary": summary_text[:500]}
+                          "summary": summary_text[:500], "signals": signals}
+
+
+# 진단 시작 때 코드가 조회하는 기본 지표. 에러율은 RB-STD-02(5xx 급증)와 RB-STD-03(에러 없이 지연)을 가르는 기준인데,
+# 모델이 에러율을 조회하지 않고 대기열 경고만 보고 RB-STD-02(재시작)로 판단한 적이 있다 (docs/harness-spec.md)
+DIAGNOSE_QUERIES = {
+    "error_rate": '(sum(rate(demo_orders_seconds_count{outcome="error"}[1m])) or vector(0))'
+                  ' / sum(rate(demo_orders_seconds_count[1m]))',
+    "p95_seconds": 'histogram_quantile(0.95, sum by (le) (rate(demo_orders_seconds_bucket[1m])))',
+    "requests_per_second": 'sum(rate(demo_orders_seconds_count[1m]))',
+}
 
 
 async def diagnose(state: State, runtime: Rt) -> dict:
@@ -302,15 +323,22 @@ async def diagnose(state: State, runtime: Rt) -> dict:
         counts = dict(state["tool_counts"])
         logs, logged = await _recent_log_patterns(runtime.context.toolbox, counts, state.get("incident_id"),
                                                   state.get("context", {}).get("incident"))
-        state = {**state, "tool_counts": counts}
-        prefetch = [logged]
+        # 정해진 쿼리라 모델의 탐색 한도(같은 도구 3번)에 넣지 않는다. 넣으면 모델이 Prometheus를 더 부를 수 없다
+        prefetch_counts: dict[str, int] = {}
+        metrics = {name: await _metric(runtime.context.toolbox, expr, prefetch_counts, node="diagnose")
+                   for name, expr in DIAGNOSE_QUERIES.items()}
+        state = {**state, "tool_counts": counts, "signals": {"metrics": metrics, "logs": logged.get("signals", {})}}
+        prefetch = [logged, {"tool": "grafana_query_prometheus", "args": DIAGNOSE_QUERIES,
+                             "summary": json.dumps(metrics, ensure_ascii=False)}]
         intro = [
             SystemMessage(harness.prompt("system") + "\n\n" + harness.prompt("diagnose")),
             HumanMessage(f"요청: {state['question']}\n\n고객사 컨텍스트(backend 계산값):\n"
                          f"{json.dumps(state.get('context', {}), ensure_ascii=False, default=str)}\n\n"
                          f"{logged['args']['startRfc3339']} 이후 ERROR·WARN 로그의 반복 메시지"
                          f"(코드가 조회, 많은 순. 인시던트 시작 2분 전부터, 최대 10분):\n"
-                         f"{harness.as_untrusted(logs)}"),
+                         f"{harness.as_untrusted(logs)}\n\n"
+                         f"현재 지표(코드가 조회, 최근 1분. 에러율은 0~1):\n{json.dumps(metrics, ensure_ascii=False)}\n\n"
+                         f"알려진 로그 신호 건수(코드가 셈, 0이면 없음):\n{json.dumps(logged.get('signals', {}), ensure_ascii=False)}"),
         ]
     history = list(state.get("messages", [])) + intro
     new, turns, counts, evidence = await _tool_loop("diagnose", state, runtime, history, harness.MAX_TURNS,
@@ -321,6 +349,8 @@ async def diagnose(state: State, runtime: Rt) -> dict:
         findings = "원인 미확정: 도구로 근거를 모으지 못했다"
     update = {"messages": intro + new, "findings": findings, "turns": turns, "tool_counts": counts,
               "evidence": state["evidence"] + prefetch + evidence}
+    if state.get("signals"):
+        update["signals"] = state["signals"]
     if not state.get("plan") and new and isinstance(new[0], AIMessage):
         update["plan"] = str(new[0].content)
     return update
@@ -350,12 +380,22 @@ async def propose_action(state: State, runtime: Rt) -> dict:
     model = harness.chat_model(tools, harness.PROPOSE_REASONING_EFFORT, tool_choice=None if scaling else "required")
     messages = [
         SystemMessage(harness.prompt("system") + "\n\n" + harness.prompt("propose")),
-        HumanMessage(f"진단 결과:\n{state['findings']}\n\n런북·계약 조항:\n"
+        HumanMessage(f"진단 결과:\n{state['findings']}\n\n"
+                     f"지표와 로그 신호(코드가 조회):\n{json.dumps(state.get('signals', {}), ensure_ascii=False)}\n\n런북·계약 조항:\n"
                      f"{json.dumps(state.get('runbook', []), ensure_ascii=False)}\n\n"
                      f"고객사 컨텍스트:\n{json.dumps(state.get('context', {}), ensure_ascii=False, default=str)}"),
     ]
     ai: AIMessage = await model.ainvoke(messages)
-    base = {"context": context, "tool_counts": counts, "turns": state["turns"] + 1}
+    turns = state["turns"] + 1
+    mismatch = _clause_mismatch(ai)
+    if mismatch and turns < harness.MAX_TURNS:
+        # 조항과 맞지 않는 조치를 골랐다. 이유를 돌려주고 한 번만 다시 고르게 한다 (판단은 여전히 모델이 한다)
+        call = ai.tool_calls[0]
+        ai = await model.ainvoke(messages + [ai, ToolMessage(content=mismatch, tool_call_id=call["id"], status="error")]
+                                 + [ToolMessage(content="이 호출은 실행하지 않았다", tool_call_id=c["id"], status="error")
+                                    for c in ai.tool_calls[1:]])
+        turns += 1
+    base = {"context": context, "tool_counts": counts, "turns": turns}
     if not ai.tool_calls:
         return {**base, "proposed_action": None, "no_action_reason": str(ai.content)[:1000] or None}
     call = ai.tool_calls[0]
@@ -366,6 +406,32 @@ async def propose_action(state: State, runtime: Rt) -> dict:
         return {**base, "proposed_action": None}
     args = {**call["args"], "incident_id": state.get("incident_id")} if "incident_id" in call["args"] else call["args"]
     return {**base, "proposed_action": {"tool": call["name"], "args": args, "reason": str(ai.content)}}
+
+
+# 공통 런북 조항별로 고칠 수 있는 조치 (data/documents/_common/runbook-standard.md). 에스컬레이션·공지는 언제나 된다.
+# 할 수 없으면 다른 조치로 대신하지 않는다: B사 급증에서 확장이 계약상 불가하자 효과 없는 재시작을 제안한 적이 있다
+CLAUSE_ACTIONS: dict[str, set[str]] = {
+    "RB-STD-01": {"rollback_deployment", "restart_pods"},   # 직전 변경이 없으면 RB-STD-02의 재시작
+    "RB-STD-02": {"restart_pods"},
+    "RB-STD-03": {"scale_deployment", "adjust_autoscaler"},
+    "RB-STD-04": set(), "RB-STD-05": set(), "RB-STD-06": set(), "RB-STD-07": set(),
+}
+_CLAUSE = re.compile(r"RB-STD-0\d")
+
+
+def _clause_mismatch(ai: AIMessage) -> str | None:
+    """제안 이유가 인용한 공통 런북 조항과 고른 조치가 맞지 않으면 그 이유. 조항을 인용하지 않았으면 검사하지 않는다."""
+    if not ai.tool_calls or ai.tool_calls[0]["name"] != "business_execute_runbook_action":
+        return None
+    args = ai.tool_calls[0]["args"]
+    clauses = sorted(set(_CLAUSE.findall(f"{args.get('reason', '')} {ai.content}")) & CLAUSE_ACTIONS.keys())
+    if not clauses or any(args.get("action") in CLAUSE_ACTIONS[c] for c in clauses):
+        return None
+    allowed = sorted({a for c in clauses for a in CLAUSE_ACTIONS[c]})
+    return (f"거부: {', '.join(clauses)}의 조치는 {allowed or '앱 조치 없음'}이다. '{args.get('action')}'는 이 장애 형태를 "
+            "고치지 못한다. 그 조치가 supportedActions에 없거나 상한에 막히면 다른 조치로 대신하지 말고 "
+            "business_escalate_incident(category=\"ACTION_BLOCKED\", required_action=…, blocked_by=…)를 호출한다. "
+            "외부·DB 원인이면 공지 또는 DEPENDENCY 에스컬레이션이다.")
 
 
 def _autoscaler_scaling(context: dict, service: str | None) -> bool:
@@ -395,8 +461,8 @@ ERROR_RATE_THRESHOLD = 0.2
 P95_THRESHOLD_SECONDS = 1.0
 
 
-async def _metric(box: ToolBox, expr: str, counts: dict[str, int]) -> float | None:
-    result = parse_json(await box.call("verify", "grafana_query_prometheus",
+async def _metric(box: ToolBox, expr: str, counts: dict[str, int], node: str = "verify") -> float | None:
+    result = parse_json(await box.call(node, "grafana_query_prometheus",
                                        {"expr": expr, "queryType": "instant", "endTime": "now"}, counts))
     try:
         return float(result["data"][0]["value"][1])

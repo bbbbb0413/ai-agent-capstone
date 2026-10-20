@@ -2,6 +2,7 @@ package com.opslens.backend.tenant;
 
 import com.opslens.backend.audit.AuditLog;
 import com.opslens.backend.change.ChangeService;
+import com.opslens.backend.change.DependencyHealth;
 import com.opslens.backend.escalation.EscalationService;
 import com.opslens.backend.incident.Incident;
 import com.opslens.backend.incident.IncidentRepository;
@@ -48,15 +49,17 @@ public class InternalTenantController {
     private final SlaPolicy sla;
     private final ChangeService changes;
     private final EscalationService escalations;
+    private final DependencyHealth dependencies;
     private final AuditLog audit;
 
     public InternalTenantController(TenantRepository tenants, IncidentRepository incidents, SlaPolicy sla,
-            ChangeService changes, EscalationService escalations, AuditLog audit) {
+            ChangeService changes, EscalationService escalations, DependencyHealth dependencies, AuditLog audit) {
         this.tenants = tenants;
         this.incidents = incidents;
         this.sla = sla;
         this.changes = changes;
         this.escalations = escalations;
+        this.dependencies = dependencies;
         this.audit = audit;
     }
 
@@ -84,6 +87,12 @@ public class InternalTenantController {
     Map<String, Object> recentChanges(@PathVariable String tenantId, @RequestHeader("X-Tenant-Id") String caller,
             @RequestParam String service) {
         return changes.recentChanges(tenant(tenantId, caller), service);
+    }
+
+    @GetMapping("/dependencies/{name}/health")
+    Map<String, Object> dependencyHealth(@PathVariable String tenantId, @RequestHeader("X-Tenant-Id") String caller,
+            @PathVariable String name) {
+        return dependencies.health(tenant(tenantId, caller), name);
     }
 
     @GetMapping("/incidents")

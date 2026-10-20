@@ -98,6 +98,15 @@ async def list_recent_changes(service: str) -> dict[str, Any]:
     return await _call("GET", "/changes", params={"service": service})
 
 
+@mcp.tool(annotations=READ)
+async def get_dependency_health(dependency: str) -> dict[str, Any]:
+    """의존 대상(DB, 외부 API)의 최근 1분 상태. dependency는 get_service_inventory의 dependencies 이름이다.
+    status: HEALTHY(p95 0.3초 미만), DEGRADED(3초 미만), DOWN(3초 이상), UNKNOWN(호출 없음).
+    앱이 의존 대상을 부를 때 잰 지연이라, 지연이 앱 안(처리 대기)에서 생기는지 의존 대상에서 생기는지 구분하는 근거다.
+    결과의 owner·ownerContact는 에스컬레이션 대상을 정할 때 쓴다."""
+    return await _call("GET", f"/dependencies/{dependency}/health")
+
+
 # ── 변경 도구 (destructiveHint: agent Harness가 실행 전에 사람의 승인을 받는다) ──
 
 

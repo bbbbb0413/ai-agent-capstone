@@ -11,6 +11,7 @@ public record OpsLensProperties(
         String serviceToken,
         String alertWebhookToken,
         String agentUrl,
+        String prometheusUrl,
         String dispatchMode,
         boolean autoApproveAllowed,
         Kubernetes kubernetes,

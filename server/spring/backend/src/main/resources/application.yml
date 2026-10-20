@@ -27,6 +27,7 @@ opslens:
   service-token: ${SERVICE_TOKEN:}
   alert-webhook-token: ${ALERT_WEBHOOK_TOKEN:}
   agent-url: ${AGENT_URL:http://localhost:8000}
+  prometheus-url: http://prometheus:9090   # 의존 대상 상태(get_dependency_health) 조회. compose 내부 주소
   dispatch-mode: ${DISPATCH_MODE:http}   # http | kafka
   auto-approve-allowed: ${AUTO_APPROVE_ALLOWED:true}   # true면 관리자가 화면에서 자동 승인을 켤 수 있다. 운영에서는 false
   kubernetes:

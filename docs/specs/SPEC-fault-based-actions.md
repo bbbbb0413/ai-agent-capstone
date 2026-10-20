@@ -287,6 +287,19 @@ backend 검사(계약·구조 제약)는 AI가 잘못 골라도 막는 두 번�
 - 새 HTTP 클라이언트로 바꿀 때 이전 클라이언트를 닫는다. 닫지 않으면 유휴 연결(기본 20분 유지)이 서버에 쌓여 A사 파드가 `OOMKilled`됐다. 앱도 유휴 연결을 5초 뒤 닫는다(`server.tomcat.keep-alive-timeout`).
 - 대기열 경고 문구는 `request queue backlog`이다. 처음의 `worker queue backlog`는 파드 멈춤의 `worker pool saturated`와 비슷해, B사 급증 측정 중 Agent가 RB-STD-02(재시작)를 제안했다.
 
+**4단계 확인 (2026-10-20, 실제 장애 주입, gpt-5-mini 추론 low):**
+
+| 장애 | Agent 제안 | 결과 |
+|---|---|---|
+| A사 +250건/초, HPA 최대 3 | `adjust_autoscaler` 최대 4 (RB-STD-03) | 기대대로. PR #10(`maxReplicas: 3 → 4`)은 병합하지 않고 닫았다. 최대치 4에서 회복은 `kubectl`로 따로 확인 |
+| A사 `DB_SLOW` | `DEPENDENCY` 에스컬레이션 (`postgres`, RB-STD-05) → 받는 사람에 A사 DBA팀, 보고서 뒤 공지 | 기대대로. 앱 조치 없음 |
+| B사 +120건/초 | 처음 4번: `restart_pods` (RB-STD-02로 오판, 또는 RB-STD-03인데 "큐를 비운다"며 재시작) → 고친 뒤: `ACTION_BLOCKED`, `scale_deployment`, `CONTRACT` → 받는 사람에 B사 운영 승인 담당 | 아래 세 가지를 고친 뒤 기대대로 |
+
+B사 급증을 고치며 넣은 것 (docs/harness-spec.md):
+- 진단 시작 때 코드가 최근 1분 에러율·p95·처리량을 조회해 넘긴다(`DIAGNOSE_QUERIES`). 모델이 에러율을 보지 않고 대기열 경고를 작업 스레드 고갈로 읽었다.
+- 코드가 알려진 로그 신호(`LOG_SIGNALS`) 건수를 세어 넘기고, 진단·제안 프롬프트에 "에러율 × 로그 신호 → 장애 형태" 판정표를 둔다.
+- 제안 이유가 인용한 조항과 고른 조치가 맞지 않으면 거부 이유를 돌려주고 한 번 다시 고르게 한다(`CLAUSE_ACTIONS`). 판정표를 준 뒤에도 RB-STD-03에 재시작을 골랐다.
+
 ### 5.7 장애 주입 스크립트
 
 `scripts/inject.sh <tenant> <fault|clear>` 하나로 합친다. 기존 `scenario-a.sh`, `scenario-b.sh`는 이 스크립트를 부르는 래퍼로 남긴다.
