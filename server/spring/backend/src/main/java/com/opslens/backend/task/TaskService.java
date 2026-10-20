@@ -35,7 +35,8 @@ public class TaskService {
     private final TaskRepository tasks;
     private final TenantRepository tenants;
     private final IncidentRepository incidents;
-    private final TaskDispatcher dispatcher;
+    private final TaskOutboxRepository outbox;
+    private final TaskOutboxRelay relay;
     private final AgentClient agent;
     private final TaskEventHub events;
     private final AuditLog audit;
@@ -43,12 +44,13 @@ public class TaskService {
     private final TransactionTemplate transactions;
 
     public TaskService(TaskRepository tasks, TenantRepository tenants, IncidentRepository incidents,
-            TaskDispatcher dispatcher, AgentClient agent, TaskEventHub events, AuditLog audit,
+            TaskOutboxRepository outbox, TaskOutboxRelay relay, AgentClient agent, TaskEventHub events, AuditLog audit,
             SettingsService settings, PlatformTransactionManager transactionManager) {
         this.tasks = tasks;
         this.tenants = tenants;
         this.incidents = incidents;
-        this.dispatcher = dispatcher;
+        this.outbox = outbox;
+        this.relay = relay;
         this.agent = agent;
         this.events = events;
         this.audit = audit;
@@ -56,7 +58,11 @@ public class TaskService {
         this.transactions = new TransactionTemplate(transactionManager);
     }
 
-    /** 작업을 저장하고 agent에 넘긴다. 호출한 쪽에는 taskId만 돌려준다 (202). */
+    /**
+     * 작업을 저장하고 agent에 넘긴다. 호출한 쪽에는 taskId만 돌려준다 (202).
+     * 작업과 전달 대기열을 한 트랜잭션에 기록하고, 커밋 뒤 발행은 TaskOutboxRelay가 한다 (SPEC-kafka-scale 4.3(1)).
+     * 발행이 실패해도 작업이 QUEUED로 남지 않는다: Relay가 다시 보내고, 끝내 실패하면 FAILED로 끝낸다.
+     */
     public UUID create(String tenantId, Long incidentId, String type, String question, Long requestedBy) {
         Tenant tenant = tenants.get(tenantId);
         if (incidentId != null) {
@@ -64,13 +70,12 @@ public class TaskService {
         }
         UUID taskId = UUID.randomUUID();
         String traceId = UUID.randomUUID().toString().replace("-", "");
-        tasks.create(taskId, tenantId, incidentId, type, question, requestedBy);
-        try {
-            dispatcher.dispatch(new TaskMessage(taskId, tenantId, tenant.slaTier(), incidentId, type, question, traceId));
-        } catch (RuntimeException e) {
-            log.warn("task {} dispatch failed", taskId, e);
-            tasks.complete(taskId, TaskRecord.FAILED, "작업을 agent에 전달하지 못했다", null, null, null);
-        }
+        TaskMessage message = new TaskMessage(taskId, tenantId, tenant.slaTier(), incidentId, type, question, traceId);
+        transactions.executeWithoutResult(tx -> {
+            tasks.create(taskId, tenantId, incidentId, type, question, requestedBy);
+            outbox.enqueue(message);
+        });
+        relay.kick(taskId);
         return taskId;
     }
 

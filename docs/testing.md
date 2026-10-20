@@ -26,7 +26,7 @@ python3 scripts/e2e.py --cleanup       # 중단된 실행이 남긴 임시 브�
 | 공통 | `isolation` | 고객사 격리 | B사 담당자·B사 작업·B사 ServiceAccount로 A사 자원 접근 거부, 감사 로그 |
 | 공통 | `question` | 문서 질문 | RAG로 계약 조항을 찾아 답하고 출처를 단다 |
 | 공통 | `no-issue` | 이상 없음 | 열린 인시던트가 없는 고객사 질문은 진단·조치 없이 30초 안에 "이상 없음" |
-| A사 | `guard` | backend 방어선 | 내부 API로 직접 요청: A사 HPA 서비스 직접 확장, HPA 최대치 5(안전 상한 4), B사 Docker 서비스 재시작, B사 롤백이 모두 422. 레플리카 불변 |
+| A사(끝) | `guard` | backend 방어선 | 내부 API로 직접 요청: A사 HPA 서비스 직접 확장, HPA 최대치 5(안전 상한 4), B사 Docker 서비스 재시작, B사 롤백이 모두 422. 레플리카 불변 |
 | A사 | `a-hang` | 파드 멈춤 | 승인 카드에 순차 재시작·무중단 표시, `restart_pods`를 API로 실행(`ROLLING`) → 회복 |
 | A사 | `a-latency` | 외부 결제 지연 | 앱 조치 없이 고객 공지 |
 | A사 | `a-dbslow` | DB 자체 지연 | `DEPENDENCY`(postgres) 에스컬레이션, 받는 사람 A사 DBA팀, 공지, 앱 조치 없음 |

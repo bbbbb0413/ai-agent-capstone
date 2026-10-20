@@ -28,7 +28,8 @@ class TaskServiceTest {
     private final TaskRepository tasks = mock(TaskRepository.class);
     private final TenantRepository tenants = mock(TenantRepository.class);
     private final IncidentRepository incidents = mock(IncidentRepository.class);
-    private final TaskDispatcher dispatcher = mock(TaskDispatcher.class);
+    private final TaskOutboxRepository outbox = mock(TaskOutboxRepository.class);
+    private final TaskOutboxRelay relay = mock(TaskOutboxRelay.class);
     private final AgentClient agent = mock(AgentClient.class);
     private final TaskEventHub events = mock(TaskEventHub.class);
     private final AuditLog audit = mock(AuditLog.class);
@@ -49,7 +50,7 @@ class TaskServiceTest {
                  "args":{"incident_id":1,"action":"restart_pods","service":"order-api"}}
                 """);
         when(tasks.get(taskId)).thenReturn(task(pending));
-        service = new TaskService(tasks, tenants, incidents, dispatcher, agent, events, audit, settings, transactions);
+        service = new TaskService(tasks, tenants, incidents, outbox, relay, agent, events, audit, settings, transactions);
     }
 
     private TaskRecord task(JsonNode action) {
@@ -64,7 +65,30 @@ class TaskServiceTest {
         when(incidents.getForTenant("tenant-a", 99L)).thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND));
         assertThrows(ResponseStatusException.class, () -> service.create("tenant-a", 99L, "QUESTION", "test", 2L));
         verify(tasks, never()).create(any(), anyString(), any(), anyString(), anyString(), any());
-        verifyNoInteractions(dispatcher);
+        verifyNoInteractions(outbox, relay);
+    }
+
+    @Test
+    void createSavesTaskAndOutboxTogetherThenKicksRelayAfterCommit() {
+        when(tenants.get("tenant-a")).thenReturn(new Tenant("tenant-a", "A", "GOLD", BigDecimal.TEN,
+                15, List.of(), "DIRECT", "tenant-a", null));
+        UUID created = service.create("tenant-a", null, "QUESTION", "test", 2L);
+        var order = inOrder(transactions, tasks, outbox, relay);
+        order.verify(transactions).getTransaction(any());
+        order.verify(tasks).create(eq(created), eq("tenant-a"), isNull(), eq("QUESTION"), eq("test"), eq(2L));
+        order.verify(outbox).enqueue(argThat(m -> m.taskId().equals(created) && m.slaTier().equals("GOLD")));
+        order.verify(transactions).commit(any());
+        order.verify(relay).kick(created);
+    }
+
+    @Test
+    void outboxFailureRollsBackAndDoesNotKick() {
+        when(tenants.get("tenant-a")).thenReturn(new Tenant("tenant-a", "A", "GOLD", BigDecimal.TEN,
+                15, List.of(), "DIRECT", "tenant-a", null));
+        doThrow(new IllegalStateException("db")).when(outbox).enqueue(any());
+        assertThrows(IllegalStateException.class, () -> service.create("tenant-a", null, "QUESTION", "test", 2L));
+        verify(transactions).rollback(any());
+        verifyNoInteractions(relay);
     }
 
     @Test

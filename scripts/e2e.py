@@ -381,8 +381,14 @@ def preflight(args) -> Result:
                     "jsonpath={range .items[*]}{.metadata.name}={.status.readyReplicas}/{.spec.replicas} {end}",
                     check=False)
     r.check("order-api" in ready and "reservation-api" in ready, f"kind 고객사 서비스 ({ready.strip() or '응답 없음'})")
-    sync = kubectl("-n", "argocd", "get", "application", "tenant-a", "-o",
-                   "jsonpath={.status.sync.status}/{.status.health.status}", check=False)
+    # 새 클러스터에서는 HPA가 첫 CPU 지표를 받기 전까지 ArgoCD가 잠깐 Degraded로 본다. 바로 실패하지 않고 기다린다
+    deadline = time.time() + 90
+    while True:
+        sync = kubectl("-n", "argocd", "get", "application", "tenant-a", "-o",
+                       "jsonpath={.status.sync.status}/{.status.health.status}", check=False)
+        if sync == "Synced/Healthy" or time.time() > deadline:
+            break
+        time.sleep(5)
     r.check(sync == "Synced/Healthy", f"ArgoCD tenant-a {sync or '없음'}")
     if "postgres" in running:
         common = ROOT / "data/documents/_common/runbook-standard.md"
@@ -788,11 +794,12 @@ QUICK = ["guard", "a-hang", "a-dbslow", "b-surge"]              # PR이 없는 �
 GITHUB_SCENARIOS = {"a-pool", "a-surge", "a-surge-max"}         # PR을 만들고 병합한다
 
 
-# 같은 묶음은 순서대로, 묶음끼리는 동시에 돈다. guard는 A사 레플리카를 전후로 비교하므로 A사 장애보다 먼저 돈다.
-# 확장 시나리오는 PR 병합과 원복 대기가 길어 묶음 끝에 둔다
+# 같은 묶음은 순서대로, 묶음끼리는 동시에 돈다. 확장 시나리오는 PR 병합과 원복 대기가 길어 뒤에 둔다.
+# guard는 앞 시나리오가 만든 A사·B사 인시던트 번호로 요청하므로 A사 묶음 끝에 둔다 (빈 DB에서도 돌게).
+# A사 장애를 정리하고 레플리카 2로 돌아온 뒤라 거부 전후 레플리카 비교도 흔들리지 않는다
 LANES = {
     "공통": ["isolation", "question", "no-issue"],
-    "tenant-a": ["guard", "a-hang", "a-latency", "a-dbslow", "a-pool", "a-surge", "a-surge-max"],
+    "tenant-a": ["a-hang", "a-latency", "a-dbslow", "a-pool", "a-surge", "a-surge-max", "guard"],
     "tenant-b": ["b-hang", "b-latency", "b-pool", "b-surge"],
 }
 LANE_OF = {key: lane for lane, keys in LANES.items() for key in keys}

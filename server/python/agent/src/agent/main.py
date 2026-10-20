@@ -1,6 +1,6 @@
 """agent 서버. backend만 호출할 수 있다 (서비스 토큰).
 
-POST /agent/tasks/{id}/run     작업 실행 (DISPATCH_MODE=http일 때 backend가 호출)
+POST /agent/tasks/{id}/run     작업 실행 (DISPATCH_MODE=http일 때 backend가 호출. 기본 kafka에서는 Kafka 소비자가 실행한다)
 POST /agent/tasks/{id}/resume  승인·거절 후 재개 (항상 HTTP)
 """
 
@@ -35,14 +35,11 @@ async def lifespan(app: FastAPI):
     pool = AsyncConnectionPool(settings.database_url, open=False, check=AsyncConnectionPool.check_connection,
                                kwargs={"autocommit": True, "prepare_threshold": 0, "row_factory": dict_row})
     await pool.open()
-    checkpointer = AsyncPostgresSaver(pool)
-    await checkpointer.setup()
-    app.state.runner = runner = Runner(graph_module.build(checkpointer), pool)
-    await runner.setup()
-    for task_id in await runner.interrupted():
-        _spawn(_limited(task_id, runner.recover(task_id)))
+    # 스키마(checkpointer 표, task_budget)는 agent-migrate가 먼저 만든다. 여기서는 DDL을 하지 않는다
+    app.state.runner = runner = Runner(graph_module.build(AsyncPostgresSaver(pool)), pool)
+    _spawn(_recover_stale(runner))
     if settings.dispatch_mode == "kafka":
-        _spawn(kafka_worker.consume(runner))
+        _spawn(kafka_worker.consume(runner, _slots))
     yield
     for task in _background:
         task.cancel()
@@ -80,6 +77,32 @@ def _spawn(coro) -> None:
     task = asyncio.create_task(coro)
     _background.add(task)
     task.add_done_callback(_background.discard)
+
+
+RECOVER_INTERVAL_SECONDS = 30
+
+
+async def _recover_stale(runner: Runner) -> None:
+    """임대가 끊긴 작업을 checkpoint에서 이어 간다. 시작할 때와 그 뒤 주기적으로 본다.
+
+    시작할 때 한 번만 보면, 다른 파드가 죽고 다시 뜨지 않을 때 그 파드의 작업이 남는다 (SPEC-kafka-scale 4.3(6)).
+    """
+    recovering: set[str] = set()   # 슬롯을 기다리는 복구를 다음 주기에 또 띄우지 않는다
+
+    async def recover(task_id: str) -> None:
+        try:
+            await _limited(task_id, runner.recover(task_id))
+        finally:
+            recovering.discard(task_id)
+
+    while True:
+        try:
+            for task_id in set(await runner.stale()) - recovering:
+                recovering.add(task_id)
+                _spawn(recover(task_id))
+        except Exception:  # noqa: BLE001 — DB가 잠깐 안 되면 다음 주기에 다시 본다
+            log.warning("stale task check failed", exc_info=True)
+        await asyncio.sleep(RECOVER_INTERVAL_SECONDS)
 
 
 async def _limited(task_id: str, coro) -> Any:

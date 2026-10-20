@@ -71,4 +71,19 @@ k config view --raw --minify -o jsonpath='{.clusters[0].cluster.certificate-auth
   > "$ROOT/.local/tenants/ca.crt"
 echo "https://${NODE}:6443" > "$ROOT/.local/tenants/api-server"
 
+# 7. HPA가 첫 CPU 지표를 계산하고(ScalingActive) A사가 Synced/Healthy가 될 때까지 기다린다.
+#    지표 전에는 ArgoCD가 HPA를 Degraded로 본다. ArgoCD가 한 번 Healthy라고 해도 지표 전이면 다시 Degraded가 된다
+for _ in $(seq 60); do
+  active=$(k -n tenant-a get hpa order-api \
+    -o jsonpath='{.status.conditions[?(@.type=="ScalingActive")].status}' 2>/dev/null || true)
+  [ "$active" = "True" ] && break
+  sleep 5
+done
+for _ in $(seq 60); do
+  state=$(k -n argocd get application tenant-a -o jsonpath='{.status.sync.status}/{.status.health.status}' 2>/dev/null || true)
+  [ "$state" = "Synced/Healthy" ] && break
+  sleep 5
+done
+echo "ArgoCD tenant-a: ${state:-없음}"
+
 echo "완료. 상태 확인: kubectl --context $CTX get pods -A"

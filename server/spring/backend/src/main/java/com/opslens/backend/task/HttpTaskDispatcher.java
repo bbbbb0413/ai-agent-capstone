@@ -4,7 +4,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 @Component
-@ConditionalOnProperty(name = "opslens.dispatch-mode", havingValue = "http", matchIfMissing = true)
+@ConditionalOnProperty(name = "opslens.dispatch-mode", havingValue = "http")
 public class HttpTaskDispatcher implements TaskDispatcher {
 
     private final AgentClient agent;

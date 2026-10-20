@@ -23,10 +23,13 @@ class Settings:
     # 진단 첫 턴에 도구 호출을 강제한다. 강제 없이 비교할 때만 false로 둔다
     diagnose_force_first_tool: bool = field(
         default_factory=lambda: os.environ.get("DIAGNOSE_FORCE_FIRST_TOOL", "true").lower() != "false")
-    dispatch_mode: str = _env("DISPATCH_MODE", "http")
+    dispatch_mode: str = _env("DISPATCH_MODE", "kafka")
     kafka_bootstrap_servers: str = _env("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
     prompts_dir: str = _env("PROMPTS_DIR", os.path.join(os.path.dirname(__file__), "..", "..", "prompts"))
+    alembic_dir: str = _env("ALEMBIC_DIR", os.path.join(os.path.dirname(__file__), "..", "..", "migrations"))
     workers: int = field(default_factory=lambda: int(os.environ.get("AGENT_WORKERS", "4")))
+    # Kafka 소비 역할. all이면 한 프로세스가 Gold·Silver 루프를 모두 돌리고, gold·silver면 그 등급만 (SPEC-kafka-scale 4.3(2))
+    consumer_role: str = _env("AGENT_CONSUMER_ROLE", "all")
 
 
 settings = Settings()

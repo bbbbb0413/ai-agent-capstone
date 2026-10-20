@@ -246,6 +246,46 @@ class ResumeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sorted(outcomes), ["DONE", "DUPLICATE"])
         self.assertEqual(runner._drive.await_count, 1)
 
+    async def test_redelivered_unfinished_task_continues_from_checkpoint(self):
+        snapshot = SimpleNamespace(values={"tenant_id": "tenant-a", "trace_id": "x"}, next=("diagnose",), interrupts=[])
+        runner = Runner(SimpleNamespace(aget_state=AsyncMock(return_value=snapshot)), None)
+        runner._drive = AsyncMock(return_value="DONE")
+        message = {"taskId": "t1", "tenantId": "tenant-a", "traceId": "x"}
+        self.assertEqual(await runner.run(message), "DONE")
+        self.assertIsNone(runner._drive.await_args.args[1])   # 새 입력이 아니라 checkpoint에서 이어 간다
+
+    async def test_finished_or_waiting_task_is_duplicate(self):
+        for snapshot in (SimpleNamespace(values={"x": 1}, next=(), interrupts=[]),
+                         SimpleNamespace(values={"x": 1}, next=("approval",), interrupts=["waiting"])):
+            runner = Runner(SimpleNamespace(aget_state=AsyncMock(return_value=snapshot)), None)
+            runner._drive = AsyncMock()
+            self.assertEqual(await runner.run({"taskId": "t1", "tenantId": "a", "traceId": "x"}), "DUPLICATE")
+            runner._drive.assert_not_awaited()
+
+    async def test_lease_held_elsewhere_skips_execution(self):
+        runner = Runner(None, None)
+        runner._claim = AsyncMock(return_value=False)
+        runner._drive_claimed = AsyncMock()
+        self.assertEqual(await runner._drive("t1", None, {}, {}, False), "RUNNING_ELSEWHERE")
+        runner._drive_claimed.assert_not_awaited()
+
+    async def test_same_process_duplicate_does_not_run_twice(self):
+        runner = Runner(None, None)
+        runner._claim = AsyncMock(return_value=True)
+        gate = asyncio.Event()
+
+        async def drive(*args):
+            await gate.wait()
+            return "DONE"
+
+        runner._drive_claimed = AsyncMock(side_effect=drive)
+        first = asyncio.create_task(runner._drive("t1", None, {}, {}, False))
+        await asyncio.sleep(0)
+        self.assertEqual(await runner._drive("t1", None, {}, {}, False), "RUNNING_ELSEWHERE")
+        gate.set()
+        self.assertEqual(await first, "DONE")
+        self.assertEqual(runner._drive_claimed.await_count, 1)
+
     def test_approval_identity_is_stable_and_advances_with_decisions(self):
         state = {"task_id": "test", "approvals": []}
         make = lambda: graph._approval_request("tool", {}, "test", state)["approvalId"]

@@ -15,6 +15,8 @@ dependencies = [
     "langchain-mcp-adapters==0.3.2",
     "psycopg[binary,pool]>=3.3,<3.4",
     "aiokafka>=0.14,<0.15",
+    # agent 스키마 마이그레이션. agent-migrate 컨테이너가 한 번 실행한다 (SPEC-kafka-scale 4.3(8))
+    "alembic>=1.20,<1.21",
 ]
 
 [build-system]
