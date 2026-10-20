@@ -26,7 +26,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 KCTX = "kind-opslens-tenants"
 REPO = "bbbbb0413/ai-agent-capstone"
-NODE_PORT = {"tenant-a": 30081, "tenant-b": 30082}
 SERVICE = {"tenant-a": "order-api", "tenant-b": "reservation-api"}
 POOL_FILE = "gitops/tenants/tenant-a/order-api.yaml"
 POOL_NORMAL = 20
@@ -67,9 +66,17 @@ def github(method: str, path: str, body: dict | None = None) -> dict | list:
 
 
 def set_fault(tenant: str, fault: str | None) -> None:
-    url = f"http://opslens-tenants-control-plane:{NODE_PORT[tenant]}/admin/faults"
+    """모든 파드에 장애를 넣거나 뺀다. 장애 상태는 파드마다 따로 있어서, Service(NodePort)로 한 번 부르면
+    파드 하나에만 닿는다. 그러면 A사(파드 2개)에서 해제가 다른 파드로 가 장애가 남는다 (a-latency 뒤 a-dbslow 실패).
+    파드 안에서 자기 관리 API를 부른다. 토큰은 파드 환경변수로만 쓰고 이 스크립트는 읽지 않는다."""
     method = f"-X POST -H 'Content-Type: application/json' -d '{{\"fault\":\"{fault}\"}}'" if fault else "-X DELETE"
-    in_backend(f'curl -sf {method} -H "Authorization: Bearer $SERVICE_TOKEN" {url} > /dev/null')
+    pods = kubectl("-n", tenant, "get", "pods", "-l", f"app={SERVICE[tenant]}", "--field-selector=status.phase=Running",
+                   "-o", "jsonpath={.items[*].metadata.name}").split()
+    if not pods:
+        raise RuntimeError(f"{tenant} {SERVICE[tenant]} 파드가 없다")
+    for pod in pods:
+        kubectl("-n", tenant, "exec", pod, "--", "sh", "-c",
+                f'curl -sf {method} -H "Authorization: Bearer $SERVICE_TOKEN" http://localhost:8080/admin/faults > /dev/null')
 
 
 def set_surge(tenant: str, on: bool, rate: int | None = None) -> None:

@@ -419,7 +419,8 @@ async def propose_action(state: State, runtime: Rt) -> dict:
     for _ in range(PROPOSE_SEND_BACKS):
         # 조항과 맞지 않거나 할 수 없는 조치를 골랐다. 이유를 돌려주고 다시 고르게 한다 (판단은 여전히 모델이 한다).
         # 거부 이유는 쌓아서 넘긴다. 재시작을 거부하자 계약상 불가한 롤백을 고른 적이 있다 (b-pool E2E)
-        problem = _clause_mismatch(ai, recent_change) or _unsupported_action(ai, context)
+        problem = (_clause_mismatch(ai, recent_change) or _unsupported_action(ai, context)
+                   or _blocked_action_mismatch(ai, state.get("signals") or {}, recent_change))
         if not problem or turns >= harness.MAX_TURNS:
             break
         call = ai.tool_calls[0]
@@ -472,6 +473,40 @@ def _unsupported_action(ai: AIMessage, context: dict) -> str | None:
     return (f"거부: {args.get('service')}의 supportedActions는 {supported}다. '{args.get('action')}'는 계약이나 실행 환경상 "
             "할 수 없다. 다른 조치로 대신하지 말고 business_escalate_incident(category=\"ACTION_BLOCKED\", "
             f"required_action=\"{args.get('action')}\", blocked_by=\"CONTRACT\" 또는 \"RUNTIME\")를 호출한다 (RB-STD-06).")
+
+
+def _signal_clause(signals: dict) -> str | None:
+    """코드가 센 지표와 로그 신호로 정한 장애 형태 (prompts/propose.md의 판정표 앞 세 행). 애매하면 None."""
+    error_rate = (signals.get("metrics") or {}).get("error_rate")
+    logs = signals.get("logs") or {}
+    if not isinstance(error_rate, (int, float)):
+        return None
+    found = [clause for clause, hit in (
+        ("RB-STD-01", error_rate >= 0.05 and logs.get("connection_pool_exhausted", 0) > 0),
+        ("RB-STD-02", error_rate >= 0.05 and logs.get("worker_pool_saturated", 0) > 0),
+        ("RB-STD-03", error_rate < 0.05 and logs.get("request_queue_backlog", 0) > 0
+         and not logs.get("external_api_timeout") and not logs.get("slow_query")),
+    ) if hit]
+    return found[0] if len(found) == 1 else None
+
+
+def _blocked_action_mismatch(ai: AIMessage, signals: dict, recent_change: bool) -> str | None:
+    """ACTION_BLOCKED 에스컬레이션의 required_action이 신호로 정한 장애 형태의 조치와 다르면 그 이유.
+
+    받는 사람(고객사 승인 담당)에게 엉뚱한 조치의 승인을 요청하게 된다. 풀 고갈(RB-STD-01)인데
+    required_action을 scale_deployment로 적은 적이 있다 (b-pool E2E).
+    """
+    if not ai.tool_calls or ai.tool_calls[0]["name"] != "business_escalate_incident":
+        return None
+    args = ai.tool_calls[0]["args"]
+    clause = _signal_clause(signals)
+    if args.get("category") != "ACTION_BLOCKED" or not args.get("required_action") or not clause:
+        return None
+    fits = CLAUSE_ACTIONS[clause] - ({"restart_pods"} if clause == "RB-STD-01" and recent_change else set())
+    if args["required_action"] in fits:
+        return None
+    return (f"거부: 지표와 로그 신호로는 {clause}다. 그 장애 형태를 고치는 조치는 {sorted(fits)}이고, "
+            f"'{args['required_action']}'는 아니다. required_action에는 그중 할 수 없어 막힌 조치를 적는다.")
 
 
 RECENT_CHANGE_MINUTES = 15   # 이상 시작 전 이 시간 안의 배포·설정 변경을 "직전 변경"으로 본다 (RB-STD-01)

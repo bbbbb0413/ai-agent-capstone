@@ -129,6 +129,19 @@ class ToolOutcomeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(graph._unsupported_action(ai("restart_pods"), context))
         self.assertIsNone(graph._unsupported_action(ai("restart_pods"), {}))   # 서비스 목록이 없으면 판단하지 않는다
 
+    def test_blocked_escalation_must_name_the_action_of_the_signalled_fault(self):
+        from langchain_core.messages import AIMessage
+        def esc(action):
+            return AIMessage(content="", tool_calls=[{"name": "business_escalate_incident", "id": "c1", "args": {
+                "category": "ACTION_BLOCKED", "required_action": action, "blocked_by": "CONTRACT", "reason": "x"}}])
+        pool = {"metrics": {"error_rate": 0.51}, "logs": {"connection_pool_exhausted": 50}}
+        self.assertIn("RB-STD-01", graph._blocked_action_mismatch(esc("scale_deployment"), pool, True))
+        self.assertIsNone(graph._blocked_action_mismatch(esc("rollback_deployment"), pool, True))
+        surge = {"metrics": {"error_rate": 0.0}, "logs": {"request_queue_backlog": 120}}
+        self.assertIsNone(graph._blocked_action_mismatch(esc("scale_deployment"), surge, False))
+        self.assertIn("RB-STD-03", graph._blocked_action_mismatch(esc("rollback_deployment"), surge, False))
+        self.assertIsNone(graph._blocked_action_mismatch(esc("scale_deployment"), {"metrics": {}, "logs": {}}, False))
+
     def test_recent_change_is_a_change_shortly_before_the_incident(self):
         b = {"revisions": [{"createdAt": "2026-10-20T04:13:12Z"}, {"createdAt": "2026-10-20T02:38:12Z"}]}
         self.assertTrue(graph._recent_change(b, "2026-10-20T04:14:34Z"))
