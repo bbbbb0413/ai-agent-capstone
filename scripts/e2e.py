@@ -364,11 +364,14 @@ def scenario_guard(args) -> Result:
     if not all(incident.values()):
         r.check(False, "검사에 쓸 인시던트가 없다 (시나리오를 한 번 이상 돌린 뒤 실행한다)")
         return r
+    # A사 order-api는 HPA가 실제 레플리카를 관리한다. 직접 확장은 HPA와 GitOps가 덮어쓰므로
+    # 거부해야 하며, 최대치 변경도 DB 연결 수로 계산한 안전 상한(4)을 넘을 수 없다.
+    a_replicas_before = kubectl("-n", "tenant-a", "get", "deploy", "order-api", "-o", "jsonpath={.spec.replicas}")
     cases = [
-        ("guard-scale", "tenant-a", {"action": "scale_deployment", "service": "order-api", "replicas": 6},
-         "2~4", "A사 확장 6 → 안전 상한 4로 거부"),
-        ("guard-min", "tenant-a", {"action": "scale_deployment", "service": "order-api", "replicas": 1},
-         "2~4", "A사 축소 1 → 계약 하한 2로 거부"),
+        ("guard-hpa-scale", "tenant-a", {"action": "scale_deployment", "service": "order-api", "replicas": 4},
+         "HPA", "A사 HPA 서비스 직접 확장 → HPA 충돌 방지를 위해 거부"),
+        ("guard-hpa-max", "tenant-a", {"action": "adjust_autoscaler", "service": "order-api", "replicas": 5},
+         "안전 상한 4", "A사 HPA 최대치 5 → 안전 상한 4로 거부"),
         ("guard-runtime", "tenant-b", {"action": "restart_pods", "service": "settlement-batch"},
          "docker", "B사 Docker 서비스 재시작 → 지원하지 않는 실행 환경으로 거부"),
         ("guard-contract", "tenant-b", {"action": "rollback_deployment", "service": "reservation-api"},
@@ -378,7 +381,8 @@ def scenario_guard(args) -> Result:
         code, message = internal_action(tenant, {**body, "incidentId": int(incident[tenant])})
         r.check(code == 422 and expect in message, f"{label} ({code}: {message[:70]})")
     replicas = kubectl("-n", "tenant-a", "get", "deploy", "order-api", "-o", "jsonpath={.spec.replicas}")
-    r.check(replicas == "2", f"거부된 요청은 클러스터를 바꾸지 않았다 (A사 레플리카 {replicas})")
+    r.check(replicas == a_replicas_before,
+            f"거부된 요청은 HPA가 관리하는 레플리카를 바꾸지 않았다 ({a_replicas_before} → {replicas})")
     return r
 
 
