@@ -163,8 +163,26 @@ QUIET_SECONDS = 75
 _cleared_at: dict[str, float] = {}
 
 
+def wait_for_closed_incidents(tenant: str, timeout: float = 420) -> None:
+    """앞 장애의 인시던트가 닫힐 때까지 기다린다. 같은 알림(예: p95 1초 초과)이 아직 울리는 중에 다음 장애를 넣으면
+    열린 인시던트로 합쳐져 새 인시던트가 생기지 않는다 (a-latency 직후 a-dbslow에서 600초 대기 후 실패)."""
+    deadline, said = time.time() + timeout, False
+    while time.time() < deadline:
+        open_ids = sql(f"select string_agg('#' || id, ', ') from app.incidents "
+                       f"where tenant_id = '{tenant}' and status = 'OPEN'")
+        if not open_ids:
+            return
+        if not said:
+            say(f"앞 장애의 인시던트({open_ids})가 닫히기를 기다린다 (알림 해제 반영)")
+            said = True
+        time.sleep(5)
+    say(f"⚠️  {timeout:.0f}초 안에 {tenant}의 열린 인시던트가 닫히지 않았다. 새 장애가 그 인시던트로 합쳐질 수 있다")
+
+
 def inject(tenant: str, kind: str | None, **options) -> None:
     """고객사 서비스에 장애를 주입한다 (kind는 scripts/inject.py의 종류). kind=None이면 모두 해제한다."""
+    if kind:
+        wait_for_closed_incidents(tenant)
     if kind and (wait := QUIET_SECONDS - (time.time() - _cleared_at.get(tenant, 0))) > 0:
         say(f"앞 장애의 로그가 진단 구간에 섞이지 않게 {wait:.0f}초 기다린다")
         time.sleep(wait)
