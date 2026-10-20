@@ -2,16 +2,17 @@
 
 | 종류 | 무엇을 확인하나 | 실행 | 걸리는 시간 |
 |---|---|---|---|
-| 전체 시나리오 E2E | 장애 주입부터 승인·조치·회복 확인·보고서까지 실제 스택에서 | `python3 scripts/e2e.py` | 전체 약 15분 |
+| 전체 시나리오 E2E | 장애 주입부터 승인·조치·회복 확인·보고서까지 실제 스택에서 | `python3 scripts/e2e.py` | 전체 약 20분 |
 | 단위·DB 테스트 | 프론트 타임라인, Agent 도구 결과·분기, backend 소유권·승인·SLA | 아래 2장 | 1분 안팎 |
 
 ## 1. 전체 시나리오 E2E (`scripts/e2e.py`)
 
 compose 스택과 kind 클러스터(`scripts/cluster-up.sh`)가 떠 있어야 한다. 시나리오 A는 backend에 `GITHUB_TOKEN`이 있어야 한다.
+문서가 추가·수정된 커밋을 받은 뒤에는 indexer를 다시 실행한다. 사전 점검은 공통 표준 런북의 현재 파일 버전이 RAG DB에 있는지 확인한다.
 
 ```bash
-python3 scripts/e2e.py                 # 전체: 사전 점검 → 격리 → 문서 질문 → B → B2 → A
-python3 scripts/e2e.py b a             # 고른 시나리오만 (사전 점검은 항상)
+python3 scripts/e2e.py                 # 전체: 사전 점검 → 격리 → 문서 질문 → B → B2 → A → A-hang
+python3 scripts/e2e.py b a-hang        # 고른 시나리오만 (사전 점검은 항상)
 python3 scripts/e2e.py --list          # 시나리오 목록
 python3 scripts/e2e.py a --no-merge    # 롤백 PR은 사람이 병합 (병합될 때까지 기다린다)
 python3 scripts/e2e.py --auto-approve  # backend 자동 승인 설정을 그대로 쓴다
@@ -25,6 +26,7 @@ python3 scripts/e2e.py --auto-approve  # backend 자동 승인 설정을 그대�
 | `b` | B. 파드 멈춤 (B사, DIRECT) | `restart_pods`를 Kubernetes API로 실행, 회복 |
 | `b2` | B2. 외부 결제 API 지연 (B사) | 재시작하지 않고 고객 공지 |
 | `a` | A. 잘못된 설정 배포 (A사, GITOPS) | 롤백 PR → 병합 → ArgoCD 동기화 → 회복, 풀 크기 20 원복 |
+| `a-hang` | A-hang. 파드 멈춤 (A사, GITOPS) | 승인 카드에 현재 레플리카·무중단 순차 재시작 영향을 표시하고, `restart_pods`를 Kubernetes API로 실행 → 실제 `ROLLING` 결과 → 회복 |
 
 - **승인:** 스크립트가 제안을 검사해 기대한 조치만 승인하고, 나머지는 거절한다. 잘못된 조치가 실행되지 않게 하기 위해서다. 실행하는 동안 backend 자동 승인을 끄고, 끝나면 되돌린다.
 - **판정:** 기대한 조치를 한 번만 제안했는지, 반영 방식, 회복 확인, 보고서·공지, 정리 상태를 본다. 승인 요청은 저장된 이벤트로 판정하므로 자동 승인으로 진행돼도 기준이 같다.
@@ -46,6 +48,7 @@ python3 scripts/e2e.py --auto-approve  # backend 자동 승인 설정을 그대�
 - approvalId로 승인 대상을 식별한다. 단일 Agent 프로세스 내 동시 재개를 직렬화하고, 지난 승인 ID로 새로운 승인 단계를 재개하지 않는다. Agent 다중 인스턴스 배포에는 별도 분산 잠금/실행 멱등성 보장이 필요하다.
 - SLA 기한은 A사 P1/P2=15/60분, B사 P1/P2=60/240분으로 계약서와 일치시킨다.
 - GITOPS 고객사라도 파드 재시작은 Kubernetes API로 바로 반영된다고 표시한다.
+- 조치 승인에는 서비스 목록이 계산한 현재·준비 레플리카, 순차/전체 재시작 방식, 확장 안전 상한을 표시한다. 모델의 추정값은 승인 영향으로 사용하지 않는다.
 
 Harness 시간·턴 한도, 원인 미확정 시 RAG 분기, 시나리오 초기화 동작은 변경하지 않는다.
 

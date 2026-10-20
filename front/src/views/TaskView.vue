@@ -4,7 +4,7 @@ import { marked } from 'marked'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { api } from '../api.js'
 import StatusBadge from '../components/StatusBadge.vue'
-import { ADMIN_ONLY_TOOLS, ESCALATION_CATEGORIES, actionDetail, actionResultLabel, approvalChangeMode, approvalFields, approvalImpact, recipientsLabel, toolLabel, toTimeline } from '../progress.js'
+import { ADMIN_ONLY_TOOLS, ESCALATION_CATEGORIES, actionDetail, actionResultLabel, approvalChangeMode, approvalFields, approvalImpact, approvalImpactFields, recipientsLabel, toolLabel, toTimeline } from '../progress.js'
 import { useSession } from '../session.js'
 
 const props = defineProps({ id: { type: String, required: true } })
@@ -136,6 +136,9 @@ async function decide(decision) {
       <tbody>
         <tr v-for="[name, value] in approvalFields(approval)" :key="name">
           <th>{{ name }}</th><td class="pre-line">{{ value }}</td>
+        </tr>
+        <tr v-for="[name, value] in approvalImpactFields(approval)" :key="`impact-${name}`">
+          <th>{{ name }}</th><td>{{ value }}</td>
         </tr>
         <tr v-if="approval.changeMode">
           <th>반영 방식</th>

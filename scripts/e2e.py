@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """OpsLens 전체 시나리오 E2E 테스트. 장애 주입부터 승인, 조치, 회복 확인, 보고서까지 실제로 돌리고 결과를 판정한다.
 
-    python3 scripts/e2e.py                # 전체: 사전 점검 → 격리 → 문서 질문 → B → B2 → A
-    python3 scripts/e2e.py b a            # 고른 시나리오만 (사전 점검은 항상)
+    python3 scripts/e2e.py                # 전체: 사전 점검 → 격리 → 문서 질문 → B → B2 → A → A-hang
+    python3 scripts/e2e.py b a-hang       # 고른 시나리오만 (사전 점검은 항상)
     python3 scripts/e2e.py --list         # 시나리오 목록
 
 옵션
@@ -15,6 +15,7 @@
 """
 
 import argparse
+import hashlib
 import os
 import http.cookiejar
 import json
@@ -235,17 +236,19 @@ def handle_pr(pending: dict, result: Result, merge: bool) -> None:
     result.check(out.get("merged") is True, f"PR #{number} 병합 ({out.get('message', '')})")
 
 
-def check_proposals(task_id: str, expect: Expect, result: Result) -> None:
+def check_proposals(task_id: str, expect: Expect, result: Result) -> dict | None:
     """저장된 이벤트로 Agent가 낸 승인 요청을 검사한다. 자동 승인으로 진행돼도 같은 기준으로 판정한다."""
     events = Session("engineer").get(f"/api/ai/tasks/{task_id}/events")
     proposals = [e["data"] for e in events if e["type"] == "APPROVAL_REQUIRED" and e.get("data")]
     unique = list({str(p.get("tool")) + json.dumps(p.get("args"), sort_keys=True): p for p in proposals}.values())
     actions = [p for p in unique if p.get("tool") == expect.action_tool]
-    result.check(any(expected(p, expect) for p in actions),
+    matching = next((p for p in actions if expected(p, expect)), None)
+    result.check(bool(matching),
                  f"기대한 조치를 제안했다 ({', '.join(describe(p) for p in actions) or '조치 제안 없음'})")
     result.check(len(actions) <= 1, f"조치 제안이 한 번이다 ({len(actions)}번. 두 번 이상이면 회복 판단을 의심한다)")
     wrong = [describe(p) for p in unique if not expected(p, expect)]
     result.check(not wrong, "기대하지 않은 승인 요청이 없다" + (f" (있음: {', '.join(wrong)})" if wrong else ""))
+    return matching
 
 
 def summarize(task: dict, result: Result) -> dict:
@@ -264,7 +267,8 @@ def preflight(args) -> Result:
     need = {"backend", "agent", "business-mcp", "rag-mcp", "mcp-grafana", "postgres", "prometheus",
             "alertmanager", "loki", "frontend"}
     running = {line.split()[0] for line in services.splitlines() if line.endswith("running")}
-    r.check(need <= running, f"compose 서비스 실행 중 ({len(need & running)}/{len(need)})"
+    stack_ready = need <= running
+    r.check(stack_ready, f"compose 서비스 실행 중 ({len(need & running)}/{len(need)})"
             + (f", 없음: {', '.join(sorted(need - running))}" if need - running else ""))
     ready = kubectl("get", "deploy", "-A", "-l", "app", "-o",
                     "jsonpath={range .items[*]}{.metadata.name}={.status.readyReplicas}/{.spec.replicas} {end}",
@@ -273,20 +277,28 @@ def preflight(args) -> Result:
     sync = kubectl("-n", "argocd", "get", "application", "tenant-a", "-o",
                    "jsonpath={.status.sync.status}/{.status.health.status}", check=False)
     r.check(sync == "Synced/Healthy", f"ArgoCD tenant-a {sync or '없음'}")
-    r.check(sql("select count(*) from docs.chunks") not in ("", "0"), "문서 색인이 있다 (RAG)")
-    token = in_backend('[ -n "$GITHUB_TOKEN" ] && echo yes || echo no')
+    if "postgres" in running:
+        common = ROOT / "data/documents/_common/runbook-standard.md"
+        version = hashlib.sha256(common.read_bytes()).hexdigest()[:12]
+        indexed = sql("select count(*) from docs.chunks where tenant_id = '_common' "
+                      f"and doc_id = 'runbook-standard' and version = '{version}'")
+        r.check(indexed not in ("", "0"), "현재 버전의 공통 표준 런북이 색인됐다 (RAG)")
+    else:
+        r.check(False, "현재 버전의 공통 표준 런북이 색인됐다 (PostgreSQL 미실행)")
     if "a" in args.scenarios:
+        token = in_backend('[ -n "$GITHUB_TOKEN" ] && echo yes || echo no') if "backend" in running else "no"
         r.check(token == "yes", "backend에 GITHUB_TOKEN이 있다 (시나리오 A의 PR)")
-    busy = sql("select string_agg(left(id::text, 8) || ' ' || tenant_id || ' ' || status || ' (' || "
-               "to_char(updated_at at time zone 'Asia/Seoul', 'HH24:MI') || ')', ', ') "
-               "from app.ai_tasks where status not in ('DONE','FAILED')")
-    if not r.check(not busy, "진행 중인 작업이 없다" + (f" (있음: {busy})" if busy else "")):
-        r.notes.append("진행 중인 작업은 화면에서 끝까지 처리하거나, 멈춘 작업이면 agent를 재시작하면 이어서 실행된다")
-    open_incidents = sql("select string_agg('#'||id||' '||tenant_id||' '||service, ', ') from app.incidents "
-                         "where status = 'OPEN' and tenant_id in ('tenant-a','tenant-b')")
-    if open_incidents:
-        r.notes.append(f"열린 인시던트가 있다: {open_incidents}. 같은 알림이면 새 인시던트가 생기지 않는다")
-        say(f"⚠️  열린 인시던트: {open_incidents}")
+    if "postgres" in running:
+        busy = sql("select string_agg(left(id::text, 8) || ' ' || tenant_id || ' ' || status || ' (' || "
+                   "to_char(updated_at at time zone 'Asia/Seoul', 'HH24:MI') || ')', ', ') "
+                   "from app.ai_tasks where status not in ('DONE','FAILED')")
+        if not r.check(not busy, "진행 중인 작업이 없다" + (f" (있음: {busy})" if busy else "")):
+            r.notes.append("진행 중인 작업은 화면에서 끝까지 처리한다. 체크포인트가 없는 중단 작업은 FAILED로 정리한다")
+        open_incidents = sql("select string_agg('#'||id||' '||tenant_id||' '||service, ', ') from app.incidents "
+                             "where status = 'OPEN' and tenant_id in ('tenant-a','tenant-b')")
+        if not r.check(not open_incidents,
+                       "열린 인시던트가 없다" + (f" (있음: {open_incidents})" if open_incidents else "")):
+            r.notes.append(f"열린 인시던트가 있다: {open_incidents}. 같은 알림이면 새 인시던트가 생기지 않는다")
     return r
 
 
@@ -489,6 +501,43 @@ def scenario_a(args) -> Result:
     return r
 
 
+def scenario_a_hang(args) -> Result:
+    r = Result("A-hang. 파드 멈춤 → 순차 재시작 (A사, GITOPS)")
+    started, since = time.time(), datetime.now(timezone.utc)
+    pods_before = kubectl("-n", "tenant-a", "get", "pods", "-l", "app=order-api", "-o", "name")
+    inject("tenant-a", "WORKER_HANG")
+    say("A사 order-api에 WORKER_HANG 주입")
+    try:
+        _, task = wait_for_incident_task(Session("admin"), "tenant-a", since, args.timeout)
+        expect = Expect("business_execute_runbook_action", "restart_pods", "order-api")
+        task = drive(task["id"], expect, r, args.timeout, merge=False)
+        summary = summarize(task, r)
+        proposal = check_proposals(task["id"], expect, r) or {}
+        impact = proposal.get("impact") or {}
+        r.check(impact.get("restartMode") == "ROLLING", "승인 카드가 순차 재시작임을 알린다")
+        r.check(impact.get("zeroDowntime") is True, "승인 카드가 전체 서비스 중단 없음을 알린다")
+        r.check((impact.get("replicas") or 0) >= 2, "승인 카드에 현재 레플리카가 표시된다")
+        action = summary.get("action") or {}
+        action_result = action.get("result") or {}
+        r.check(action_result.get("status") == "EXECUTED", "재시작이 Kubernetes API로 실행됐다")
+        r.check(action_result.get("restartMode") == "ROLLING", "실제 조치도 파드를 하나씩 재시작했다")
+        r.check(summary.get("recovered") is True, "회복 확인: RECOVERED")
+        pods_after = kubectl("-n", "tenant-a", "get", "pods", "-l", "app=order-api", "-o", "name")
+        r.check(pods_after and pods_after != pods_before, "파드가 새로 만들어졌다")
+    finally:
+        reset_a()
+    r.seconds = time.time() - started
+    return r
+
+
+def reset_a() -> None:
+    """A사 장애를 정리한다. 남은 장애가 다음 시나리오에 섞이지 않게 한다."""
+    try:
+        inject("tenant-a", None)
+    except RuntimeError as e:
+        say(f"⚠️  A사 장애 해제 실패: {e}")
+
+
 def reset_b() -> None:
     """B사 장애를 정리한다. 남은 장애가 다음 시나리오에 섞이지 않게 한다."""
     try:
@@ -505,6 +554,7 @@ SCENARIOS = {
     "b": ("B. 파드 멈춤 → 재시작 (DIRECT)", scenario_b),
     "b2": ("B2. 외부 결제 지연 → 고객 공지", scenario_b2),
     "a": ("A. 잘못된 설정 배포 → 롤백 PR → 병합 → 동기화 (GITOPS)", scenario_a),
+    "a-hang": ("A-hang. 파드 멈춤 → 순차 재시작 (GITOPS)", scenario_a_hang),
 }
 
 
@@ -539,7 +589,7 @@ def write_report(results: list[Result], started: datetime) -> Path:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("scenarios", nargs="*", help="isolation question b b2 a (생략하면 전체)")
+    parser.add_argument("scenarios", nargs="*", help="실행할 시나리오 키 (생략하면 전체, --list로 확인)")
     parser.add_argument("--list", action="store_true")
     parser.add_argument("--no-merge", action="store_true")
     parser.add_argument("--auto-approve", action="store_true")

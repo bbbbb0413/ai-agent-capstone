@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { actionResultLabel, approvalChangeMode, approvalFields, approvalImpact, recipientsLabel, toTimeline } from '../src/progress.js'
+import { actionResultLabel, approvalChangeMode, approvalFields, approvalImpact, approvalImpactFields, recipientsLabel, toTimeline } from '../src/progress.js'
 
 const event = (type, data = {}) => ({ type, data, createdAt: '2026-10-19T00:00:00Z' })
 const start = (callId) => event('TOOL_START', { tool: 'business_execute_runbook_action', callId })
@@ -42,6 +42,27 @@ test('GitOps pod restart is described as direct API execution, not a PR', () => 
   request.args.action = 'scale_deployment'
   assert.match(approvalChangeMode(request), /PR/)
   assert.match(approvalImpact(request), /PR/)
+})
+
+test('approval shows rolling restart impact from the service inventory', () => {
+  const request = { tool: 'business_execute_runbook_action', args: { action: 'restart_pods', service: 'order-api' },
+    impact: { runtime: 'KUBERNETES', replicas: 2, readyReplicas: 2, restartMode: 'ROLLING', zeroDowntime: true } }
+  const fields = Object.fromEntries(approvalImpactFields(request))
+  assert.equal(fields['현재 레플리카'], '2개 (준비됨 2개)')
+  assert.match(fields['재시작 방식'], /순차 재시작/)
+  assert.match(approvalImpact(request), /전체 서비스를 중단하지 않지만/)
+  request.impact.restartMode = 'ALL_AT_ONCE'
+  assert.match(approvalImpact(request), /서비스가 중단될 수 있다/)
+})
+
+test('scale approval shows current, target, and calculated safe maximum', () => {
+  const request = { tool: 'business_execute_runbook_action', args: { action: 'scale_deployment', service: 'order-api', replicas: 4 },
+    impact: { replicas: 2, readyReplicas: 2, targetReplicas: 4, safeMaxReplicas: 4 } }
+  const fields = Object.fromEntries(approvalImpactFields(request))
+  assert.equal(fields['현재 레플리카'], '2개 (준비됨 2개)')
+  assert.equal(fields['변경 후 레플리카'], '4개')
+  assert.equal(fields['안전 상한'], '4개')
+  assert.match(approvalImpact(request), /안전 상한은 4개/)
 })
 
 test('blocked-action escalation shows what is needed, why, and that delivery is not wired', () => {
