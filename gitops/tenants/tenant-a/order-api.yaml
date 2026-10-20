@@ -5,7 +5,7 @@ metadata:
   labels:
     app: order-api
 spec:
-  replicas: 2
+  # replicas는 두지 않는다. HPA(hpa.yaml)가 2~최대치 사이에서 정한다. 두면 ArgoCD 동기화가 HPA의 값을 덮어쓴다
   selector:
     matchLabels:
       app: order-api
@@ -39,7 +39,7 @@ spec:
               port: 8080
             periodSeconds: 5
           resources:
-            requests: { cpu: 50m, memory: 192Mi }
+            requests: { cpu: 100m, memory: 192Mi }   # HPA CPU 사용률의 기준
             limits: { memory: 384Mi }
 ---
 apiVersion: v1

@@ -1,0 +1,58 @@
+# 부하 발생기 (SPEC-fault-based-actions 5.6). 고객사 밖의 사용자 역할이다.
+# - 레플리카 0으로 둔다. 트래픽 급증 장애 주입은 레플리카를 1로 올리는 것이다 (scripts/inject.sh surge).
+# - ArgoCD 관리 경로(gitops/tenants) 밖이라 selfHeal에 되돌려지지 않고, 고객사 ServiceAccount로는 건드릴 수 없다.
+# - traffic 네임스페이스는 메트릭 수집 대상이 아니고(metrics-agent), 부하 모드는 로그를 Loki로 보내지 않는다.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: traffic
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loadgen-tenant-a
+  namespace: traffic
+spec:
+  replicas: 0
+  selector:
+    matchLabels: { app: loadgen, target: tenant-a }
+  template:
+    metadata:
+      labels: { app: loadgen, target: tenant-a }
+    spec:
+      containers:
+        - name: loadgen
+          image: opslens/demo-app:0.1.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - { name: DEMO_MODE, value: loadgen }
+            - { name: LOADGEN_TARGET, value: "http://order-api.tenant-a.svc:8080/orders" }
+            - { name: LOADGEN_RATE, value: "250" }   # HPA 최대 3(약 210건/초)은 넘고, 4(약 280건/초)면 감당한다
+          resources:
+            requests: { cpu: 50m, memory: 192Mi }
+            limits: { memory: 384Mi }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loadgen-tenant-b
+  namespace: traffic
+spec:
+  replicas: 0
+  selector:
+    matchLabels: { app: loadgen, target: tenant-b }
+  template:
+    metadata:
+      labels: { app: loadgen, target: tenant-b }
+    spec:
+      containers:
+        - name: loadgen
+          image: opslens/demo-app:0.1.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - { name: DEMO_MODE, value: loadgen }
+            - { name: LOADGEN_TARGET, value: "http://reservation-api.tenant-b.svc:8080/orders" }
+            - { name: LOADGEN_RATE, value: "120" }   # B사 용량 약 80건/초(파드 1개)를 넘긴다
+          resources:
+            requests: { cpu: 50m, memory: 192Mi }
+            limits: { memory: 384Mi }

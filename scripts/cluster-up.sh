@@ -9,6 +9,7 @@ NODE="${CLUSTER}-control-plane"
 NETWORK=opslens_default
 IMAGE=opslens/demo-app:0.1.0
 ARGOCD_VERSION=v3.5.5
+METRICS_SERVER_VERSION=v0.7.2
 CTX="kind-${CLUSTER}"
 k() { kubectl --context "$CTX" "$@"; }
 
@@ -29,6 +30,11 @@ kind load docker-image "$IMAGE" --name "$CLUSTER"
 # 3. 네임스페이스·권한·관측 수집기
 k apply -f "$ROOT/gitops/cluster/tenants.yaml"
 k apply -f "$ROOT/gitops/cluster/metrics-agent.yaml"
+k apply -f "$ROOT/gitops/cluster/traffic.yaml"   # 부하 발생기 (레플리카 0)
+# HPA가 쓰는 파드 CPU 사용량. kind kubelet 인증서는 자체 서명이라 검증을 끈다
+k apply -f "https://github.com/kubernetes-sigs/metrics-server/releases/download/${METRICS_SERVER_VERSION}/components.yaml" > /dev/null
+k -n kube-system patch deployment metrics-server --type json \
+  -p '[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]' > /dev/null 2>&1 || true
 
 # 고객사 서비스 관리 API의 토큰 (compose의 SERVICE_TOKEN과 같은 값)
 set -a; . "$ROOT/.env"; set +a

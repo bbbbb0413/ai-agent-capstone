@@ -87,6 +87,16 @@ class ToolOutcomeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(graph._log_window_start(now, old), now - timedelta(minutes=10))
         self.assertEqual(graph._log_window_start(now, None), now - timedelta(minutes=10))
 
+    def test_only_an_autoscaler_still_scaling_up_allows_no_action(self):
+        def ctx(desired, maximum):
+            return {"services": [{"name": "order-api", "autoscaling": {
+                "minReplicas": 2, "maxReplicas": maximum, "desiredReplicas": desired,
+                "atMax": desired >= maximum}}]}
+        self.assertTrue(graph._autoscaler_scaling(ctx(3, 4), "order-api"))     # 늘리는 중
+        self.assertFalse(graph._autoscaler_scaling(ctx(3, 3), "order-api"))    # 최대치: 조치 또는 에스컬레이션
+        self.assertFalse(graph._autoscaler_scaling(ctx(2, 3), "order-api"))    # 부하와 무관한 장애
+        self.assertFalse(graph._autoscaler_scaling({"services": [{"name": "reservation-api"}]}, "reservation-api"))
+
     def test_flow_escalation_category_follows_the_reason(self):
         base = {"incident_id": 1, "proposed_action": {"args": {"action": "restart_pods", "service": "order-api"}}}
         self.assertEqual(graph._escalation_args({**base, "attempts": 0})["category"], "P1")

@@ -78,3 +78,13 @@ test('blocked-action escalation shows what is needed, why, and that delivery is 
     { kind: 'MSP_ONCALL', name: 'admin' }, { kind: 'MSP_ONCALL', name: 'eng-b' }, { kind: 'CUSTOMER', name: 'B사 담당' },
   ]), 'MSP 담당 admin, eng-b · 고객사 담당 B사 담당')
 })
+
+test('raising the autoscaler max shows the range change and the safe cap', () => {
+  const request = { tool: 'business_execute_runbook_action', changeMode: 'GITOPS',
+    args: { action: 'adjust_autoscaler', service: 'order-api', max_replicas: 4 },
+    impact: { autoscalerMinReplicas: 2, autoscalerMaxReplicas: 3, targetMaxReplicas: 4, safeMaxReplicas: 4 } }
+  const fields = Object.fromEntries(approvalImpactFields(request))
+  assert.equal(fields['HPA 범위'], '2~3개 → 2~4개')
+  assert.match(approvalImpact(request), /최대치를 4개로 올린다/)
+  assert.match(approvalImpact(request), /PR/)
+})

@@ -23,10 +23,14 @@
 
 ## RB-STD-03 트래픽 급증 (앱 처리 용량 부족)
 
-- 증상: 에러율은 정상인데 p95 응답시간 상승, 로그에 `worker queue backlog` 경고 반복
-- 구분: 외부 API timeout 로그와 DB `slow query` 로그가 없다. 지연이 앱의 처리 대기에서 생긴다
-- 구조 검토: 목표 레플리카는 현재의 2배다. 서비스 목록의 안전 상한(`safe_max_replicas`)을 넘으면 상한까지만 늘린다. 안전 상한은 DB 최대 연결 수와 계약 상한으로 정해지며, 넘으면 확장 때문에 DB 장애가 날 수 있다. 이미 상한이면 RB-STD-06을 따른다
-- 조치: 레플리카를 늘린다 (`scale_deployment`, `replicas`=목표 레플리카)
+- 증상: 에러율은 정상인데 p95 응답시간 상승, 로그에 `request queue backlog` 경고 반복
+- 구분: 5xx 에러가 늘지 않는다(늘면 RB-STD-02). 외부 API timeout 로그와 DB `slow query` 로그가 없다. 지연이 앱의 처리 대기에서 생긴다
+- 구조 검토: 서비스 목록의 `autoscaling`(HPA)을 먼저 본다. 안전 상한(`safe_max_replicas`)은 DB 최대 연결 수와 계약 상한으로 정해지며, 넘으면 확장 때문에 DB 장애가 날 수 있다
+  - HPA가 있고 최대치에 닿지 않았다(`atMax` false): HPA가 늘리는 중이다. 레플리카를 직접 바꾸지 않고 조치하지 않는다
+  - HPA가 최대치에 닿았고 최대치가 안전 상한보다 작다(`canRaiseMax` true): HPA 최대치를 안전 상한까지 올린다
+  - HPA가 최대치에 닿았고 최대치가 이미 안전 상한이다: 더 늘릴 수 없다. RB-STD-06을 따른다
+  - HPA가 없다: 목표 레플리카는 현재의 2배이고, 안전 상한을 넘으면 상한까지만 늘린다. 이미 상한이면 RB-STD-06
+- 조치: HPA가 있으면 `adjust_autoscaler`(`max_replicas`=안전 상한). HPA가 없으면 `scale_deployment`(`replicas`=목표 레플리카). HPA가 관리하는 서비스의 레플리카는 직접 바꾸지 않는다(HPA가 곧 덮어쓴다)
 
 ## RB-STD-04 외부 의존 서비스 지연
 

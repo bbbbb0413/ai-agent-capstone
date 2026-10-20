@@ -65,6 +65,22 @@ public class GitOpsRepository {
                 }));
     }
 
+    /** HPA 최대치를 바꾸는 PR. 고객사 경로의 hpa.yaml에서 이 서비스 HPA의 maxReplicas만 고친다. */
+    public PullRequest setAutoscalerMax(Tenant tenant, String service, int maxReplicas, String reason) {
+        String file = tenant.gitopsPath() + "/hpa.yaml";
+        Pattern max = Pattern.compile("(name: " + Pattern.quote(service) + "\\b[\\s\\S]*?maxReplicas: )(\\d+)");
+        return openPullRequest(tenant, "autoscaler-" + service,
+                "Raise %s autoscaler max to %d replicas".formatted(service, maxReplicas), reason,
+                Map.of(file, content -> {
+                    Matcher m = max.matcher(content);
+                    if (!m.find()) {
+                        throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+                                "%s에 %s HPA의 maxReplicas 항목이 없다".formatted(file, service));
+                    }
+                    return m.replaceFirst("$1" + maxReplicas);
+                }));
+    }
+
     /**
      * 장애 시작 전 마지막 변경을 되돌리는 PR. 그 커밋이 바꾼 파일을 커밋 직전 내용으로 복원한다.
      * "가장 최근 커밋"이 아니라 장애 시작 시각 기준으로 고른다. 그래야 롤백을 두 번 해도 수정 커밋을 되돌리지 않는다.

@@ -132,7 +132,7 @@ B사에서 나는 장애가 A사에서 나면 근거 조항이 없다. 지금 E2
 |---|---|---|---|---|
 | RB-STD-01 | 설정 변경으로 인한 커넥션 풀 고갈 | 5xx 급증, `HikariPool … Connection is not available`, 이상 직전 `DEMO_POOL_SIZE` 감소 | DB 상태가 정상인지 확인한다. DB가 이상하면 RB-STD-05 | `rollback_deployment`. 직전 변경이 없으면 RB-STD-02 |
 | RB-STD-02 | 작업 스레드 고갈 (파드 멈춤) | 5xx 급증, `503 worker pool saturated`, 직전 배포 없음 | `zero_downtime_restart`가 false면 영향(전체 중단)을 이유에 적고 공지를 함께 제안한다 | `restart_pods` |
-| RB-STD-03 | 트래픽 급증 (앱 처리 용량 부족) | 에러는 정상인데 p95 상승, `worker queue backlog`, 외부·DB 지연 로그 없음 | 목표 레플리카(현재의 2배)가 `safe_max_replicas`를 넘으면 상한까지만 늘린다. 이미 상한이면 RB-STD-06 | `scale_deployment` |
+| RB-STD-03 | 트래픽 급증 (앱 처리 용량 부족) | 에러는 정상인데 p95 상승, `request queue backlog`, 외부·DB 지연 로그 없음. 5xx가 함께 늘면 RB-STD-02다 | HPA가 관리하면 레플리카를 바꾸지 않는다(5.4.2). HPA가 확장 중이면 조치하지 않는다. 최대치에 닿았으면 `safe_max_replicas`까지 최대치를 올리고, 이미 상한이면 RB-STD-06. HPA가 없으면 목표 레플리카(현재의 2배)를 `safe_max_replicas`까지만 | HPA: `adjust_autoscaler` 또는 에스컬레이션. HPA 없음: `scale_deployment` |
 | RB-STD-04 | 외부 의존 지연 | p95 상승, `payment API timeout` 등 외부 호출 경고 | 의존 대상 소유가 `third_party`면 공지, `tenant`면 해당 팀에 에스컬레이션 | 조치하지 않음 |
 | RB-STD-05 | 의존 대상(DB) 자체 장애 | p95 상승 또는 5xx, `slow query … db=postgres`, 앱 풀 설정은 그대로 | 앱 조치(재시작·확장·롤백)는 효과가 없고, 확장은 DB 부하를 늘린다 | 조치하지 않음. 의존 대상 소유자에게 에스컬레이션하고, 고객 영향이 있으면 공지 |
 | RB-STD-06 | 계약·구조상 할 수 없는 조치가 필요 | 위 조치가 `supported_actions`에 없거나 상한 초과 | — | 조치하지 않음. **에스컬레이션하고, 고객 영향이 있으면 공지도 한다** (결정 1) |
@@ -177,7 +177,7 @@ RB-STD-03(트래픽 급증), RB-STD-04(외부 지연), RB-STD-05(DB 장애)는 �
 | `prompts/diagnose.md` | 병목 위치(앱, DB, 외부 API)를 판단하는 단계를 추가한다. 진단 결과에 `장애 형태: RB-STD-0x`와 `병목: 앱|DB|외부` 두 줄을 추가한다 |
 | `prompts/propose.md` | ① 공통 런북으로 후보 조치를 정한다 → ② 카탈로그로 검토한다(병목 위치, `safe_max_replicas`, `zero_downtime_restart`) → ③ `supported_actions`에 있는지 확인한다 → ④ 불가하면 RB-STD-06으로 에스컬레이션하고, 고객 영향이 있으면 보고서 뒤 공지 승인으로 이어진다 |
 | `retrieve_runbook` | 검색어에 장애 형태를 넣는다. 공통 런북, 서비스 런북, 계약 조항이 함께 나오게 한다 |
-| 승인 카드 (`_approval_request`) | 영향 정보를 넣는다: 순차·전체 중단 여부, 확장 목표와 상한 |
+| 승인 카드 (`_approval_request`) | 영향 정보(`impact`)를 넣는다: 실행 환경, 현재·준비 레플리카, 재시작 방식(`restartMode`: `ROLLING`·`ALL_AT_ONCE`), 확장 목표와 안전 상한. 값은 서비스 목록의 backend 계산값을 옮긴다 (`graph._action_impact`, E2E `a-hang`) |
 
 backend 검사(계약·구조 제약)는 AI가 잘못 골라도 막는 두 번째 방어선이다. AI의 제안 기준과 backend의 검사 기준은 같은 카탈로그 값을 쓴다.
 
@@ -197,6 +197,37 @@ backend 검사(계약·구조 제약)는 AI가 잘못 골라도 막는 두 번�
 - 같은 인시던트에 같은 분류·조치·의존 대상이 이미 대기 중이면 새로 쌓지 않고 그 건을 돌려준다(`duplicate`).
 - 감사 로그 `ESCALATED`에 대기열 번호와 받는 사람을 남긴다. MSP 직원은 `GET /api/incidents/{id}/escalations`로 대기열을 본다. 고객사 포털에는 보이지 않는다.
 - 승인 카드에는 분류·필요한 조치·할 수 없는 이유를, 작업 요약에는 받는 사람과 "호출 대기열에 등록 (발송 미연결)"을 보여 준다. 보고서는 "호출했다"고 쓰지 않는다.
+
+### 5.4.2 자동 확장(HPA)과 Agent의 역할 (결정 8)
+
+트래픽에 맞춰 파드 수를 바꾸는 일은 HPA가 한다. Agent가 HPA 대상의 레플리카를 직접 바꾸면 HPA가 곧 덮어쓰고, GitOps 매니페스트의 `replicas`와도 충돌한다. Agent는 HPA가 스스로 못 하는 판단을 맡는다: **HPA 최대치가 모자랄 때, 구조 제약(안전 상한) 안에서 최대치를 올린다.**
+
+| 상황 | HPA | Agent |
+|---|---|---|
+| 급증, HPA가 최대치 아래에서 늘리는 중 | 늘린다 | 조치하지 않는다. 보고서에 자동 확장 중이라고 적는다 |
+| 급증, HPA가 최대치이고 최대치 < `safeMaxReplicas` | 더 늘리지 못한다 | `adjust_autoscaler`로 최대치를 `safeMaxReplicas`까지 올린다 (GITOPS: PR) |
+| 급증, HPA가 최대치이고 최대치 = `safeMaxReplicas` | 더 늘리지 못한다 | 에스컬레이션 (`ACTION_BLOCKED`, `STRUCTURE`). 더 올리면 DB 연결이 모자라 A사 DB 용량 판단이 필요하다 |
+| DB 자체 지연 | CPU가 오르지 않아 늘리지 않는다 | 에스컬레이션 (`DEPENDENCY`, A사 DBA) |
+| HPA 없음, 계약상 확장 불가 (B사) | 해당 없음 | 에스컬레이션 (`ACTION_BLOCKED`, `CONTRACT`) |
+
+- "최대치에 닿았다"는 HPA의 목표 레플리카(`desiredReplicas`)로 본다. 새 파드가 아직 뜨는 중이어도 목표가 최대치면 닿은 것이다.
+- HPA 최소치는 트래픽 대응으로 바꾸지 않는다. 최소치는 예정된 행사 전 사전 확장이나 기본 용량 계획에 쓰는 값이라 장애 대응 범위 밖이다.
+- 최대치를 내리는 조치는 두지 않는다. 부하가 빠지면 HPA가 스스로 줄인다. 올린 최대치를 원래대로 돌릴지는 A사가 정한다(보고서 권장 행동에 적는다).
+
+| 위치 | 변경 |
+|---|---|
+| `gitops/tenants/tenant-a` | `hpa.yaml`: order-api 최소 2, **최대 3**, CPU 사용률 목표 100%(평상시 약 50%), 축소 안정화 60초. A사가 비용 때문에 평소 최대 3으로 운영한다는 설정이다(안전 상한 4, 계약 상한 6). Deployment에서 `replicas`를 빼서 ArgoCD가 HPA와 다투지 않게 한다 |
+| `scripts/cluster-up.sh` | metrics-server 설치 (kind라 `--kubelet-insecure-tls`) |
+| `gitops/cluster/tenants.yaml` | 고객사 ServiceAccount Role에 `autoscaling/horizontalpodautoscalers` get·list·patch |
+| 데모 앱 | 처리 슬롯에서 실제로 CPU를 쓴다(주문당 약 5ms). sleep만 하면 CPU가 오르지 않아 HPA가 반응하지 않는다. 파드 CPU 요청 100m |
+| `RuntimeAdapter.Workload` | `autoscaler`(최소, 최대, 현재·목표 레플리카, CPU 목표·현재). Kubernetes 어댑터가 HPA를 읽는다. `RuntimeAdapter.setAutoscalerMax` 추가 |
+| `ChangeService` | 새 조치 `adjust_autoscaler(service, max_replicas)`: HPA가 있어야 하고, 최대치는 현재 최대치보다 크고 `safeMaxReplicas` 이하여야 한다. GITOPS면 `hpa.yaml`의 `maxReplicas`를 고치는 PR, 아니면 어댑터가 HPA를 바로 고친다. HPA가 관리하는 서비스의 `scale_deployment`는 422("HPA가 관리한다. 최대치가 모자라면 adjust_autoscaler"). 인벤토리에 `autoscaling`(`atMax` 포함)을 넣고 `supportedActions`를 HPA 유무에 맞춘다 |
+| 계약 | A사 `allowed_actions`에 `adjust_autoscaler`를 추가한다 (마이그레이션). A사 계약서에 "HPA 최대치는 계약 상한 안에서 MSP가 PR로 조정한다"를 넣는다 |
+| `business-mcp` | `execute_runbook_action`의 action에 `adjust_autoscaler`, 인자 `max_replicas` |
+| 공통 런북 RB-STD-03 | 위 표의 판단 순서. `prompts/propose.md`도 같다. HPA가 확장 중이면 조치하지 않는다(이때만 도구를 부르지 않는다) |
+| 부하 발생기 | A사 +250건/초: 파드 3개(약 210건/초)는 넘고 4개(약 280건/초)면 감당한다 |
+
+`scale_deployment`와 `GitOpsRepository.scale`(확장 PR)은 HPA가 없는 서비스용으로 남긴다.
 
 ### 5.5 실행 플랫폼 확장 지점 (구현하지 않음)
 
@@ -237,7 +268,21 @@ backend 검사(계약·구조 제약)는 AI가 잘못 골라도 막는 두 번�
 | A사 (레플리카 2, 용량 약 160건/초) | 약 10건/초 | +200건/초, 파드당 약 105건/초로 과부하 | `safe_max_replicas` 4까지, 파드당 약 52건/초로 정상 |
 | B사 (레플리카 1, 용량 약 80건/초) | 약 5건/초 | +120건/초로 과부하 | 계약상 확장 불가 → 에스컬레이션 |
 
-위 수치는 설계 목표다. 구현 후 실제로 재서 맞춘다(7장 4단계).
+실측 (2026-10-20, 부하 발생기 동시 요청 상한 300, 30초 창):
+
+| 조건 | p95 | 처리량 | 비고 |
+|---|---|---|---|
+| 평상시 | 0.13초 | A 9건/초, B 4건/초 | |
+| B사 +120건/초 | 3.9초 | 80건/초 | 에러 0, 건너뛴 요청 약 40건/초 |
+| A사 +200건/초, 레플리카 2 | 2.4초 | 150건/초 | 파드당 66~70건/초 |
+| A사 +200건/초, 레플리카 4 | 0.15초 | 200건/초 | 파드당 약 55건/초, 에러 0 |
+
+구현하며 바꾼 것:
+- 주문 요청은 Tomcat 스레드가 아니라 주문 전용 스레드에서 처리한다. 과부하에서 Tomcat 스레드가 모두 슬롯 대기에 묶여 `/actuator/health`·`/actuator/prometheus`가 응답하지 못했다. 파드가 Service에서 빠지고 메트릭이 끊겼다.
+- 부하 발생기는 응답을 기다리는 요청을 300건으로 제한한다. 상한이 없으면 서버 대기 요청이 끝없이 늘어 JVM 힙이 터졌다(`OutOfMemoryError`).
+- 부하 발생기는 1초마다 새 HTTP 클라이언트를 쓴다. Service는 연결 단위로 파드를 고른다. 처음 맺은 연결만 재사용하면 레플리카를 4로 늘려도 새 파드에 초당 3건 안팎만 갔다(파드별 처리량으로 확인).
+- 의존 대상(DB, 결제 API) 호출은 처리 슬롯 밖에서 한다. 의존 대상이 느려도 대기열 경고가 나오지 않아야 장애 형태가 구분된다.
+- 대기열 경고 문구는 `request queue backlog`이다. 처음의 `worker queue backlog`는 파드 멈춤의 `worker pool saturated`와 비슷해, B사 급증 측정 중 Agent가 RB-STD-02(재시작)를 제안했다.
 
 ### 5.7 장애 주입 스크립트
 
@@ -281,7 +326,8 @@ E2E가 만드는 커밋(장애 주입, 롤백·확장 PR, 확장 원복 PR)은 `
 |---|---|---|---|---|---|
 | `a-pool` (지금 `a`) | 풀 고갈 | A | `rollback_deployment` | 되돌리기 PR → 병합 → 동기화 | 회복 |
 | `a-hang` | 스레드 고갈 | A | `restart_pods` | GitOps여도 **API로 바로, 순차 재시작** | 재시작 중 에러율이 기준 아래 (무중단) |
-| `a-surge` | 트래픽 급증 | A | `scale_deployment` **4** (2배 = 4, 상한 4) | 확장 PR → 병합 → 동기화 | 회복, 상한을 넘는 제안 없음 |
+| `a-surge` | 트래픽 급증 (+250건/초) | A | `adjust_autoscaler` **최대 4** (안전 상한) | PR → 병합 → 동기화 → HPA가 4로 확장 | 회복. `scale_deployment` 제안 없음, 4를 넘는 최대치 없음 |
+| `a-surge-max` | 트래픽 급증 (+400건/초) | A | 위와 같이 최대 4로 올린 뒤에도 미회복 → **에스컬레이션** (`ACTION_BLOCKED`, `STRUCTURE`) + 공지 | 위와 같음 | 4를 넘는 제안 없음 |
 | `a-latency` | 외부 API 지연 | A | 고객 공지 | — | 앱 조치 없음 |
 | `a-dbslow` | DB 자체 지연 | A | **에스컬레이션** (A사 DBA) + 공지 | — | 앱 조치·확장 없음 |
 | `b-pool` | 풀 고갈 | B | **에스컬레이션** (롤백 계약상 불가) + 공지 | — | 롤백 제안 없음 |
@@ -293,7 +339,7 @@ E2E가 만드는 커밋(장애 주입, 롤백·확장 PR, 확장 원복 PR)은 `
 
 | 키 | 확인 |
 |---|---|
-| `guard-scale` | A사에 `scale_deployment` 6을 직접 요청 → 422, 메시지에 `safe_max_replicas` 4 |
+| `guard-scale` | A사에 `scale_deployment`를 직접 요청 → 422, 메시지에 HPA가 관리한다는 내용과 범위(2~4) |
 | `guard-runtime` | 카탈로그 runtime을 `docker`로 둔 테스트 서비스에 재시작 요청 → 422 "지원하지 않는 실행 환경" |
 | `guard-contract` | B사에 `rollback_deployment` 요청 → 422 (지금도 동작, 회귀 확인) |
 
@@ -304,7 +350,7 @@ E2E가 만드는 커밋(장애 주입, 롤백·확장 PR, 확장 원복 PR)은 `
 - 근거 조항이 RB-STD-*이고, 진단 결과의 병목 위치가 맞다
 - 끝난 뒤 원래 상태다: 풀 20, 레플리카 원복, 부하 발생기 0, 주입 장애 해제
 
-**확장 원복 (결정 3):** `a-surge`가 끝나면 A사 레플리카가 4로 남는다. 스크립트가 2로 되돌리는 PR을 만들어 병합하고, ArgoCD 동기화 후 레플리카 2를 확인한다. 이 PR도 임시 브랜치에서 한다(5.8).
+**확장 원복:** HPA가 부하가 빠지면 스스로 줄인다(기본 안정화 5분). 스크립트는 레플리카 2로 돌아오기를 기다리기만 한다. 결정 3의 원복 PR은 필요 없어졌다(결정 8).
 
 **실행 시간:** 시나리오당 3~5분, 전체 12개는 40~50분으로 예상한다. 기존 키(`a`, `b`, `b2`)는 별칭으로 남긴다. PR이 없는 빠른 확인용 묶음 `--quick`은 `a-hang b-surge a-dbslow guard-*`이다.
 
@@ -316,8 +362,8 @@ E2E가 만드는 커밋(장애 주입, 롤백·확장 PR, 확장 원복 PR)은 `
 |---|---|---|
 | 1 | 공통 런북·서비스 런북·계약서 정리, RAG 공통 검색 | 재색인 후 A·B 작업 모두 RB-STD가 검색되고, B사 작업에서 A사 문서가 나오지 않는다 |
 | 2 | 서비스 카탈로그 마이그레이션, 인벤토리 계산값, backend 제약 검사, `RuntimeAdapter`, 순차 재시작 | `guard-*` 3개 통과. A사 재시작 중 에러율이 기준 아래다 |
-| 3 | 프롬프트 수정, 에스컬레이션·의존 상태 도구 허용, 승인 카드 영향 표시 | 기존 E2E(`a b b2`)가 그대로 통과한다 (회귀 확인) |
-| 4 | 데모 앱 처리 슬롯·`/orders`·대기열 경고·`DB_SLOW`·의존 메트릭, 부하 발생기 | 부하를 넣으면 p95가 1초를 넘고, 수동으로 레플리카 4로 늘리면 내려가는지 직접 잰다. 수치를 조정한다 |
+| 3 | 프롬프트 수정, 에스컬레이션 허용(5.4.1), 승인 카드 영향 표시 | 기존 E2E(`a b b2`)가 그대로 통과한다 (회귀 확인) |
+| 4 | 데모 앱 처리 슬롯·`/orders`·대기열 경고·`DB_SLOW`·의존 메트릭, 부하 발생기, 의존 상태 도구(`get_dependency_health`, 의존 메트릭이 생겨야 의미가 있어 3단계에서 옮겼다) | 부하를 넣으면 p95가 1초를 넘고, 수동으로 레플리카 4로 늘리면 내려가는지 직접 잰다. 수치를 조정한다 |
 | 5 | 장애 주입 스크립트 통합, E2E 임시 브랜치(`gitops_branch`, 관리자 API, ArgoCD 전환) | 장애 5종 × 2곳 주입·정리가 각각 동작한다. E2E 1회 실행 후 `main` 기록에 새 커밋이 없고 `e2e/*` 브랜치가 남지 않는다 |
 | 6 | E2E 매트릭스 12개, 확장 원복 | 전부 통과한다. 실패하면 원인을 Harness 명세에 기록한다 |
 | 7 | 기획안 3.3·10장, ADR 0001 D7·D8, Harness 명세 갱신 | 문서와 코드가 맞는지 확인한다 |
@@ -345,8 +391,9 @@ ADR에 추가할 결정:
 |---|---|---|---|
 | 1 | 계약·구조상 불가할 때 기대 동작 | **에스컬레이션과 공지를 둘 다** 한다 (공지는 고객 영향이 있을 때) | 4.3 RB-STD-05·06, 5.4, 6.1 |
 | 2 | A사 확장 상한 | 계약 상한 6, 구조 상한 4 그대로 | 4.1, 6.1 `a-surge` |
-| 3 | 확장 원복 방식 | 스크립트가 원복 **PR을 만들어 병합**한다 | 6.3 |
+| 3 | 확장 원복 방식 | ~~스크립트가 원복 PR을 만들어 병합한다~~ → 결정 8로 HPA가 줄인다 | 6.3 |
 | 4 | E2E 테스트 커밋 | **`main`에 커밋하지 않는다.** 실행마다 임시 브랜치를 쓰고 지운다 | 5.7, 5.8, 7장 5단계 |
 | 5 | 카탈로그 위치 | **backend DB**. GitOps YAML은 ADR에 운영 방향으로만 적는다 | 4.1, 5.1 |
 | 6 | DB 연결 여유율 | **0.8** | 4.1 |
 | 7 | 에스컬레이션 실제 발송 | **구현하지 않는다.** 받는 사람·메시지 결정과 발송 대기열 저장까지 한다 | 5.4.1 |
+| 8 | 트래픽 급증 대응 (2026-10-20) | **A사는 HPA(최소 2, 최대 3)가 확장한다.** Agent는 레플리카를 바꾸지 않는다. HPA가 최대치에 닿으면 안전 상한(4)까지 최대치를 올리는 PR(`adjust_autoscaler`)을 제안하고, 이미 상한이면 에스컬레이션한다. 최소치는 바꾸지 않는다 | 5.4.2, 4.3 RB-STD-03, 6.1 `a-surge` |

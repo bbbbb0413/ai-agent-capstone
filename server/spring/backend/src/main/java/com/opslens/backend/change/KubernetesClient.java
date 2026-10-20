@@ -57,7 +57,7 @@ public class KubernetesClient implements RuntimeAdapter {
 
     @Override
     public Set<String> supportedActions() {
-        return Set.of("restart_pods", "scale_deployment", "rollback_deployment");
+        return Set.of("restart_pods", "scale_deployment", "rollback_deployment", "adjust_autoscaler");
     }
 
     @Override
@@ -65,7 +65,43 @@ public class KubernetesClient implements RuntimeAdapter {
         JsonNode d = call(tenant, c -> c.get().uri(deploymentPath(service)).retrieve().body(JsonNode.class));
         JsonNode container = d.path("spec").path("template").path("spec").path("containers").path(0);
         return new Workload(d.path("metadata").path("name").asText(), d.path("spec").path("replicas").asInt(),
-                d.path("status").path("readyReplicas").asInt(), container.path("image").asText(), env(container));
+                d.path("status").path("readyReplicas").asInt(), container.path("image").asText(), env(container),
+                autoscaler(tenant, service));
+    }
+
+    /** 이 Deployment를 대상으로 하는 HPA. 없으면 null. */
+    private Autoscaler autoscaler(Tenant tenant, ServiceCatalog.Entry service) {
+        JsonNode list = call(tenant, c -> c.get().uri("/apis/autoscaling/v2/namespaces/{ns}/horizontalpodautoscalers",
+                service.targetNamespace()).retrieve().body(JsonNode.class));
+        for (JsonNode hpa : list.path("items")) {
+            JsonNode target = hpa.path("spec").path("scaleTargetRef");
+            if ("Deployment".equals(target.path("kind").asText()) && service.name().equals(target.path("name").asText())) {
+                return new Autoscaler(hpa.path("metadata").path("name").asText(),
+                        hpa.path("spec").path("minReplicas").asInt(1), hpa.path("spec").path("maxReplicas").asInt(),
+                        hpa.path("status").path("currentReplicas").asInt(),
+                        hpa.path("status").path("desiredReplicas").asInt(),
+                        cpu(hpa.path("spec").path("metrics"), "target"),
+                        cpu(hpa.path("status").path("currentMetrics"), "current"));
+            }
+        }
+        return null;
+    }
+
+    private static Integer cpu(JsonNode metrics, String field) {
+        for (JsonNode m : metrics) {
+            JsonNode resource = m.path("resource");
+            if ("cpu".equals(resource.path("name").asText()) && resource.path(field).has("averageUtilization")) {
+                return resource.path(field).path("averageUtilization").asInt();
+            }
+        }
+        return null;
+    }
+
+    @Override
+    public void setAutoscalerMax(Tenant tenant, ServiceCatalog.Entry service, Autoscaler autoscaler, int maxReplicas) {
+        call(tenant, c -> c.patch().uri("/apis/autoscaling/v2/namespaces/{ns}/horizontalpodautoscalers/{name}",
+                        service.targetNamespace(), autoscaler.name()).contentType(MERGE_PATCH)
+                .body(Map.of("spec", Map.of("maxReplicas", maxReplicas))).retrieve().toBodilessEntity());
     }
 
     /**

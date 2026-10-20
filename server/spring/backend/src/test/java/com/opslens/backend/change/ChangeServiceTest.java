@@ -23,8 +23,8 @@ class ChangeServiceTest {
     private final RuntimeAdapter kubernetes = mock(RuntimeAdapter.class);
     private final GitOpsRepository gitops = mock(GitOpsRepository.class);
     private final Tenant tenantA = new Tenant("tenant-a", "A사", "GOLD", new BigDecimal("99.90"), 15,
-            List.of("restart_pods", "scale_deployment", "rollback_deployment", "notice"), "GITOPS", "tenant-a",
-            "gitops/tenants/tenant-a");
+            List.of("restart_pods", "scale_deployment", "rollback_deployment", "adjust_autoscaler", "notice"), "GITOPS",
+            "tenant-a", "gitops/tenants/tenant-a");
     private final Tenant tenantB = new Tenant("tenant-b", "B사", "SILVER", new BigDecimal("99.50"), 60,
             List.of("restart_pods", "notice"), "DIRECT", "tenant-b", null);
     private final ServiceCatalog.Dependency postgres = new ServiceCatalog.Dependency("postgres", "database", "tenant",
@@ -38,7 +38,8 @@ class ChangeServiceTest {
     @BeforeEach
     void setup() {
         when(kubernetes.runtime()).thenReturn("kubernetes");
-        when(kubernetes.supportedActions()).thenReturn(Set.of("restart_pods", "scale_deployment", "rollback_deployment"));
+        when(kubernetes.supportedActions()).thenReturn(
+                Set.of("restart_pods", "scale_deployment", "rollback_deployment", "adjust_autoscaler"));
         when(kubernetes.status(any(), any())).thenReturn(
                 new RuntimeAdapter.Workload("order-api", 2, 2, "demo:0.1.0", Map.of("DEMO_POOL_SIZE", "20")));
         when(catalog.require(tenantA, "order-api")).thenReturn(orderApi);
@@ -106,5 +107,55 @@ class ChangeServiceTest {
         Map<String, Object> item = service.inventory(tenantB).get(0);
         assertEquals(false, item.get("runtimeSupported"));
         assertEquals(List.of(), item.get("supportedActions"));
+    }
+
+    // ── HPA (스펙 5.4.2) ───────────────────────────────────────
+
+    private void withAutoscaler(int max, int desired) {
+        when(kubernetes.status(any(), any())).thenReturn(new RuntimeAdapter.Workload("order-api", desired, desired,
+                "demo:0.1.0", Map.of("DEMO_POOL_SIZE", "20"),
+                new RuntimeAdapter.Autoscaler("order-api", 2, max, desired, desired, 50, 180)));
+    }
+
+    @Test
+    void scaleIsRejectedWhenAutoscalerManagesReplicas() {
+        withAutoscaler(3, 3);
+        ResponseStatusException e = assertThrows(ResponseStatusException.class, () ->
+                service.execute(tenantA, "scale_deployment", "order-api", 4, "test", OffsetDateTime.now()));
+        assertTrue(e.getReason().contains("HPA") && e.getReason().contains("adjust_autoscaler"), e.getReason());
+        verifyNoInteractions(gitops);
+    }
+
+    @Test
+    void autoscalerMaxIsRaisedUpToSafeMaxByPullRequest() {
+        withAutoscaler(3, 3);
+        when(gitops.setAutoscalerMax(tenantA, "order-api", 4, "test"))
+                .thenReturn(new GitOpsRepository.PullRequest(10, "https://pr/10", "b", List.of("hpa.yaml")));
+        Map<String, Object> result = service.execute(tenantA, "adjust_autoscaler", "order-api", 4, "test",
+                OffsetDateTime.now());
+        assertEquals(ChangeService.PR_CREATED, result.get("status"));
+        assertEquals(3, result.get("previousMaxReplicas"));
+        assertThrows(ResponseStatusException.class, () ->   // 안전 상한 4를 넘는다
+                service.execute(tenantA, "adjust_autoscaler", "order-api", 5, "test", OffsetDateTime.now()));
+    }
+
+    @Test
+    void autoscalerAlreadyAtSafeMaxMeansEscalation() {
+        withAutoscaler(4, 4);
+        ResponseStatusException e = assertThrows(ResponseStatusException.class, () ->
+                service.execute(tenantA, "adjust_autoscaler", "order-api", 5, "test", OffsetDateTime.now()));
+        assertTrue(e.getReason().contains("에스컬레이션"), e.getReason());
+    }
+
+    @Test
+    void inventoryShowsAutoscalerAndSwapsScaleForAdjust() {
+        withAutoscaler(3, 3);
+        when(catalog.list("tenant-a")).thenReturn(List.of(orderApi));
+        Map<String, Object> item = service.inventory(tenantA).get(0);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> autoscaling = (Map<String, Object>) item.get("autoscaling");
+        assertEquals(true, autoscaling.get("atMax"));
+        assertEquals(true, autoscaling.get("canRaiseMax"));
+        assertEquals(List.of("adjust_autoscaler", "restart_pods", "rollback_deployment"), item.get("supportedActions"));
     }
 }

@@ -14,8 +14,26 @@ import java.util.Set;
  */
 public interface RuntimeAdapter {
 
-    /** 실행 중인 상태. env는 값이 직접 적힌 환경변수만 담는다(Secret 참조는 내보내지 않는다). */
-    record Workload(String name, int replicas, int readyReplicas, String image, Map<String, String> env) {}
+    /** 실행 중인 상태. env는 값이 직접 적힌 환경변수만 담는다(Secret 참조는 내보내지 않는다). autoscaler는 없으면 null. */
+    record Workload(String name, int replicas, int readyReplicas, String image, Map<String, String> env,
+            Autoscaler autoscaler) {
+
+        public Workload(String name, int replicas, int readyReplicas, String image, Map<String, String> env) {
+            this(name, replicas, readyReplicas, image, env, null);
+        }
+    }
+
+    /**
+     * 레플리카 수를 관리하는 자동 확장 설정 (Kubernetes HPA). SPEC-fault-based-actions 5.4.2.
+     * "최대치에 닿았다"는 목표 레플리카로 본다. 새 파드가 아직 뜨는 중이어도 목표가 최대치면 더 늘지 않는다.
+     */
+    record Autoscaler(String name, int minReplicas, int maxReplicas, int currentReplicas, int desiredReplicas,
+            Integer targetCpuPercent, Integer currentCpuPercent) {
+
+        public boolean atMax() {
+            return desiredReplicas >= maxReplicas;
+        }
+    }
 
     record Revision(int revision, String image, Map<String, String> env, String createdAt) {}
 
@@ -32,6 +50,9 @@ public interface RuntimeAdapter {
     Restart restart(Tenant tenant, ServiceCatalog.Entry service);
 
     void scale(Tenant tenant, ServiceCatalog.Entry service, int replicas);
+
+    /** 자동 확장의 최대치를 바꾼다. 최소치는 바꾸지 않는다 (장애 대응이 아니라 용량 계획의 값이다). */
+    void setAutoscalerMax(Tenant tenant, ServiceCatalog.Entry service, Autoscaler autoscaler, int maxReplicas);
 
     Revision rollback(Tenant tenant, ServiceCatalog.Entry service, OffsetDateTime incidentStartedAt);
 

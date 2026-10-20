@@ -1,12 +1,11 @@
-# A사 order-api의 원하는 상태. OpsLens는 이 파일의 replicas와 images만 바꾸는 PR을 만든다.
+# A사 order-api의 원하는 상태. 레플리카 수는 HPA(hpa.yaml)가 관리해서 여기에 두지 않는다 (SPEC-fault-based-actions 5.4.2).
+# OpsLens는 hpa.yaml의 maxReplicas, 이 파일의 images, order-api.yaml의 설정을 바꾸는 PR을 만든다.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: tenant-a
 resources:
   - order-api.yaml
-replicas:
-  - name: order-api
-    count: 2
+  - hpa.yaml
 images:
   - name: opslens/demo-app
     newTag: 0.1.0

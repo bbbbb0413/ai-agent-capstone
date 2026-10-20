@@ -21,12 +21,15 @@ import org.springframework.web.server.ResponseStatusException;
  *     restart_pods        일회성 조치. 원하는 상태가 그대로라 GITOPS 고객사도 어댑터로 바로 실행한다
  *     scale_deployment    원하는 상태 변경. GITOPS면 PR, 아니면 어댑터
  *     rollback_deployment 원하는 상태 변경. 장애 시작 전 마지막 변경을 GITOPS면 되돌리기 PR로, 아니면 어댑터로 되돌린다
+ *     adjust_autoscaler   원하는 상태 변경. HPA 최대치를 안전 상한까지 올린다. GITOPS면 hpa.yaml PR (스펙 5.4.2)
+ *   HPA가 관리하는 서비스는 레플리카를 직접 바꾸지 않는다(scale_deployment 거부). HPA가 곧 덮어쓰기 때문이다
  * Agent와 MCP 도구는 반영 방식을 모른다. 구조 제약은 Agent도 같은 계산값(inventory)으로 미리 확인하고, 여기서 다시 막는다.
  */
 @Service
 public class ChangeService {
 
-    public static final Set<String> ACTIONS = Set.of("restart_pods", "scale_deployment", "rollback_deployment");
+    public static final Set<String> ACTIONS = Set.of("restart_pods", "scale_deployment", "rollback_deployment",
+            "adjust_autoscaler");
     public static final String EXECUTED = "EXECUTED";
     public static final String PR_CREATED = "PR_CREATED";
 
@@ -73,12 +76,33 @@ public class ChangeService {
                 result.put("restartMode", restart.rolling() ? "ROLLING" : "ALL_AT_ONCE");
             }
             case "scale_deployment" -> {
-                requireReplicas(entry, replicas, adapter.status(tenant, entry));
+                RuntimeAdapter.Workload workload = adapter.status(tenant, entry);
+                if (workload.autoscaler() != null) {
+                    RuntimeAdapter.Autoscaler hpa = workload.autoscaler();
+                    throw unprocessable(("%s의 레플리카는 HPA(%s, %d~%d)가 관리해 직접 바꾸지 않는다. "
+                            + "HPA 최대치가 모자라면 adjust_autoscaler로 안전 상한 %d까지 올린다")
+                            .formatted(service, hpa.name(), hpa.minReplicas(), hpa.maxReplicas(),
+                                    safeMaxReplicas(entry, poolSize(entry, workload))));
+                }
+                requireReplicas(entry, replicas, workload);
                 result.put("replicas", replicas);
                 if (tenant.gitops()) {
                     putPullRequest(result, gitops.scale(tenant, service, replicas, reason));
                 } else {
                     adapter.scale(tenant, entry, replicas);
+                    result.put("status", EXECUTED);
+                }
+            }
+            case "adjust_autoscaler" -> {
+                RuntimeAdapter.Workload workload = adapter.status(tenant, entry);
+                RuntimeAdapter.Autoscaler hpa = requireAutoscalerMax(entry, replicas, workload);
+                result.put("autoscaler", hpa.name());
+                result.put("previousMaxReplicas", hpa.maxReplicas());
+                result.put("maxReplicas", replicas);
+                if (tenant.gitops()) {
+                    putPullRequest(result, gitops.setAutoscalerMax(tenant, service, replicas, reason));
+                } else {
+                    adapter.setAutoscalerMax(tenant, entry, hpa, replicas);
                     result.put("status", EXECUTED);
                 }
             }
@@ -143,7 +167,21 @@ public class ChangeService {
             item.put("poolSize", pool);
             item.put("safeMaxReplicas", safeMaxReplicas(entry, pool));
             item.put("zeroDowntimeRestart", workload != null && !entry.stateful() && workload.replicas() >= 2);
-            item.put("supportedActions", supportedActions(tenant, entry, adapter));
+            RuntimeAdapter.Autoscaler hpa = workload == null ? null : workload.autoscaler();
+            if (hpa != null) {
+                Map<String, Object> autoscaling = new LinkedHashMap<>();
+                autoscaling.put("name", hpa.name());
+                autoscaling.put("minReplicas", hpa.minReplicas());
+                autoscaling.put("maxReplicas", hpa.maxReplicas());
+                autoscaling.put("currentReplicas", hpa.currentReplicas());
+                autoscaling.put("desiredReplicas", hpa.desiredReplicas());
+                autoscaling.put("targetCpuPercent", hpa.targetCpuPercent());
+                autoscaling.put("currentCpuPercent", hpa.currentCpuPercent());
+                autoscaling.put("atMax", hpa.atMax());
+                autoscaling.put("canRaiseMax", hpa.maxReplicas() < safeMaxReplicas(entry, pool));
+                item.put("autoscaling", autoscaling);
+            }
+            item.put("supportedActions", supportedActions(tenant, entry, adapter, hpa != null));
             return item;
         }).toList();
     }
@@ -165,12 +203,13 @@ public class ChangeService {
         return max;
     }
 
-    /** 실행 환경이 지원하는 조치 ∩ 계약 허용 조치. 상태 저장이면 재시작·확장을 뺀다. */
+    /** 실행 환경이 지원하는 조치 ∩ 계약 허용 조치. 상태 저장이면 재시작·확장을 뺀다. HPA가 있으면 직접 확장 대신 최대치 조정이다. */
     private static List<String> supportedActions(Tenant tenant, ServiceCatalog.Entry entry,
-            Optional<RuntimeAdapter> adapter) {
+            Optional<RuntimeAdapter> adapter, boolean autoscaled) {
         return adapter.map(RuntimeAdapter::supportedActions).orElse(Set.of()).stream()
                 .filter(tenant.allowedActions()::contains)
                 .filter(a -> !(entry.stateful() && STATEFUL_UNSAFE.contains(a)))
+                .filter(a -> !(autoscaled ? "scale_deployment" : "adjust_autoscaler").equals(a))
                 .sorted().toList();
     }
 
@@ -192,6 +231,24 @@ public class ChangeService {
                     + "DB 연결 한도로 계산한 안전 상한이다. 이미 상한이면 에스컬레이션한다")
                     .formatted(entry.minReplicas(), safeMax, replicas, entry.maxReplicas()));
         }
+    }
+
+    private static RuntimeAdapter.Autoscaler requireAutoscalerMax(ServiceCatalog.Entry entry, Integer maxReplicas,
+            RuntimeAdapter.Workload workload) {
+        RuntimeAdapter.Autoscaler hpa = workload.autoscaler();
+        if (hpa == null) {
+            throw unprocessable("%s에는 HPA가 없다. 레플리카를 바꾸려면 scale_deployment를 쓴다".formatted(entry.name()));
+        }
+        int safeMax = safeMaxReplicas(entry, poolSize(entry, workload));
+        if (hpa.maxReplicas() >= safeMax) {
+            throw unprocessable(("%s HPA 최대치 %d가 이미 안전 상한 %d다. 더 올리면 DB 연결이 모자란다. "
+                    + "에스컬레이션한다 (ACTION_BLOCKED, STRUCTURE)").formatted(entry.name(), hpa.maxReplicas(), safeMax));
+        }
+        if (maxReplicas == null || maxReplicas <= hpa.maxReplicas() || maxReplicas > safeMax) {
+            throw unprocessable("adjust_autoscaler의 최대치는 %d보다 크고 안전 상한 %d 이하여야 한다 (요청 %s)"
+                    .formatted(hpa.maxReplicas(), safeMax, maxReplicas));
+        }
+        return hpa;
     }
 
     private RuntimeAdapter adapter(ServiceCatalog.Entry entry) {

@@ -56,6 +56,7 @@ class State(TypedDict, total=False):
     classification: dict[str, Any] | None  # 에러 유형·원인·근거 조항 (summary.py)
     notice_result: dict[str, Any] | None
     escalation_result: dict[str, Any] | None   # 에스컬레이션 발송 대기열 등록 결과 (받는 사람, 메시지, status QUEUED)
+    no_action_reason: str | None    # 조치하지 않기로 한 이유 (HPA가 확장 중일 때만 생긴다)
 
 
 @dataclass
@@ -337,8 +338,16 @@ async def propose_action(state: State, runtime: Rt) -> dict:
     runtime.context.check_time()
     if state["turns"] >= harness.MAX_TURNS:
         return {"proposed_action": None}
-    model = harness.chat_model(runtime.context.toolbox.for_node("propose_action"), harness.PROPOSE_REASONING_EFFORT,
-                               tool_choice="required")
+    # 진단에 몇 분이 걸리는 동안 HPA가 파드를 늘렸을 수 있다. 제안 직전의 서비스 목록으로 판단한다 (스펙 5.4.2)
+    box, counts = runtime.context.toolbox, dict(state["tool_counts"])
+    services = parse_json(await box.call("propose_action", "business_get_service_inventory", {}, counts))
+    context = {**state.get("context", {}), "services": services} if isinstance(services, list) \
+        else state.get("context", {})
+    state = {**state, "context": context, "tool_counts": counts}
+    # 조치를 하지 않는 것이 맞는 경우는 HPA가 아직 최대치 아래에서 늘리는 중일 때뿐이다. 그때만 도구를 강제하지 않는다
+    scaling = _autoscaler_scaling(context, (context.get("incident") or {}).get("service"))
+    tools = [t for t in box.for_node("propose_action") if t.name != "business_get_service_inventory"]
+    model = harness.chat_model(tools, harness.PROPOSE_REASONING_EFFORT, tool_choice=None if scaling else "required")
     messages = [
         SystemMessage(harness.prompt("system") + "\n\n" + harness.prompt("propose")),
         HumanMessage(f"진단 결과:\n{state['findings']}\n\n런북·계약 조항:\n"
@@ -346,17 +355,29 @@ async def propose_action(state: State, runtime: Rt) -> dict:
                      f"고객사 컨텍스트:\n{json.dumps(state.get('context', {}), ensure_ascii=False, default=str)}"),
     ]
     ai: AIMessage = await model.ainvoke(messages)
+    base = {"context": context, "tool_counts": counts, "turns": state["turns"] + 1}
     if not ai.tool_calls:
-        return {"proposed_action": None, "turns": state["turns"] + 1}
+        return {**base, "proposed_action": None, "no_action_reason": str(ai.content)[:1000] or None}
     call = ai.tool_calls[0]
     required = {"business_execute_runbook_action": {"action", "service"},
                 "business_escalate_incident": {"category", "reason"}}.get(call["name"], set())
     if not required <= call["args"].keys():
         # 필수 인자가 빠진 조치는 승인 요청으로 올리지 않는다. 사람이 빈 조치를 승인하게 만들지 않는다
-        return {"proposed_action": None, "turns": state["turns"] + 1}
+        return {**base, "proposed_action": None}
     args = {**call["args"], "incident_id": state.get("incident_id")} if "incident_id" in call["args"] else call["args"]
-    return {"proposed_action": {"tool": call["name"], "args": args, "reason": str(ai.content)},
-            "turns": state["turns"] + 1}
+    return {**base, "proposed_action": {"tool": call["name"], "args": args, "reason": str(ai.content)}}
+
+
+def _autoscaler_scaling(context: dict, service: str | None) -> bool:
+    """HPA가 부하를 보고 최소치보다 늘렸고, 아직 최대치에는 닿지 않았다 (스스로 더 늘릴 여지가 있다).
+
+    최대치가 아니라는 것만으로는 부족하다. 풀 고갈·파드 멈춤처럼 부하와 무관한 장애에서도 HPA는 최대치 아래에 있다.
+    """
+    services = context.get("services") if isinstance(context.get("services"), list) else []
+    item = next((s for s in services if isinstance(s, dict) and s.get("name") == service), None)
+    hpa = (item or {}).get("autoscaling")
+    return (isinstance(hpa, dict) and hpa.get("atMax") is False
+            and (hpa.get("desiredReplicas") or 0) > (hpa.get("minReplicas") or 0))
 
 
 def route_propose(state: State) -> Literal["approval", "report"]:
@@ -447,7 +468,8 @@ async def report(state: State, runtime: Rt) -> dict:
         "action": state.get("proposed_action"), "approvals": state.get("approvals", []),
         "recovered": state.get("recovered"), "verification": state.get("verification"),
         "action_result": state.get("action_result"), "change": state.get("change"),
-        "escalation": state.get("escalation_result"), "context": state.get("context", {}),
+        "escalation": state.get("escalation_result"), "no_action_reason": state.get("no_action_reason"),
+        "context": state.get("context", {}),
     }, ensure_ascii=False, default=str)
 
     information_question = state.get("type") == "QUESTION" and state.get("incident_id") is None
@@ -496,6 +518,10 @@ def _action_impact(args: dict, state: State) -> dict[str, Any]:
                        "restartMode": "ROLLING" if zero_downtime else "ALL_AT_ONCE"})
     elif args.get("action") == "scale_deployment" and args.get("replicas") is not None:
         impact["targetReplicas"] = args["replicas"]
+    elif args.get("action") == "adjust_autoscaler":
+        hpa = service.get("autoscaling") or {}
+        impact.update({"autoscalerMaxReplicas": hpa.get("maxReplicas"), "targetMaxReplicas": args.get("max_replicas"),
+                       "autoscalerMinReplicas": hpa.get("minReplicas")})
     return impact
 
 

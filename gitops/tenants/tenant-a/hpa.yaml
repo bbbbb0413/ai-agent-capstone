@@ -1,0 +1,24 @@
+# A사 order-api 자동 확장 (SPEC-fault-based-actions 5.4.2, 결정 8).
+# 최대 3은 A사가 비용 때문에 평소 쓰는 값이다. 안전 상한(DB 연결 한도로 계산한 4)과 계약 상한(6)보다 낮다.
+# 최대치에 닿아도 과부하면 OpsLens가 안전 상한까지 maxReplicas를 올리는 PR(adjust_autoscaler)을 만든다.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: order-api
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: order-api
+  minReplicas: 2
+  maxReplicas: 3
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 100   # 평상시 약 50%(JVM + 자체 트래픽), 과부하 때 파드당 약 400%
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 60   # 기본 5분. 부하가 빠진 뒤 E2E가 원래 크기로 돌아오기를 오래 기다리지 않게 한다

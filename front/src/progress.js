@@ -33,6 +33,7 @@ export const RUNBOOK_ACTIONS = {
   restart_pods: '파드 재시작',
   scale_deployment: '레플리카 확장',
   rollback_deployment: '직전 배포로 롤백',
+  adjust_autoscaler: 'HPA 최대치 올리기',
 }
 
 // backend EscalationService.CATEGORIES·BLOCKED_BY와 같다
@@ -65,6 +66,7 @@ export function approvalFields({ tool, args = {} }) {
         ['조치', RUNBOOK_ACTIONS[args.action] || args.action],
         ['대상 서비스', args.service],
         ['레플리카', args.replicas != null ? `${args.replicas}개` : null],
+        ['HPA 최대치', args.max_replicas != null ? `${args.max_replicas}개` : null],
         ['근거', args.reason],
         ['인시던트', args.incident_id != null ? `#${args.incident_id}` : null],
       ].filter(([, value]) => value)
@@ -103,6 +105,12 @@ export function approvalImpactFields({ tool, args = {}, impact = {} }) {
     if (impact.targetReplicas != null) rows.push(['변경 후 레플리카', `${impact.targetReplicas}개`])
     if (impact.safeMaxReplicas != null) rows.push(['안전 상한', `${impact.safeMaxReplicas}개`])
   }
+  if (args.action === 'adjust_autoscaler') {
+    if (impact.autoscalerMaxReplicas != null) {
+      rows.push(['HPA 범위', `${impact.autoscalerMinReplicas}~${impact.autoscalerMaxReplicas}개 → ${impact.autoscalerMinReplicas}~${impact.targetMaxReplicas}개`])
+    }
+    if (impact.safeMaxReplicas != null) rows.push(['안전 상한', `${impact.safeMaxReplicas}개`])
+  }
   return rows
 }
 
@@ -123,6 +131,7 @@ export function approvalImpact({ tool, args = {}, changeMode, impact = {} }) {
         : `${service}의 파드를 재시작한다. 재시작하는 동안 처리량이 잠시 줄 수 있다.`,
     scale_deployment: `${service}의 레플리카 수를 ${args.replicas}개로 바꾼다.${impact.safeMaxReplicas != null ? ` 계산된 안전 상한은 ${impact.safeMaxReplicas}개다.` : ''}`,
     rollback_deployment: `${service}를 직전 배포(설정·이미지)로 되돌린다. 그 이후의 변경은 사라진다.`,
+    adjust_autoscaler: `${service} HPA의 최대치를 ${args.max_replicas}개로 올린다. 레플리카는 HPA가 부하에 맞춰 그 안에서 정한다.`,
   }[args.action] || `${service}에 ${args.action} 조치를 실행한다.`
   const how = changeMode === 'GITOPS' && args.action !== 'restart_pods'
     ? ' 바로 반영되지 않고 설정 저장소에 PR이 만들어진다. PR이 병합되고 ArgoCD가 동기화하면 반영된다.'

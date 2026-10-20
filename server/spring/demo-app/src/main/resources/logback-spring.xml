@@ -22,8 +22,16 @@
         </http>
     </appender>
 
-    <root level="INFO">
-        <appender-ref ref="CONSOLE"/>
-        <appender-ref ref="LOKI"/>
-    </root>
+    <!-- 부하 발생기는 고객사 밖의 사용자 역할이라 로그를 Loki로 보내지 않는다 -->
+    <springProfile name="!loadgen">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="LOKI"/>
+        </root>
+    </springProfile>
+    <springProfile name="loadgen">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
 </configuration>

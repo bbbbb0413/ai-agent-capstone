@@ -135,22 +135,27 @@ async def escalate_incident(
 @mcp.tool(annotations=WRITE)
 async def execute_runbook_action(
     incident_id: int,
-    action: Literal["restart_pods", "scale_deployment", "rollback_deployment"],
+    action: Literal["restart_pods", "scale_deployment", "rollback_deployment", "adjust_autoscaler"],
     service: str,
     replicas: int | None = None,
+    max_replicas: int | None = None,
     reason: str | None = None,
 ) -> dict[str, Any]:
     """고객사 서비스에 런북 조치를 실행한다.
     - restart_pods: 서비스의 파드를 재시작한다 (메모리에 묶인 상태가 풀린다)
-    - scale_deployment: 레플리카 수를 replicas(1~10)로 바꾼다
+    - scale_deployment: 레플리카 수를 replicas로 바꾼다. HPA가 관리하는 서비스에는 쓰지 않는다
     - rollback_deployment: 직전 배포(설정·이미지)로 되돌린다
+    - adjust_autoscaler: HPA 최대치를 max_replicas로 올린다. 서비스 목록의 autoscaling.atMax가 true이고
+      canRaiseMax가 true일 때만 쓰며, max_replicas는 safeMaxReplicas 이하다
     service는 get_service_inventory의 서비스 이름이다. reason에는 근거 런북 조항과 이유를 한 문장으로 적는다.
     반영 방식은 고객사 운영 방식에 따라 backend가 정한다. 결과 status가 EXECUTED면 바로 반영된 것이고,
     PR_CREATED면 설정 저장소 PR이 만들어진 것이다(병합·동기화 후 반영된다).
     계약상 허용되지 않은 조치는 거부되고, 오류 메시지에 허용 조치 목록이 담긴다."""
     # 순차 재시작은 파드마다 새 파드가 Ready가 되기를 기다려서 오래 걸린다 (파드당 최대 60초)
     return await _call("POST", "/actions", timeout=150, json={"incidentId": incident_id, "action": action,
-                                                              "service": service, "replicas": replicas,
+                                                              "service": service,
+                                                              "replicas": max_replicas if action == "adjust_autoscaler"
+                                                              else replicas,
                                                               "reason": reason})
 
 
