@@ -95,6 +95,30 @@ class ToolOutcomeTests(unittest.IsolatedAsyncioTestCase):
         timeout = graph._escalation_args({**base, "attempts": 0, "change": {"result": "TIMEOUT", "prUrl": "u"}})
         self.assertEqual(timeout["category"], "CHANGE_TIMEOUT")
 
+    def test_approval_uses_service_inventory_for_rolling_restart_impact(self):
+        state = {"task_id": "test", "approvals": [], "context": {
+            "tenant": {"changeMode": "GITOPS"},
+            "services": [{"name": "order-api", "runtime": "KUBERNETES", "replicas": 2,
+                          "readyReplicas": 2, "safeMaxReplicas": 4, "zeroDowntimeRestart": True}],
+        }}
+        request = graph._approval_request("business_execute_runbook_action",
+                                          {"action": "restart_pods", "service": "order-api"}, "hang", state)
+        self.assertEqual(request["changeMode"], "GITOPS")
+        self.assertEqual(request["impact"]["restartMode"], "ROLLING")
+        self.assertEqual(request["impact"]["replicas"], 2)
+        self.assertTrue(request["impact"]["zeroDowntime"])
+
+    def test_scale_approval_includes_current_target_and_safe_max(self):
+        state = {"task_id": "test", "approvals": [], "context": {"services": [
+            {"name": "order-api", "replicas": 2, "readyReplicas": 2, "safeMaxReplicas": 4},
+        ]}}
+        request = graph._approval_request("business_execute_runbook_action",
+                                          {"action": "scale_deployment", "service": "order-api", "replicas": 4},
+                                          "capacity", state)
+        self.assertEqual(request["impact"], {
+            "replicas": 2, "readyReplicas": 2, "safeMaxReplicas": 4, "targetReplicas": 4,
+        })
+
 
 class ReportTests(unittest.IsolatedAsyncioTestCase):
     def test_unlinked_sla_question_routes_directly_to_document_search(self):

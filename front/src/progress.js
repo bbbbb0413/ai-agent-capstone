@@ -85,8 +85,29 @@ export function approvalFields({ tool, args = {} }) {
   }
 }
 
+/** 서비스 목록에서 계산된 현재 상태와 안전 제약. 모델이 만든 설명과 분리해 표시한다. */
+export function approvalImpactFields({ tool, args = {}, impact = {} }) {
+  if (tool !== 'business_execute_runbook_action') return []
+  const rows = []
+  if (impact.runtime) rows.push(['실행 환경', impact.runtime])
+  if (impact.replicas != null) {
+    const ready = impact.readyReplicas != null ? ` (준비됨 ${impact.readyReplicas}개)` : ''
+    rows.push(['현재 레플리카', `${impact.replicas}개${ready}`])
+  }
+  if (args.action === 'restart_pods' && impact.restartMode) {
+    rows.push(['재시작 방식', impact.restartMode === 'ROLLING'
+      ? '순차 재시작 (전체 서비스 중단 없음)'
+      : '전체 재시작 (서비스 중단 가능)'])
+  }
+  if (args.action === 'scale_deployment') {
+    if (impact.targetReplicas != null) rows.push(['변경 후 레플리카', `${impact.targetReplicas}개`])
+    if (impact.safeMaxReplicas != null) rows.push(['안전 상한', `${impact.safeMaxReplicas}개`])
+  }
+  return rows
+}
+
 /** 승인하면 무엇이 바뀌는가 (기획안 5.3: 승인 카드의 '영향') */
-export function approvalImpact({ tool, args = {}, changeMode }) {
+export function approvalImpact({ tool, args = {}, changeMode, impact = {} }) {
   if (tool === 'business_send_customer_notice') return '고객사 담당자에게 위 내용으로 공지가 발송된다. 발송 후에는 취소할 수 없다.'
   if (tool === 'business_escalate_incident') {
     const who = { ACTION_BLOCKED: 'MSP 담당과 고객사 담당', DEPENDENCY: 'MSP 담당과 의존 대상 소유자' }[args.category] || 'MSP 담당'
@@ -95,8 +116,12 @@ export function approvalImpact({ tool, args = {}, changeMode }) {
   if (tool !== 'business_execute_runbook_action') return null
   const service = args.service || '서비스'
   const what = {
-    restart_pods: `${service}의 파드를 재시작한다. 재시작하는 동안 처리량이 잠시 줄 수 있다.`,
-    scale_deployment: `${service}의 레플리카 수를 ${args.replicas}개로 바꾼다.`,
+    restart_pods: impact.restartMode === 'ROLLING'
+      ? `${service}의 파드를 하나씩 재시작한다. 전체 서비스를 중단하지 않지만 재시작 중 처리량이 줄 수 있다.`
+      : impact.restartMode === 'ALL_AT_ONCE'
+        ? `${service}의 모든 파드를 함께 재시작하므로 재시작 중 서비스가 중단될 수 있다.`
+        : `${service}의 파드를 재시작한다. 재시작하는 동안 처리량이 잠시 줄 수 있다.`,
+    scale_deployment: `${service}의 레플리카 수를 ${args.replicas}개로 바꾼다.${impact.safeMaxReplicas != null ? ` 계산된 안전 상한은 ${impact.safeMaxReplicas}개다.` : ''}`,
     rollback_deployment: `${service}를 직전 배포(설정·이미지)로 되돌린다. 그 이후의 변경은 사라진다.`,
   }[args.action] || `${service}에 ${args.action} 조치를 실행한다.`
   const how = changeMode === 'GITOPS' && args.action !== 'restart_pods'

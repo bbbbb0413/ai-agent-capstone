@@ -481,6 +481,24 @@ def route_report(state: State) -> Literal["notice_approval", "__end__"]:
 # ── 사람의 결정을 기다리는 Node (interrupt) ───────────────────────
 
 
+def _action_impact(args: dict, state: State) -> dict[str, Any]:
+    """서비스 목록의 계산값을 승인 화면에 전달한다. 모델의 추정값은 넣지 않는다."""
+    service = next((item for item in (state.get("context", {}).get("services") or [])
+                    if item.get("name") == args.get("service")), None)
+    if not service:
+        return {}
+
+    impact = {key: service[key] for key in ("runtime", "replicas", "readyReplicas", "safeMaxReplicas")
+              if service.get(key) is not None}
+    if args.get("action") == "restart_pods":
+        zero_downtime = bool(service.get("zeroDowntimeRestart"))
+        impact.update({"zeroDowntime": zero_downtime,
+                       "restartMode": "ROLLING" if zero_downtime else "ALL_AT_ONCE"})
+    elif args.get("action") == "scale_deployment" and args.get("replicas") is not None:
+        impact["targetReplicas"] = args["replicas"]
+    return impact
+
+
 def _approval_request(tool: str, args: dict, reason: str, state: State) -> dict:
     request = {"tool": tool, "args": args, "reason": reason,
                "approvalId": str(uuid5(NAMESPACE_URL, f"{state['task_id']}:{tool}:{len(state.get('approvals', []))}")),
@@ -488,6 +506,7 @@ def _approval_request(tool: str, args: dict, reason: str, state: State) -> dict:
     if tool == "business_execute_runbook_action":
         # 화면의 승인 카드에 반영 방식을 보여 준다. 방식은 backend가 정한 고객사 값이다
         request["changeMode"] = (state.get("context", {}).get("tenant") or {}).get("changeMode")
+        request["impact"] = _action_impact(args, state)
     return request
 
 
