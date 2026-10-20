@@ -21,6 +21,10 @@ demo:
     # 과부하에서도 메모리가 터지지 않고, 지연은 상한 ÷ 처리 용량(B사 300÷80 ≈ 3.8초)에서 멈춘다
     max-in-flight: ${LOADGEN_MAX_IN_FLIGHT:300}
 
+server:
+  tomcat:
+    keep-alive-timeout: 5s   # 유휴 연결을 오래 쥐지 않는다. 부하 중 연결이 쌓여 파드가 OOMKilled된 적이 있다
+
 management:
   endpoints:
     web:

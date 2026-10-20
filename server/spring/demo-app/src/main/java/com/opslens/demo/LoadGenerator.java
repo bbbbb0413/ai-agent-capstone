@@ -57,8 +57,7 @@ public class LoadGenerator {
     void start() {
         scheduler.scheduleAtFixedRate(this::tick, 0, TICK_MS, TimeUnit.MILLISECONDS);
         scheduler.scheduleAtFixedRate(this::report, 10, 10, TimeUnit.SECONDS);
-        // 이전 클라이언트는 진행 중인 요청이 끝나면 GC가 연결과 함께 정리한다
-        scheduler.scheduleAtFixedRate(() -> client = newClient(), 1, 1, TimeUnit.SECONDS);
+        scheduler.scheduleAtFixedRate(this::renewClient, 1, 1, TimeUnit.SECONDS);
     }
 
     private void tick() {
@@ -75,6 +74,16 @@ public class LoadGenerator {
                 (error == null && response.statusCode() == 200 ? ok : failed).incrementAndGet();
             });
         }
+    }
+
+    /**
+     * 새 클라이언트로 바꾸고, 이전 클라이언트는 진행 중인 요청이 끝나면 닫는다(close는 그때까지 기다린다).
+     * 닫지 않으면 HttpClient가 유휴 연결을 기본 20분 동안 쥐고 있어, 1초마다 새 연결이 서버에 쌓여 파드가 OOMKilled됐다.
+     */
+    private void renewClient() {
+        HttpClient previous = client;
+        client = newClient();
+        Thread.ofVirtual().start(previous::close);
     }
 
     private static HttpClient newClient() {
