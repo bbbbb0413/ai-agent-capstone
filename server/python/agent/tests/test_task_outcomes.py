@@ -66,6 +66,35 @@ class ToolOutcomeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(graph.route_execute({**state, "action_result": {"status": "PR_CREATED"},
                                             "change": {"prNumber": 1}}), "await_change")
 
+    async def test_escalation_chosen_instead_of_action_is_queued_and_reported(self):
+        queued = {"escalationId": 3, "status": "QUEUED", "category": "ACTION_BLOCKED",
+                  "recipients": [{"kind": "CUSTOMER", "name": "B사 운영 승인 담당", "role": "B사"}]}
+        result = ToolMessage(content=json.dumps(queued), status="success", tool_call_id="test")
+        box = SimpleNamespace(call=AsyncMock(return_value=result))
+        state = {"proposed_action": {"tool": "business_escalate_incident",
+                                     "args": {"category": "ACTION_BLOCKED", "reason": "확장 계약상 불가"}},
+                 "tool_counts": {}, "evidence": []}
+        update = await graph.execute(state, SimpleNamespace(context=SimpleNamespace(toolbox=box)))
+        self.assertEqual(update["escalation_result"]["status"], "QUEUED")
+        self.assertEqual(graph.route_execute({**state, **update}), "report")  # 공지는 보고서 뒤에 따로 승인한다
+
+    def test_log_window_starts_shortly_before_the_incident(self):
+        from datetime import datetime, timedelta, timezone
+        now = datetime(2026, 10, 20, 9, 0, tzinfo=timezone.utc)
+        started = {"startedAt": "2026-10-20T08:58:00Z"}
+        self.assertEqual(graph._log_window_start(now, started), now - timedelta(minutes=4))
+        old = {"startedAt": "2026-10-20T07:00:00Z"}   # 오래된 인시던트는 최근 10분
+        self.assertEqual(graph._log_window_start(now, old), now - timedelta(minutes=10))
+        self.assertEqual(graph._log_window_start(now, None), now - timedelta(minutes=10))
+
+    def test_flow_escalation_category_follows_the_reason(self):
+        base = {"incident_id": 1, "proposed_action": {"args": {"action": "restart_pods", "service": "order-api"}}}
+        self.assertEqual(graph._escalation_args({**base, "attempts": 0})["category"], "P1")
+        args = graph._escalation_args({**base, "attempts": 1})
+        self.assertEqual((args["category"], args["service"]), ("NOT_RECOVERED", "order-api"))
+        timeout = graph._escalation_args({**base, "attempts": 0, "change": {"result": "TIMEOUT", "prUrl": "u"}})
+        self.assertEqual(timeout["category"], "CHANGE_TIMEOUT")
+
 
 class ReportTests(unittest.IsolatedAsyncioTestCase):
     def test_unlinked_sla_question_routes_directly_to_document_search(self):

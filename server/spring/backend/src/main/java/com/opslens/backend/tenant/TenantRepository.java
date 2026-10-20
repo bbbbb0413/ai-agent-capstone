@@ -49,6 +49,12 @@ public class TenantRepository {
                 .list();
     }
 
+    /** 계약상 승인이 필요한 조치를 요청할 고객사 담당 (에스컬레이션 대상) */
+    public Optional<String> customerContact(String tenantId) {
+        return jdbc.sql("SELECT customer_contact FROM tenants WHERE id = ?").param(tenantId)
+                .query(String.class).optional();
+    }
+
     private static Tenant toTenant(ResultSet rs, int rowNum) throws SQLException {
         return new Tenant(rs.getString("id"), rs.getString("name"), rs.getString("sla_tier"),
                 rs.getBigDecimal("availability_target"), rs.getInt("response_minutes"),

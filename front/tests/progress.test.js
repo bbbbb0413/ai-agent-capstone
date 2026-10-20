@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { actionResultLabel, approvalChangeMode, approvalImpact, toTimeline } from '../src/progress.js'
+import { actionResultLabel, approvalChangeMode, approvalFields, approvalImpact, recipientsLabel, toTimeline } from '../src/progress.js'
 
 const event = (type, data = {}) => ({ type, data, createdAt: '2026-10-19T00:00:00Z' })
 const start = (callId) => event('TOOL_START', { tool: 'business_execute_runbook_action', callId })
@@ -42,4 +42,18 @@ test('GitOps pod restart is described as direct API execution, not a PR', () => 
   request.args.action = 'scale_deployment'
   assert.match(approvalChangeMode(request), /PR/)
   assert.match(approvalImpact(request), /PR/)
+})
+
+test('blocked-action escalation shows what is needed, why, and that delivery is not wired', () => {
+  const request = { tool: 'business_escalate_incident', args: {
+    incident_id: 2, category: 'ACTION_BLOCKED', reason: '확장 계약상 불가', required_action: 'scale_deployment', blocked_by: 'CONTRACT' } }
+  const fields = Object.fromEntries(approvalFields(request))
+  assert.equal(fields['필요한 조치'], '레플리카 확장')
+  assert.equal(fields['할 수 없는 이유'], '계약상 불가')
+  assert.match(approvalImpact(request), /고객사 담당/)
+  assert.match(approvalImpact(request), /발송 대기열/)
+  assert.equal(actionResultLabel({ status: 'QUEUED' }), '호출 대기열에 등록 (발송 미연결)')
+  assert.equal(recipientsLabel([
+    { kind: 'MSP_ONCALL', name: 'admin' }, { kind: 'MSP_ONCALL', name: 'eng-b' }, { kind: 'CUSTOMER', name: 'B사 담당' },
+  ]), 'MSP 담당 admin, eng-b · 고객사 담당 B사 담당')
 })

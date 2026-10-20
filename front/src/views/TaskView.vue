@@ -4,7 +4,7 @@ import { marked } from 'marked'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { api } from '../api.js'
 import StatusBadge from '../components/StatusBadge.vue'
-import { ADMIN_ONLY_TOOLS, actionDetail, actionResultLabel, approvalChangeMode, approvalFields, approvalImpact, toolLabel, toTimeline } from '../progress.js'
+import { ADMIN_ONLY_TOOLS, ESCALATION_CATEGORIES, actionDetail, actionResultLabel, approvalChangeMode, approvalFields, approvalImpact, recipientsLabel, toolLabel, toTimeline } from '../progress.js'
 import { useSession } from '../session.js'
 
 const props = defineProps({ id: { type: String, required: true } })
@@ -37,6 +37,7 @@ const actionLabel = computed(() => {
   const action = summary.value?.action
   if (!action) return '제안 없음'
   if (action.tool === 'business_send_customer_notice') return '고객 공지 발송'
+  if (action.tool === 'business_escalate_incident') return '조치 대신 에스컬레이션'
   return actionDetail(action.args) || action.tool
 })
 const recoveredLabel = computed(() => {
@@ -199,6 +200,17 @@ async function decide(decision) {
           <td :class="{ ok: summary.recovered === true, error: summary.recovered === false }">{{ recoveredLabel }}</td>
         </tr>
         <tr><th>에스컬레이션</th><td>{{ decisionLabel(summary.escalation) }}</td></tr>
+        <tr v-if="summary.escalation_result">
+          <th>호출</th>
+          <td :class="{ error: summary.escalation_result.status === 'FAILED' }">
+            {{ actionResultLabel(summary.escalation_result) }}
+            <span v-if="summary.escalation_result.category"> · {{ ESCALATION_CATEGORIES[summary.escalation_result.category] }}</span>
+            <p v-if="summary.escalation_result.recipients?.length" class="muted">
+              받는 사람: {{ recipientsLabel(summary.escalation_result.recipients) }}
+            </p>
+            <p v-if="summary.escalation_result.error" class="muted">{{ summary.escalation_result.error }}</p>
+          </td>
+        </tr>
         <tr><th>고객 공지</th><td>{{ decisionLabel(summary.notice) }}</td></tr>
         <tr v-if="summary.notice_result"><th>공지 결과</th><td>{{ actionResultLabel(summary.notice_result) }}</td></tr>
       </tbody>

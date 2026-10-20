@@ -2,6 +2,7 @@ package com.opslens.backend.tenant;
 
 import com.opslens.backend.audit.AuditLog;
 import com.opslens.backend.change.ChangeService;
+import com.opslens.backend.escalation.EscalationService;
 import com.opslens.backend.incident.Incident;
 import com.opslens.backend.incident.IncidentRepository;
 import jakarta.validation.Valid;
@@ -31,7 +32,9 @@ public class InternalTenantController {
 
     record CreateIncidentRequest(@NotBlank String service, @NotBlank String title, @NotBlank String severity) {}
 
-    record EscalateRequest(@NotBlank String reason) {}
+    /** category와 나머지 필드는 EscalationService가 검사한다 */
+    record EscalateRequest(@NotBlank String category, @NotBlank String reason, String service, String requiredAction,
+            String blockedBy, String dependency) {}
 
     record ActionRequest(@NotBlank String action, @NotBlank String service, Integer replicas,
             @NotNull Long incidentId, String reason) {}
@@ -44,14 +47,16 @@ public class InternalTenantController {
     private final IncidentRepository incidents;
     private final SlaPolicy sla;
     private final ChangeService changes;
+    private final EscalationService escalations;
     private final AuditLog audit;
 
     public InternalTenantController(TenantRepository tenants, IncidentRepository incidents, SlaPolicy sla,
-            ChangeService changes, AuditLog audit) {
+            ChangeService changes, EscalationService escalations, AuditLog audit) {
         this.tenants = tenants;
         this.incidents = incidents;
         this.sla = sla;
         this.changes = changes;
+        this.escalations = escalations;
         this.audit = audit;
     }
 
@@ -112,13 +117,18 @@ public class InternalTenantController {
             @RequestHeader("X-Tenant-Id") String caller,
             @RequestHeader(value = "X-Trace-Id", required = false) String traceId,
             @Valid @RequestBody EscalateRequest request) {
-        tenant(tenantId, caller);
-        incidents.getForTenant(tenantId, incidentId);
-        List<TenantRepository.Contact> contacts = tenants.oncall(tenantId);
-        // TODO: 실제 호출(메신저·전화) 대신 감사 로그로 남긴다
-        audit.record(tenantId, "agent", "ESCALATED",
-                Map.of("incidentId", incidentId, "reason", request.reason(), "contacts", contacts), traceId);
-        return Map.of("notified", contacts);
+        Tenant tenant = tenant(tenantId, caller);
+        Incident incident = incidents.getForTenant(tenantId, incidentId);
+        // 발송 직전까지만 한다: 받는 사람과 메시지를 정해 발송 대기열에 넣는다. 실제 발송은 아직 없다
+        Map<String, Object> result = escalations.queue(tenant, incident, new EscalationService.Request(
+                request.category(), request.reason(), request.service(), request.requiredAction(),
+                request.blockedBy(), request.dependency()), traceId);
+        if (!Boolean.TRUE.equals(result.get("duplicate"))) {
+            audit.record(tenantId, "agent", "ESCALATED", Map.of("incidentId", incidentId,
+                    "escalationId", result.get("escalationId"), "category", result.get("category"),
+                    "reason", request.reason(), "recipients", result.get("recipients")), traceId);
+        }
+        return result;
     }
 
     @PostMapping("/actions")

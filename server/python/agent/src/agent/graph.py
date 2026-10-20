@@ -55,6 +55,7 @@ class State(TypedDict, total=False):
     notice_draft: str
     classification: dict[str, Any] | None  # 에러 유형·원인·근거 조항 (summary.py)
     notice_result: dict[str, Any] | None
+    escalation_result: dict[str, Any] | None   # 에스컬레이션 발송 대기열 등록 결과 (받는 사람, 메시지, status QUEUED)
 
 
 @dataclass
@@ -183,10 +184,13 @@ async def execute(state: State, runtime: Rt) -> dict:
         outcome = {"status": "SENT", **parsed}
     else:
         outcome = {"status": "UNCONFIRMED", "detail": str(parsed)[:500]}
+    update: dict[str, Any] = {}
+    if action["tool"] == "business_escalate_incident":   # 조치 대신 고른 에스컬레이션 (RB-STD-05~07)
+        update["escalation_result"] = outcome
     change = None
     if outcome and outcome["status"] == "PR_CREATED":
         change = {key: outcome.get(key) for key in ("action", "service", "changeMode", "prNumber", "prUrl", "files")}
-    return {"evidence": evidence, "tool_counts": counts, "action_result": outcome, "change": change}
+    return {"evidence": evidence, "tool_counts": counts, "action_result": outcome, "change": change, **update}
 
 
 def route_execute(state: State) -> Literal["verify", "await_change", "report"]:
@@ -239,15 +243,34 @@ def _final_text(messages: list[AnyMessage]) -> str:
 _LOG_NUMBERS = re.compile(r"\d+")
 
 
-async def _recent_log_patterns(box: ToolBox, counts: dict[str, int], incident_id: int | None) -> tuple[str, dict]:
-    """최근 10분 ERROR·WARN 로그를 코드가 먼저 조회해 반복 메시지별로 센다.
+LOG_WINDOW = timedelta(minutes=10)
+LOG_LEAD = timedelta(minutes=2)   # 알림(for 30s + 평가 주기)은 이상 시작보다 1분 남짓 늦게 인시던트를 만든다
+
+
+def _log_window_start(now: datetime, incident: dict[str, Any] | None) -> datetime:
+    """최근 10분과 인시던트 시작 2분 전 중 늦은 시각. 같은 서비스에서 앞서 끝난 장애의 로그를 원인으로 읽지 않게 한다.
+
+    E2E에서 B(파드 멈춤) 직후 B2(결제 지연)를 진단할 때, 10분 창에 남은 B의 `worker pool saturated` 로그를 보고
+    재시작을 제안한 적이 있다 (docs/harness-spec.md).
+    """
+    start = now - LOG_WINDOW
+    try:
+        started = datetime.fromisoformat(str((incident or {})["startedAt"]).replace("Z", "+00:00"))
+    except (KeyError, ValueError):
+        return start
+    return max(start, min(now - LOG_LEAD, started - LOG_LEAD))
+
+
+async def _recent_log_patterns(box: ToolBox, counts: dict[str, int], incident_id: int | None,
+                               incident: dict[str, Any] | None = None) -> tuple[str, dict]:
+    """최근 ERROR·WARN 로그를 코드가 먼저 조회해 반복 메시지별로 센다. 구간은 _log_window_start.
 
     모델이 로그를 조회하지 않거나 단어로 미리 걸러 원인 로그(결제 API timeout 등)를 놓친 적이 있다 (docs/harness-spec.md).
     숫자를 지운 메시지를 패턴으로 묶는다. 마스킹과 tool_output 경계는 ToolBox가 이미 적용했다.
     """
     now = datetime.now(timezone.utc)
     args = {"logql": '{app="demo-app", level=~"ERROR|WARN"}', "limit": 200, "direction": "backward",
-            "startRfc3339": (now - timedelta(minutes=10)).isoformat(timespec="seconds"),
+            "startRfc3339": _log_window_start(now, incident).isoformat(timespec="seconds"),
             "endRfc3339": now.isoformat(timespec="seconds")}
     # 200줄이면 결과 길이 제한(4000자)을 넘어 잘리고 JSON이 깨져 "로그 없음"으로 처리된 적이 있다.
     # 이 결과는 모델에 바로 가지 않고 아래에서 요약하므로 길이 제한을 넉넉히 둔다 (마스킹은 그대로)
@@ -265,7 +288,7 @@ async def _recent_log_patterns(box: ToolBox, counts: dict[str, int], incident_id
             item["count"] += 1
     top = sorted(patterns.values(), key=lambda p: -p["count"])[:6]
     summary_text = (json.dumps(top, ensure_ascii=False) if top
-                    else "최근 10분 ERROR·WARN 로그 없음" if result.status != "error" else "로그 조회 실패")
+                    else "조회 구간에 ERROR·WARN 로그 없음" if result.status != "error" else "로그 조회 실패")
     return summary_text, {"tool": "grafana_query_loki_logs", "args": args, "status": result.status,
                           "summary": summary_text[:500]}
 
@@ -276,14 +299,16 @@ async def diagnose(state: State, runtime: Rt) -> dict:
         intro = [HumanMessage("조치 후에도 회복되지 않았다. 조치 이후 시간대를 다시 조사한다.")]
     else:
         counts = dict(state["tool_counts"])
-        logs, logged = await _recent_log_patterns(runtime.context.toolbox, counts, state.get("incident_id"))
+        logs, logged = await _recent_log_patterns(runtime.context.toolbox, counts, state.get("incident_id"),
+                                                  state.get("context", {}).get("incident"))
         state = {**state, "tool_counts": counts}
         prefetch = [logged]
         intro = [
             SystemMessage(harness.prompt("system") + "\n\n" + harness.prompt("diagnose")),
             HumanMessage(f"요청: {state['question']}\n\n고객사 컨텍스트(backend 계산값):\n"
                          f"{json.dumps(state.get('context', {}), ensure_ascii=False, default=str)}\n\n"
-                         f"최근 10분 ERROR·WARN 로그의 반복 메시지(코드가 조회, 많은 순):\n"
+                         f"{logged['args']['startRfc3339']} 이후 ERROR·WARN 로그의 반복 메시지"
+                         f"(코드가 조회, 많은 순. 인시던트 시작 2분 전부터, 최대 10분):\n"
                          f"{harness.as_untrusted(logs)}"),
         ]
     history = list(state.get("messages", [])) + intro
@@ -324,7 +349,9 @@ async def propose_action(state: State, runtime: Rt) -> dict:
     if not ai.tool_calls:
         return {"proposed_action": None, "turns": state["turns"] + 1}
     call = ai.tool_calls[0]
-    if call["name"] == "business_execute_runbook_action" and not {"action", "service"} <= call["args"].keys():
+    required = {"business_execute_runbook_action": {"action", "service"},
+                "business_escalate_incident": {"category", "reason"}}.get(call["name"], set())
+    if not required <= call["args"].keys():
         # 필수 인자가 빠진 조치는 승인 요청으로 올리지 않는다. 사람이 빈 조치를 승인하게 만들지 않는다
         return {"proposed_action": None, "turns": state["turns"] + 1}
     args = {**call["args"], "incident_id": state.get("incident_id")} if "incident_id" in call["args"] else call["args"]
@@ -420,7 +447,7 @@ async def report(state: State, runtime: Rt) -> dict:
         "action": state.get("proposed_action"), "approvals": state.get("approvals", []),
         "recovered": state.get("recovered"), "verification": state.get("verification"),
         "action_result": state.get("action_result"), "change": state.get("change"),
-        "context": state.get("context", {}),
+        "escalation": state.get("escalation_result"), "context": state.get("context", {}),
     }, ensure_ascii=False, default=str)
 
     information_question = state.get("type") == "QUESTION" and state.get("incident_id") is None
@@ -486,23 +513,38 @@ def route_await_change(state: State) -> Literal["verify", "final_escalate"]:
     return "verify" if state["change"].get("result") == "SYNCED" else "final_escalate"
 
 
-def _escalation_reason(state: State) -> str:
-    if (state.get("change") or {}).get("result") == "TIMEOUT":
-        return f"조치 PR이 기한 안에 병합되지 않음 ({state['change'].get('prUrl')})"
-    return "P1 장애 발생" if not state.get("attempts") else "조치 후에도 회복되지 않음"
+def _escalation_args(state: State) -> dict[str, Any]:
+    """흐름이 정하는 에스컬레이션의 분류와 이유. 받는 사람과 메시지는 backend가 정한다."""
+    args: dict[str, Any] = {"incident_id": state["incident_id"]}
+    action = (state.get("proposed_action") or {}).get("args") or {}
+    change = state.get("change") or {}
+    if change.get("result") == "TIMEOUT":
+        args |= {"category": "CHANGE_TIMEOUT",
+                 "reason": f"조치 PR이 기한 안에 병합되지 않음 ({change.get('prUrl')})"}
+    elif not state.get("attempts"):
+        args |= {"category": "P1", "reason": "P1 장애 발생"}
+    else:
+        args |= {"category": "NOT_RECOVERED",
+                 "reason": f"{action.get('action') or '조치'} 후 다시 진단했지만 회복되지 않음"}
+    if action.get("service"):
+        args["service"] = action["service"]
+    return args
 
 
 async def escalate(state: State, runtime: Rt) -> dict:
-    """P1이거나 회복에 실패하거나 PR이 병합되지 않으면 담당자 호출을 제안한다. 승인되면 호출한다."""
-    reason = _escalation_reason(state)
-    args = {"incident_id": state["incident_id"], "reason": reason}
-    decision = interrupt(_approval_request("business_escalate_incident", args, reason, state))
+    """P1이거나 회복에 실패하거나 PR이 병합되지 않으면 담당자 호출을 제안한다. 승인되면 발송 대기열에 넣는다."""
+    args = _escalation_args(state)
+    decision = interrupt(_approval_request("business_escalate_incident", args, args["reason"], state))
     approvals = state["approvals"] + [{**decision, "tool": "business_escalate_incident"}]
     counts = dict(state["tool_counts"])
+    update: dict[str, Any] = {"approvals": approvals, "tool_counts": counts}
     if decision.get("decision") == "APPROVE":
-        await runtime.context.toolbox.call("escalate", "business_escalate_incident", args, counts,
-                                           incident_id=state["incident_id"])
-    return {"approvals": approvals, "tool_counts": counts}
+        result = await runtime.context.toolbox.call("escalate", "business_escalate_incident", args, counts,
+                                                    incident_id=state["incident_id"])
+        outcome = parse_json(result)
+        update["escalation_result"] = (outcome if result.status != "error" and isinstance(outcome, dict)
+                                       else {"status": "FAILED", "error": str(outcome)[:500]})
+    return update
 
 
 async def notice_approval(state: State, runtime: Rt) -> dict:

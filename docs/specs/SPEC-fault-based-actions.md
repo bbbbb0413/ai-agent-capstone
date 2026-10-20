@@ -181,6 +181,23 @@ RB-STD-03(트래픽 급증), RB-STD-04(외부 지연), RB-STD-05(DB 장애)는 �
 
 backend 검사(계약·구조 제약)는 AI가 잘못 골라도 막는 두 번째 방어선이다. AI의 제안 기준과 backend의 검사 기준은 같은 카탈로그 값을 쓴다.
 
+### 5.4.1 에스컬레이션 (발송 직전까지, 결정 7)
+
+`escalate_incident(incident_id, category, reason, service?, required_action?, blocked_by?, dependency?)`를 받은 backend(`EscalationService`)가 요청을 검사하고, 받는 사람과 메시지를 정해 발송 대기열 `escalations`(status `QUEUED`)에 넣는다. 실제 발송(메신저·전화·메일)은 하지 않는다. 발송기를 붙이면 `QUEUED`를 읽어 보내고 `SENT`·`FAILED`로 바꾼다.
+
+| 분류 (`category`) | 누가 정하나 | 받는 사람 (MSP 담당은 항상) | 필수 인자 |
+|---|---|---|---|
+| `P1` | 흐름 (triage) | — | — |
+| `NOT_RECOVERED` | 흐름 (재진단 후 미회복) | — | — |
+| `CHANGE_TIMEOUT` | 흐름 (PR 병합 기한 초과) | — | — |
+| `ACTION_BLOCKED` | AI (`propose_action`, RB-STD-06) | + 고객사 담당 (`tenants.customer_contact`) | `required_action`, `blocked_by` (`CONTRACT`·`STRUCTURE`·`RUNTIME`) |
+| `DEPENDENCY` | AI (RB-STD-04·05) | + 의존 대상 소유자 (카탈로그 `owner_contact`) | `dependency`. 서드파티 소유면 422 (공지 대상이다) |
+| `CAUSE_UNKNOWN` | AI (RB-STD-07) | — | — |
+
+- 같은 인시던트에 같은 분류·조치·의존 대상이 이미 대기 중이면 새로 쌓지 않고 그 건을 돌려준다(`duplicate`).
+- 감사 로그 `ESCALATED`에 대기열 번호와 받는 사람을 남긴다. MSP 직원은 `GET /api/incidents/{id}/escalations`로 대기열을 본다. 고객사 포털에는 보이지 않는다.
+- 승인 카드에는 분류·필요한 조치·할 수 없는 이유를, 작업 요약에는 받는 사람과 "호출 대기열에 등록 (발송 미연결)"을 보여 준다. 보고서는 "호출했다"고 쓰지 않는다.
+
 ### 5.5 실행 플랫폼 확장 지점 (구현하지 않음)
 
 | 플랫폼 | 재시작 | 확장 | 롤백 | 접속 |
@@ -332,3 +349,4 @@ ADR에 추가할 결정:
 | 4 | E2E 테스트 커밋 | **`main`에 커밋하지 않는다.** 실행마다 임시 브랜치를 쓰고 지운다 | 5.7, 5.8, 7장 5단계 |
 | 5 | 카탈로그 위치 | **backend DB**. GitOps YAML은 ADR에 운영 방향으로만 적는다 | 4.1, 5.1 |
 | 6 | DB 연결 여유율 | **0.8** | 4.1 |
+| 7 | 에스컬레이션 실제 발송 | **구현하지 않는다.** 받는 사람·메시지 결정과 발송 대기열 저장까지 한다 | 5.4.1 |

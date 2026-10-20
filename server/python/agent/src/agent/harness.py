@@ -43,7 +43,8 @@ NODE_TOOLS: dict[str, set[str]] = {
                  "grafana_query_loki_stats", "business_list_incidents", "business_get_service_inventory",
                  "business_list_recent_changes"},
     "retrieve_runbook": {"rag_search_documents"},
-    "propose_action": {"business_execute_runbook_action", "business_send_customer_notice"},
+    "propose_action": {"business_execute_runbook_action", "business_send_customer_notice",
+                       "business_escalate_incident"},   # 계약·구조상 할 수 없으면 조치 대신 에스컬레이션 (RB-STD-05~07)
     "escalate": {"business_escalate_incident"},
     "verify": {"grafana_query_prometheus"},   # 코드가 정해진 쿼리로만 호출한다 (graph.VERIFY_QUERIES)
     "notice": {"business_send_customer_notice"},

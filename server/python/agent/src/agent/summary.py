@@ -33,6 +33,14 @@ async def classify(payload: str) -> dict[str, Any] | None:
     return result.model_dump()
 
 
+def _escalation(result: dict[str, Any] | None) -> dict[str, Any] | None:
+    """화면에 보여 줄 만큼만: 분류, 받는 사람, 발송 상태. 메시지 본문은 backend 대기열에 있다."""
+    if not result:
+        return None
+    return {key: result.get(key) for key in ("status", "escalationId", "category", "recipients", "error")
+            if result.get(key) is not None}
+
+
 def _decision(approvals: list[dict[str, Any]], tool: str) -> str | None:
     return next((a.get("decision") for a in reversed(approvals) if a.get("tool") == tool), None)
 
@@ -55,6 +63,7 @@ def build(state: dict[str, Any]) -> dict[str, Any] | None:
         "change": {key: change.get(key) for key in ("prNumber", "prUrl", "result")} if change else None,
         "recovered": state.get("recovered"),
         "escalation": _decision(approvals, "business_escalate_incident"),
+        "escalation_result": _escalation(state.get("escalation_result")),
         "notice": _decision(approvals, "business_send_customer_notice"),
         "notice_result": state.get("notice_result") or (
             state.get("action_result") if action.get("tool") == "business_send_customer_notice" else None),

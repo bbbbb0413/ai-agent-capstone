@@ -28,6 +28,7 @@ python3 scripts/e2e.py --auto-approve  # backend 자동 승인 설정을 그대�
 
 - **승인:** 스크립트가 제안을 검사해 기대한 조치만 승인하고, 나머지는 거절한다. 잘못된 조치가 실행되지 않게 하기 위해서다. 실행하는 동안 backend 자동 승인을 끄고, 끝나면 되돌린다.
 - **판정:** 기대한 조치를 한 번만 제안했는지, 반영 방식, 회복 확인, 보고서·공지, 정리 상태를 본다. 승인 요청은 저장된 이벤트로 판정하므로 자동 승인으로 진행돼도 기준이 같다.
+- **장애 사이 간격:** 같은 고객사에서 앞 장애를 정리하고 75초가 지나야 다음 장애를 주입한다. Agent는 인시던트 시작 2분 전부터 로그를 보므로, 간격이 짧으면 앞 장애의 로그가 다음 진단 근거에 섞인다.
 - **결과:** 화면 요약 표와 `.local/e2e/<시각>.md`(작업 링크·보고서 포함, git에 올리지 않음).
 - **주의:** 지금은 시나리오 A가 실행할 때마다 `main`에 커밋 3개(장애, 되돌리기, 병합)를 남긴다. 임시 브랜치로 바꿀 예정이다([SPEC 5.8](specs/SPEC-fault-based-actions.md)). 실행이 겹치면 두 번째 실행은 시작하지 않는다.
 - 장애 형태 × 고객사 교차 매트릭스로 확장하는 계획: [specs/SPEC-fault-based-actions.md](specs/SPEC-fault-based-actions.md)
@@ -67,7 +68,7 @@ docker compose run --rm --no-deps -T \
   agent -m unittest discover -s /tests -v
 ```
 
-Backend의 소유권, 관리자 승인, 전달 실패 복원, 자동 승인, SLA:
+Backend의 소유권, 관리자 승인, 전달 실패 복원, 자동 승인, SLA, 구조 제약, 에스컬레이션 받는 사람·중복 방지:
 
 ```bash
 docker build --target build -t opslens-backend-tests server/spring/backend

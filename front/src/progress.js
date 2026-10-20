@@ -35,6 +35,25 @@ export const RUNBOOK_ACTIONS = {
   rollback_deployment: '직전 배포로 롤백',
 }
 
+// backend EscalationService.CATEGORIES·BLOCKED_BY와 같다
+export const ESCALATION_CATEGORIES = {
+  P1: 'P1 장애 발생',
+  NOT_RECOVERED: '조치 후에도 회복되지 않음',
+  CHANGE_TIMEOUT: '조치 PR이 기한 안에 병합되지 않음',
+  ACTION_BLOCKED: '필요한 조치를 계약·구조상 할 수 없음',
+  DEPENDENCY: '원인이 다른 팀 소유의 의존 대상',
+  CAUSE_UNKNOWN: '원인 미확정',
+}
+const BLOCKED_BY = { CONTRACT: '계약상 불가', STRUCTURE: '구조상 불가(상한·상태 저장)', RUNTIME: '지원하지 않는 실행 환경' }
+const RECIPIENT_KINDS = { MSP_ONCALL: 'MSP 담당', CUSTOMER: '고객사 담당', DEPENDENCY_OWNER: '의존 대상 소유자' }
+
+/** 에스컬레이션 받는 사람 한 줄 요약 (예: "MSP 담당 admin, eng-b · 고객사 담당 B사 운영 승인 담당") */
+export function recipientsLabel(recipients = []) {
+  const groups = new Map()
+  for (const r of recipients) groups.set(r.kind, [...(groups.get(r.kind) || []), r.name])
+  return [...groups].map(([kind, names]) => `${RECIPIENT_KINDS[kind] || kind} ${names.join(', ')}`).join(' · ')
+}
+
 // backend TaskService.ADMIN_ONLY_TOOLS와 같다. 고객에게 나가거나 돈이 걸린 도구는 MSP 관리자만 승인·거절한다
 export const ADMIN_ONLY_TOOLS = ['business_send_customer_notice', 'business_confirm_sla_credit']
 
@@ -52,7 +71,15 @@ export function approvalFields({ tool, args = {} }) {
     case 'business_send_customer_notice':
       return [['공지 내용', args.message], ['인시던트', args.incident_id != null ? `#${args.incident_id}` : '연결된 인시던트 없음']]
     case 'business_escalate_incident':
-      return [['호출 사유', args.reason], ['인시던트', `#${args.incident_id}`]]
+      return [
+        ['분류', ESCALATION_CATEGORIES[args.category] || args.category],
+        ['호출 사유', args.reason],
+        ['대상 서비스', args.service],
+        ['필요한 조치', RUNBOOK_ACTIONS[args.required_action] || args.required_action],
+        ['할 수 없는 이유', BLOCKED_BY[args.blocked_by] || args.blocked_by],
+        ['원인 의존 대상', args.dependency],
+        ['인시던트', args.incident_id != null ? `#${args.incident_id}` : null],
+      ].filter(([, value]) => value)
     default:
       return Object.entries(args).map(([key, value]) => [key, typeof value === 'object' ? JSON.stringify(value) : String(value)])
   }
@@ -61,7 +88,10 @@ export function approvalFields({ tool, args = {} }) {
 /** 승인하면 무엇이 바뀌는가 (기획안 5.3: 승인 카드의 '영향') */
 export function approvalImpact({ tool, args = {}, changeMode }) {
   if (tool === 'business_send_customer_notice') return '고객사 담당자에게 위 내용으로 공지가 발송된다. 발송 후에는 취소할 수 없다.'
-  if (tool === 'business_escalate_incident') return '고객사 온콜 담당자를 호출한다.'
+  if (tool === 'business_escalate_incident') {
+    const who = { ACTION_BLOCKED: 'MSP 담당과 고객사 담당', DEPENDENCY: 'MSP 담당과 의존 대상 소유자' }[args.category] || 'MSP 담당'
+    return `${who}에게 보낼 호출을 발송 대기열에 넣는다. 실제 메신저·전화 발송은 아직 연결되지 않았다.`
+  }
   if (tool !== 'business_execute_runbook_action') return null
   const service = args.service || '서비스'
   const what = {
@@ -88,7 +118,7 @@ export const toolLabel = (tool) => TOOL_LABELS[tool] || tool
 export function actionResultLabel(result) {
   return {
     EXECUTED: '조치 실행 완료', PR_CREATED: 'PR 생성 (반영 상태 별도 확인)',
-    SENT: '공지 발송 완료', FAILED: '실행 실패', UNCONFIRMED: '실행 결과 확인 불가', REJECTED: '발송 거절',
+    SENT: '공지 발송 완료', QUEUED: '호출 대기열에 등록 (발송 미연결)', FAILED: '실행 실패', UNCONFIRMED: '실행 결과 확인 불가', REJECTED: '발송 거절',
   }[result?.status] || '실행 확인 안 됨'
 }
 

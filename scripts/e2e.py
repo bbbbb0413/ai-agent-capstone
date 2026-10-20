@@ -120,11 +120,22 @@ class Session:
         return body
 
 
+# Agent는 인시던트 시작 2분 전부터 로그를 본다 (agent graph._log_window_start). 인시던트는 주입 약 70초 뒤에
+# 생기므로, 앞 장애를 정리하고 이만큼 지난 뒤 주입해야 앞 장애의 로그가 다음 진단 근거에 섞이지 않는다
+QUIET_SECONDS = 75
+_cleared_at: dict[str, float] = {}
+
+
 def inject(tenant: str, fault: str | None) -> None:
     """고객사 서비스에 장애를 주입한다. fault=None이면 해제한다."""
+    if fault and (wait := QUIET_SECONDS - (time.time() - _cleared_at.get(tenant, 0))) > 0:
+        say(f"앞 장애의 로그가 진단 구간에 섞이지 않게 {wait:.0f}초 기다린다")
+        time.sleep(wait)
     url = f"http://opslens-tenants-control-plane:{NODE_PORT[tenant]}/admin/faults"
     method = f"-X POST -H 'Content-Type: application/json' -d '{{\"fault\":\"{fault}\"}}'" if fault else "-X DELETE"
     in_backend(f'curl -sf {method} -H "Authorization: Bearer $SERVICE_TOKEN" {url} > /dev/null')
+    if not fault:
+        _cleared_at[tenant] = time.time()
 
 
 def github(method: str, path: str, body: dict | None = None) -> dict:

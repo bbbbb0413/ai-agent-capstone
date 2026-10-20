@@ -108,9 +108,28 @@ async def create_incident(service: str, title: str, severity: Literal["P1", "P2"
 
 
 @mcp.tool(annotations=WRITE)
-async def escalate_incident(incident_id: int, reason: str) -> dict[str, Any]:
-    """담당 엔지니어와 MSP 관리자를 호출한다. reason에는 에스컬레이션 이유를 한 문장으로 적는다."""
-    return await _call("POST", f"/incidents/{incident_id}/escalate", json={"reason": reason})
+async def escalate_incident(
+    incident_id: int,
+    category: Literal["P1", "NOT_RECOVERED", "CHANGE_TIMEOUT", "ACTION_BLOCKED", "DEPENDENCY", "CAUSE_UNKNOWN"],
+    reason: str,
+    service: str | None = None,
+    required_action: Literal["restart_pods", "scale_deployment", "rollback_deployment"] | None = None,
+    blocked_by: Literal["CONTRACT", "STRUCTURE", "RUNTIME"] | None = None,
+    dependency: str | None = None,
+) -> dict[str, Any]:
+    """사람에게 장애를 넘긴다(담당자 호출). 받는 사람과 메시지는 backend가 정해 발송 대기열에 넣는다.
+    - ACTION_BLOCKED: 필요한 조치를 계약(CONTRACT)·구조(STRUCTURE: 안전 상한, 상태 저장)·실행 환경(RUNTIME)상
+      할 수 없다 (RB-STD-06). required_action과 blocked_by가 필요하다. 고객사 담당도 받는다
+    - DEPENDENCY: 원인이 고객사 다른 팀 소유의 의존 대상이다 (RB-STD-04·05). dependency에 get_service_inventory의
+      의존 대상 이름을 넣는다. 그 소유자도 받는다. 서드파티 외부 API는 호출 대상이 아니라 고객 공지 대상이다
+    - CAUSE_UNKNOWN: 근거가 부족해 원인을 정하지 못했다 (RB-STD-07)
+    - P1, NOT_RECOVERED, CHANGE_TIMEOUT: Agent 흐름이 정한다
+    reason에는 필요한 조치와 할 수 없는 이유(계약 조항, 상한 값)를 한 문장으로 적는다.
+    service를 비우면 인시던트의 서비스다. 결과 status QUEUED는 발송 대기열에 들어갔다는 뜻이다."""
+    body = {"category": category, "reason": reason, "service": service, "requiredAction": required_action,
+            "blockedBy": blocked_by, "dependency": dependency}
+    return await _call("POST", f"/incidents/{incident_id}/escalate",
+                       json={k: v for k, v in body.items() if v is not None})
 
 
 @mcp.tool(annotations=WRITE)
