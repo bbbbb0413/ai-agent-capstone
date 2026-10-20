@@ -387,6 +387,38 @@ def scenario_question(args) -> Result:
     return r
 
 
+def scenario_no_issue(args) -> Result:
+    """열린 인시던트가 없는 고객사에 묻는 질문은 진단·조치 없이 이상 없음으로 끝난다 (기능별-변경사항 T7-5)."""
+    r = Result("이상 없음 (열린 인시던트가 없는 질문)")
+    started = time.time()
+    tenant = sql("select id from app.tenants t where id in ('tenant-a','tenant-b') and not exists "
+                 "(select 1 from app.incidents i where i.tenant_id = t.id and i.status = 'OPEN') order by id limit 1")
+    if not r.check(bool(tenant), "열린 인시던트가 없는 고객사가 있다"):
+        r.notes.append("A사·B사 모두 열린 인시던트가 있다: " + sql(
+            "select string_agg('#'||id||' '||tenant_id, ', ') from app.incidents where status = 'OPEN'"))
+        return r
+    name = sql(f"select name from app.tenants where id = '{tenant}'")
+    say(f"{name}({tenant})에 질문한다")
+    # 문서 질문 단어(SLA, 계약, 런북 등)가 있으면 문서 검색으로 가므로 넣지 않는다
+    engineer = Session("engineer")
+    status, body = engineer.call("POST", "/api/ai/tasks", {"tenantId": tenant, "question": "지금 서비스 상태 괜찮아?"})
+    if not r.check(status == 202, f"질문 접수 → {status}"):
+        return r
+    task = drive(body["taskId"], Expect(action_tool="-"), r, args.timeout, merge=False)
+    summarize(task, r)
+    answer = task.get("answer") or ""
+    r.check(answer.startswith("## 이상 없음") and name in answer,
+            f"답변이 '## 이상 없음'으로 시작하고 고객사 이름을 담는다 ({answer[:40]!r})")
+    events = engineer.get(f"/api/ai/tasks/{task['id']}/events")
+    approvals = sum(e["type"] == "APPROVAL_REQUIRED" for e in events)
+    r.check(approvals == 0, f"승인 요청이 없다 ({approvals}건)")
+    nodes = sorted({str((e.get("data") or {}).get("node")) for e in events if e["type"] == "TOOL_START"})
+    r.check(nodes == ["load_context"], f"컨텍스트 수집 도구만 불렀다 (Node: {', '.join(nodes) or '없음'})")
+    r.seconds = time.time() - started
+    r.check(r.seconds <= 30, f"30초 안에 끝났다 ({r.seconds:.0f}초)")
+    return r
+
+
 def scenario_b(args) -> Result:
     r = Result("B. 파드 멈춤 → 재시작 (B사, DIRECT)")
     started, since = time.time(), datetime.now(timezone.utc)
@@ -469,6 +501,7 @@ SCENARIOS = {
     "isolation": ("D. 고객사 격리 (권한·감사 로그)", scenario_isolation),
     "guard": ("backend 방어선 (안전 상한·실행 환경·계약)", scenario_guard),
     "question": ("문서 질문 → RAG 답변", scenario_question),
+    "no-issue": ("열린 인시던트가 없는 질문 → 이상 없음", scenario_no_issue),
     "b": ("B. 파드 멈춤 → 재시작 (DIRECT)", scenario_b),
     "b2": ("B2. 외부 결제 지연 → 고객 공지", scenario_b2),
     "a": ("A. 잘못된 설정 배포 → 롤백 PR → 병합 → 동기화 (GITOPS)", scenario_a),
