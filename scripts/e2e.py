@@ -11,6 +11,16 @@
     --timeout 초     시나리오 하나의 최대 시간 (기본 600)
     --no-branch      임시 브랜치를 쓰지 않는다 (A사 설정 저장소 기준이 main 그대로. 시나리오 a는 실패한다)
     --cleanup        지난 실행이 남긴 임시 브랜치와 설정을 정리하고 끝낸다
+    --serial         고객사 묶음을 동시에 돌리지 않고 하나씩 돌린다 (원인을 좁힐 때)
+
+실행 순서: 공통 묶음(격리·문서 질문·이상 없음, 장애가 없을 때 돌린다) → A사 묶음과 B사 묶음을 동시에.
+한 고객사 안에서는 순서대로 돈다. 서비스가 고객사마다 하나라 같은 서비스에 장애를 겹쳐 넣으면 증상이 섞이고,
+같은 알림은 인시던트 하나로 합쳐지기 때문이다.
+
+결과 파일 (.local/e2e/<시각>/, git에 올리지 않는다)
+    summary.md       시나리오별 상태(대기·진행 중·통과·실패)와 시간. 실행 중에도 갱신된다
+    <키>.log         그 시나리오의 진행 기록 전체
+    <키>.md          판정 항목, 작업 링크, Agent 보고서
 
 임시 브랜치 (SPEC-fault-based-actions 5.8): 실행 동안 A사 설정 저장소 기준을 e2e/<시각> 브랜치로 바꾼다
 (backend 고객사 설정과 ArgoCD targetRevision). 장애 주입 커밋과 롤백 PR이 그 브랜치에서 일어나 main에 남지 않고,
@@ -21,6 +31,8 @@
 """
 
 import argparse
+import contextvars
+import threading
 import hashlib
 import os
 import http.cookiejar
@@ -48,8 +60,22 @@ USERS = {"engineer": "engineer1234", "admin": "admin1234", "viewer-a": "viewer12
 
 # ── 출력 ──────────────────────────────────────────────────────
 
+_print_lock = threading.Lock()
+_log: contextvars.ContextVar["tuple[str, Path] | None"] = contextvars.ContextVar("e2e_log", default=None)
+
+
 def say(msg: str) -> None:
-    print(f"  {datetime.now():%H:%M:%S}  {msg}", flush=True)
+    """진행 기록. 시나리오 안에서 부르면 그 시나리오의 로그 파일에도 쓰고, 화면에는 시나리오 키를 붙인다."""
+    line = f"{datetime.now():%H:%M:%S}  {msg}"
+    current = _log.get()
+    with _print_lock:
+        if current:
+            key, path = current
+            with path.open("a", encoding="utf-8") as f:
+                f.write(line + "\n")
+            print(f"  [{key:12}] {line}", flush=True)
+        else:
+            print(f"  {line}", flush=True)
 
 
 @dataclass
@@ -633,6 +659,15 @@ SCENARIOS = {
 }
 
 
+# 같은 묶음은 순서대로, 묶음끼리는 동시에 돈다. guard는 A사 레플리카를 전후로 비교하므로 A사 장애보다 먼저 돈다
+LANES = {
+    "공통": ["isolation", "question", "no-issue"],
+    "tenant-a": ["guard", "a", "a-hang"],
+    "tenant-b": ["b", "b2"],
+}
+LANE_OF = {key: lane for lane, keys in LANES.items() for key in keys}
+
+
 # ── 실행 ──────────────────────────────────────────────────────
 
 def set_auto_approve(enabled: bool) -> bool | None:
@@ -646,20 +681,141 @@ def set_auto_approve(enabled: bool) -> bool | None:
     return before
 
 
-def write_report(results: list[Result], started: datetime) -> Path:
-    out = ROOT / ".local/e2e" / f"{started:%Y%m%d-%H%M%S}.md"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    lines = [f"# OpsLens E2E 결과 ({started:%Y-%m-%d %H:%M})", "", "| 시나리오 | 결과 | 시간 | 작업 |", "|---|---|---|---|"]
-    for r in results:
-        link = f"[{r.task_id[:8]}]({WEB}/tasks/{r.task_id})" if r.task_id else ""
-        lines.append(f"| {r.name} | {'PASS' if r.passed else 'FAIL'} | {r.seconds:.0f}s | {link} |")
-    for r in results:
-        lines += ["", f"## {r.name}", ""] + [f"- {'✅' if ok else '❌'} {label}" for ok, label in r.checks]
-        lines += [f"- 참고: {n}" for n in r.notes]
+class Run:
+    """한 번의 실행 결과 폴더. 상태가 바뀔 때마다 summary.md를 다시 쓴다 (실행 중에도 열어 볼 수 있다)."""
+
+    def __init__(self, started: datetime, keys: list[str]):
+        self.started = started
+        self.dir = ROOT / ".local/e2e" / f"{started:%Y%m%d-%H%M%S}"
+        self.dir.mkdir(parents=True, exist_ok=True)
+        self.lock = threading.Lock()
+        self.state: dict[str, dict] = {k: {"status": "대기", "result": None} for k in keys}
+        self.extra: list[Result] = []   # 사전 점검, 임시 브랜치 준비 같은 시나리오 밖의 결과
+        self.write()
+
+    def start(self, key: str) -> None:
+        with self.lock:
+            self.state[key]["status"] = "진행 중"
+            self.state[key]["since"] = datetime.now()
+        self.write()
+
+    def finish(self, key: str, result: Result) -> None:
+        with self.lock:
+            self.state[key].update(status="통과" if result.passed else "실패", result=result)
+        self.write_detail(key, result)
+        self.write()
+
+    def results(self) -> list[Result]:
+        return self.extra + [s["result"] for s in self.state.values() if s["result"]]
+
+    def write_detail(self, key: str, r: Result) -> None:
+        link = f"{WEB}/tasks/{r.task_id}" if r.task_id else "없음"
+        lines = [f"# {r.name}", "", f"- 결과: **{'통과' if r.passed else '실패'}** ({r.seconds:.0f}초)",
+                 f"- 작업: {link}", f"- 진행 기록: [{key}.log]({key}.log)", "", "## 판정", ""]
+        lines += [f"- {'✅' if ok else '❌'} {label}" for ok, label in r.checks]
+        if r.notes:
+            lines += ["", "## 참고", ""] + [f"- {n}" for n in r.notes]
         if r.report:
-            lines += ["", "<details><summary>보고서</summary>", "", r.report, "", "</details>"]
-    out.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return out
+            lines += ["", "## Agent 보고서", "", r.report]
+        (self.dir / f"{key}.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    def write(self) -> None:
+        with self.lock:
+            lines = [f"# OpsLens E2E ({self.started:%Y-%m-%d %H:%M})", "",
+                     f"갱신: {datetime.now():%H:%M:%S}", "",
+                     "| 묶음 | 시나리오 | 상태 | 시간 | 처음 실패한 항목 | 상세 |", "|---|---|---|---|---|---|"]
+            for r in self.extra:
+                fails = [label for ok, label in r.checks if not ok]
+                lines.append(f"| - | {r.name} | {'통과' if r.passed else '실패'} | {r.seconds:.0f}초 | "
+                             f"{(fails or [''])[0]} | |")
+            for key, st in self.state.items():
+                r = st["result"]
+                if r:
+                    fails = [label for ok, label in r.checks if not ok]
+                    took, first = f"{r.seconds:.0f}초", (fails or [""])[0]
+                elif st.get("since"):
+                    took, first = f"{(datetime.now() - st['since']).seconds}초째", ""
+                else:
+                    took, first = "", ""
+                detail = f"[{key}.md]({key}.md) · [log]({key}.log)" if r else (f"[log]({key}.log)" if st.get("since") else "")
+                lines.append(f"| {LANE_OF.get(key, '-')} | {SCENARIOS[key][0]} | {st['status']} | {took} | "
+                             f"{first.replace('|', '/')} | {detail} |")
+            (self.dir / "summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def run_lane(run: Run, keys: list[str], args) -> None:
+    """한 묶음의 시나리오를 순서대로 돌린다. 한 시나리오가 실패해도 다음 시나리오는 돌린다."""
+    for key in keys:
+        title, scenario = SCENARIOS[key]
+        token = _log.set((key, run.dir / f"{key}.log"))
+        run.start(key)
+        say(f"▶ {title}")
+        begin = time.time()
+        try:
+            result = scenario(args)
+        except Exception as e:  # noqa: BLE001 — 한 시나리오의 오류가 다른 시나리오를 멈추지 않게 한다
+            result = Result(title)
+            result.check(False, f"중단: {type(e).__name__}: {e}")
+        result.seconds = result.seconds or time.time() - begin
+        say(f"■ {'통과' if result.passed else '실패'} ({result.seconds:.0f}초)")
+        run.finish(key, result)
+        _log.reset(token)
+
+
+def run_all(args) -> int:
+    started = datetime.now()
+    run = Run(started, args.scenarios)
+    print(f"\n결과 폴더: {run.dir.relative_to(ROOT)}/summary.md (실행 중에도 갱신된다)")
+    print("\n▶ 사전 점검")
+    pre = preflight(args)
+    run.extra.append(pre)
+    run.write()
+    if not pre.passed:
+        print("\n사전 점검 실패. 위 항목을 고친 뒤 다시 실행한다 (클러스터: scripts/cluster-up.sh)")
+        return 1
+
+    previous = None if args.auto_approve else set_auto_approve(False)
+    if previous:
+        say("backend 자동 승인을 실행 동안 끈다 (끝나면 되돌린다)")
+    branch = None
+    try:
+        if not args.no_branch:
+            branch = start_branch()
+        lanes = [[k for k in keys if k in args.scenarios] for keys in LANES.values()]
+        common, parallel = lanes[0], [lane for lane in lanes[1:] if lane]
+        run_lane(run, common, args)          # 장애가 없을 때 돌려야 하는 시나리오
+        if args.serial:
+            for lane in parallel:
+                run_lane(run, lane, args)
+        else:
+            threads = [threading.Thread(target=run_lane, args=(run, lane, args), daemon=True) for lane in parallel]
+            for t in threads:
+                t.start()
+            while any(t.is_alive() for t in threads):   # join(timeout)이라 Ctrl-C로 멈출 수 있다
+                for t in threads:
+                    t.join(timeout=1)
+    except KeyboardInterrupt:
+        print("\n중단됨")
+    except Exception as e:  # noqa: BLE001 — 임시 브랜치 준비 실패 등. 아래 finally에서 되돌린다
+        failed = Result("임시 브랜치 준비")
+        failed.check(False, f"중단: {type(e).__name__}: {e}")
+        run.extra.append(failed)
+    finally:
+        if not args.no_branch:
+            end_branch(branch)
+        if previous:
+            set_auto_approve(True)
+            say("backend 자동 승인을 다시 켰다")
+        run.write()
+
+    results = run.results()
+    print("\n━━ 결과 " + "━" * 50)
+    for r in results:
+        fails = [label for ok, label in r.checks if not ok]
+        print(f"  {'PASS' if r.passed else 'FAIL'}  {r.name:52} {r.seconds:5.0f}s"
+              + (f"\n        ↳ {fails[0]}" if fails else ""))
+    print(f"\n  상세: {(run.dir / 'summary.md').relative_to(ROOT)}")
+    return 0 if results and all(r.passed for r in results) and len(results) == len(args.scenarios) + len(run.extra) else 1
 
 
 def main() -> int:
@@ -671,6 +827,7 @@ def main() -> int:
     parser.add_argument("--timeout", type=float, default=600)
     parser.add_argument("--no-branch", action="store_true")
     parser.add_argument("--cleanup", action="store_true")
+    parser.add_argument("--serial", action="store_true")
     args = parser.parse_args()
     if args.list:
         for key, (title, _) in SCENARIOS.items():
@@ -697,56 +854,6 @@ def main() -> int:
         return run_all(args)
     finally:
         lock.unlink(missing_ok=True)
-
-
-def run_all(args) -> int:
-    started = datetime.now()
-    print(f"\n▶ 사전 점검")
-    results = [preflight(args)]
-    if not results[0].passed:
-        print("\n사전 점검 실패. 위 항목을 고친 뒤 다시 실행한다 (클러스터: scripts/cluster-up.sh)")
-        write_report(results, started)
-        return 1
-
-    previous = None if args.auto_approve else set_auto_approve(False)
-    if previous:
-        say("backend 자동 승인을 실행 동안 끈다 (끝나면 되돌린다)")
-    branch = None
-    try:
-        if not args.no_branch:
-            branch = start_branch()
-        for key in args.scenarios:
-            title, run = SCENARIOS[key]
-            print(f"\n▶ {title}")
-            begin = time.time()
-            try:
-                result = run(args)
-            except Exception as e:  # 한 시나리오가 실패해도 다음 시나리오는 돌린다
-                result = Result(title)
-                result.check(False, f"중단: {type(e).__name__}: {e}")
-            result.seconds = result.seconds or time.time() - begin
-            results.append(result)
-    except KeyboardInterrupt:
-        print("\n중단됨")
-    except Exception as e:  # 임시 브랜치 준비 실패 등. 아래 finally에서 되돌린다
-        result = Result("임시 브랜치 준비")
-        result.check(False, f"중단: {type(e).__name__}: {e}")
-        results.append(result)
-    finally:
-        if not args.no_branch:
-            end_branch(branch)
-        if previous:
-            set_auto_approve(True)
-            say("backend 자동 승인을 다시 켰다")
-
-    print("\n━━ 결과 " + "━" * 50)
-    for r in results:
-        fails = [label for ok, label in r.checks if not ok]
-        print(f"  {'PASS' if r.passed else 'FAIL'}  {r.name:52} {r.seconds:5.0f}s"
-              + (f"\n        ↳ {fails[0]}" if fails else ""))
-    report = write_report(results, started)
-    print(f"\n  상세: {report.relative_to(ROOT)}")
-    return 0 if all(r.passed for r in results) else 1
 
 
 if __name__ == "__main__":
