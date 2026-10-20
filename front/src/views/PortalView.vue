@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { api } from '../api.js'
 import StatusBadge from '../components/StatusBadge.vue'
+import { shortDateTime } from '../format.js'
 
 const REFRESH_MS = 30_000
 
@@ -54,7 +55,7 @@ onUnmounted(() => clearInterval(timer))
       </thead>
       <tbody>
         <tr v-for="i in incidents" :key="i.id">
-          <td>{{ new Date(i.startedAt).toLocaleString() }}</td>
+          <td class="nowrap">{{ shortDateTime(i.startedAt) }}</td>
           <td v-if="tenants.length > 1">{{ tenantName(i.tenantId) }}</td>
           <td>{{ i.service }}</td>
           <td>{{ i.title }}</td>

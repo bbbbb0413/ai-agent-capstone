@@ -23,11 +23,14 @@ async function submit() {
 </script>
 
 <template>
-  <form class="card narrow" @submit.prevent="submit">
-    <h1>로그인</h1>
-    <label>아이디 <input v-model="username" autocomplete="username" /></label>
-    <label>비밀번호 <input v-model="password" type="password" autocomplete="current-password" /></label>
-    <button type="submit">로그인</button>
-    <p v-if="error" class="error">{{ error }}</p>
-  </form>
+  <div class="login-screen">
+    <form class="card login-card" @submit.prevent="submit">
+      <div class="login-brand">OPSLENS</div>
+      <p class="muted">AI Ops Console에 로그인한다</p>
+      <label>아이디 <input v-model="username" autocomplete="username" /></label>
+      <label>비밀번호 <input v-model="password" type="password" autocomplete="current-password" /></label>
+      <button type="submit">로그인</button>
+      <p v-if="error" class="error">{{ error }}</p>
+    </form>
+  </div>
 </template>

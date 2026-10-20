@@ -48,15 +48,20 @@ const maxErrorType = computed(() => Math.max(1, ...errorTypes.value.map(([, n]) 
 </script>
 
 <template>
-  <section class="card">
-    <h2>현황</h2>
-    <div class="kpis">
-      <div class="kpi"><span class="muted">장애</span><strong>{{ incidents.length }}</strong></div>
-      <div class="kpi"><span class="muted">성공</span><strong class="ok">{{ count('DONE') }}</strong></div>
-      <div class="kpi"><span class="muted">실패</span><strong class="error">{{ count('FAILED') }}</strong></div>
-      <div class="kpi"><span class="muted">처리 중</span><strong>{{ count('WAITING') + count('RUNNING') }}</strong></div>
+  <div class="kpis">
+    <div class="kpi tone-bad">
+      <span class="muted">처리 중인 장애</span><strong>{{ incidents.filter((i) => i.status !== 'RESOLVED').length }}</strong>
+      <span class="muted kpi-sub">전체 {{ incidents.length }}건</span>
     </div>
+    <div class="kpi tone-ok"><span class="muted">Agent 작업 성공</span><strong class="ok">{{ count('DONE') }}</strong></div>
+    <div class="kpi tone-danger"><span class="muted">Agent 작업 실패</span><strong class="error">{{ count('FAILED') }}</strong></div>
+    <div class="kpi tone-info">
+      <span class="muted">처리 중인 작업</span><strong>{{ count('WAITING') + count('RUNNING') }}</strong>
+      <span class="muted kpi-sub">승인·반영 대기 {{ count('WAITING') }}건</span>
+    </div>
+  </div>
 
+  <section class="card">
     <div class="charts">
       <div>
         <h3>Agent 작업 결과</h3>
