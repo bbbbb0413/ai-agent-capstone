@@ -94,7 +94,8 @@ async def get_service_inventory() -> list[dict[str, Any]]:
 async def list_recent_changes(service: str) -> dict[str, Any]:
     """서비스의 최근 배포·설정 변경 3건(최신순). 장애가 직전 변경과 관련 있는지 볼 때 쓴다.
     설정 저장소로 운영하는 고객사는 커밋(시각, 메시지, 변경 내용 일부)을, 직접 운영 고객사는 배포 이력
-    (revision, 이미지, 환경변수, 생성 시각)을 돌려준다."""
+    (revision, 이미지, 환경변수, 생성 시각)을 돌려준다. 배포 이력의 현재 리비전에는 실제로 배포된 시각(deployedAt)이
+    있다. 예전 설정으로 다시 배포하면 생성 시각(createdAt)은 옛 값이므로 직전 변경은 deployedAt으로 본다."""
     return await _call("GET", "/changes", params={"service": service})
 
 

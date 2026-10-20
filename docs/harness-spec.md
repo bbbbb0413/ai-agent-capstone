@@ -13,10 +13,12 @@ PDF 표 6-3의 권장값을 기준으로 둔 값과, 팀이 바꾼 값과 이유
 | Tools | 도구 결과 길이 | 4,000자 | 길이 제한 | |
 | Context | 대화 예산 | 24,000자 | Token 예산 | 넘으면 오래된 도구 결과를 줄인다. 모델 요약은 TODO |
 | Recovery | 429·5xx 재시도 | 2회 | 2회 | 이후 대체 모델(`FALLBACK_MODEL`) |
-| Recovery | Kafka 작업 재시도 | 3회 | — | 이후 `tasks.dlt`, 작업은 FAILED |
+| Recovery | Kafka 작업 재시도 | 3회 | — | 등급별 재시도 토픽(`tasks.retry.gold`·`silver`, 2ⁿ초 뒤), 이후 `tasks.dlt`, 작업은 FAILED |
 | Recovery | 모델 호출 타임아웃 | 30초 | — | 타임아웃도 재시도 대상이라 한 턴이 최대 90초까지 걸린다 |
 | Agent Loop | 추론 강도 | low (propose_action만 medium) | — | `LLM_REASONING_EFFORT`. 비우면 모델 기본값. propose는 `harness.PROPOSE_REASONING_EFFORT` |
 | Agent Loop | 도구 호출 강제 | propose_action 전체, diagnose 첫 턴 | — | diagnose는 `DIAGNOSE_FORCE_FIRST_TOOL`(기본 true). 진단 도구는 조회 전용이라 강제해도 부작용이 없다 |
+| Guardrails | 조치 돌려보내기 | 최대 2번 | — | 인용 조항과 맞지 않는 조치(직전 변경이 있으면 RB-STD-01 재시작 불가)와 `supportedActions`에 없는 조치를 이유와 함께 돌려보낸다 (`graph.PROPOSE_SEND_BACKS`) |
+| Guardrails | 고객 공지 문안 | 규칙 검사 → 고쳐 쓰기 1번 → 기본 문안 | — | `prompts/notice.md`, `agent/customer_notice.py`. 발송 전 MSP 관리자 승인은 그대로 |
 
 ## 변경 이력
 
@@ -49,3 +51,6 @@ PDF 표 6-3의 권장값을 기준으로 둔 값과, 팀이 바꾼 값과 이유
 | 2026-10-20 | RB-STD-01의 재시작 허용 | 언제나 → 직전 변경이 없을 때만. 진단 때 코드가 인시던트 시작 전 15분 안의 변경 여부(`signals.recent_change`)를 계산하고, 있으면 RB-STD-01 인용 재시작을 거부해 다시 고르게 한다 (`graph._recent_change`, `_clause_mismatch`) | E2E `b-pool`에서 직전 배포(풀 5)가 있는데 롤백이 계약상 불가하자 "RB-STD-01 1차 조치로 재시작"을 제안. 조항-조치 검사가 RB-STD-01의 재시작 예외를 그대로 허용함 | `scripts/e2e.py b-pool`: 재시작 제안 없이 `ACTION_BLOCKED rollback_deployment CONTRACT`, B사 운영 승인 담당 |
 | 2026-10-20 | 재진단 신호 | 첫 진단 값 재사용 → 재진단 때 코드가 로그 반복 메시지·로그 신호·기본 지표를 다시 조회해 전달 (`graph.diagnose`) | `a-surge-max` 재실행에서 첫 진단 시점에는 `request queue backlog` 로그가 아직 Loki에 없어 신호 0건이었고, 재진단에서도 그 0건을 써서 판정표에 맞는 행이 없어 `CAUSE_UNKNOWN`으로 에스컬레이션. Loki에는 그 뒤 분당 168~220건이 있었다 | `scripts/e2e.py a-surge-max` |
 | 2026-10-20 | 회복 확인 재측정 | 한 번 → 첫 값이 기준 안이면 20초 뒤 다시 재서 둘 다 기준 안이어야 회복 (`graph.verify`, `prompts/verify.md`) | `a-surge-max`(+400건/초)에서 최대치 4 동기화 직후 15초 창 p95 0.60초를 보고 RECOVERED. 직접 재 보니 파드 4개의 안정 상태 p95는 약 3초이고, 새 파드가 Ready가 된 직후 15초만 0.98초로 내려갔다(빈 파드가 대기 요청을 받음) | 측정: 400건/초, HPA 최대 4, 15초 간격 16회 p95 5.4→1.0→2.8~3.8초 |
+| 2026-10-20 | 고객 공지 문안 검사 | 지시문만 → 공지 규칙을 `prompts/notice.md`로 분리하고, 코드가 문안을 검사한다(`customer_notice.problems`): 한글·영문 외 문자, 내부 처리·식별자·지표 용어(에스컬레이션, 승인, PR, `tenant-`, p95 등), 지시문을 옮긴 말과 머리말("초안", "발송해 주세요"), 목록 형식, 400자 초과, 회복 전인데 구체적인 다음 안내 시각 없음. 어기면 한 번 고쳐 쓰고, 그래도 어기면 상태값으로 만든 기본 문안을 쓴다. 보고서의 공지와 조치로 고른 공지 모두 거친다 | `a-surge-max`에서 공지에 "에스컬레이션 요청은 형식 오류로 실패"와 다른 언어 단어(अभी)가 섞임. 확인해 보니 처음부터 구성한 전체 E2E의 공지 11건 중 9건이 목록 형식, 내부 절차("발송 대기 상태", "PR 병합"), 머리말("검토 후 발송해 주세요")을 담았다 | 같은 11건을 실제 모델로 다시 처리: 고쳐 씀 9, 기본 문안 2, 규칙 위반 0 |
+| 2026-10-20 | 배포 이력의 배포 시각 | ReplicaSet 생성 시각만 → 현재 리비전에 실제 배포 시각(`deployedAt`, Deployment `Progressing` 상태의 마지막 갱신)을 더하고, 직전 변경 판단(`graph._recent_change`)이 먼저 본다 | `b-pool` 재실행에서 풀 5 배포가 예전 실행의 같은 설정 ReplicaSet을 다시 써서 생성 시각이 1시간 전으로 남았다. 직전 변경 없음으로 판단해 RB-STD-01 재시작 제안이 거부되지 않음 | B사 배포 이력: 리비전 5 생성 05:35, 배포 06:30. `scripts/e2e.py b-pool` |
+| 2026-10-20 | 조치 돌려보내기 | 조항 검사 1번 → 조항 검사와 `supportedActions` 검사를 함께, 최대 2번 돌려보내고 거부 이유를 쌓아 넘긴다 (`graph._unsupported_action`, `PROPOSE_SEND_BACKS`) | 위 수정 뒤 `b-pool`에서 재시작이 거부되자 계약상 불가한 `rollback_deployment`를 골랐고, 두 번째 선택은 검사하지 않아 승인 요청으로 올라감(backend가 422로 막으므로 실행은 안 됨) | `scripts/e2e.py b-pool`: P1 → `ACTION_BLOCKED rollback_deployment CONTRACT` → 공지 |

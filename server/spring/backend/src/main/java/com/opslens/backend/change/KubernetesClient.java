@@ -161,13 +161,30 @@ public class KubernetesClient implements RuntimeAdapter {
         call(tenant, c -> c.patch().uri(deploymentPath(service)).contentType(JSON_PATCH)
                 .body(List.of(Map.of("op", "replace", "path", "/spec/template", "value", template)))
                 .retrieve().toBodilessEntity());
-        return toRevision(previous);
+        return toRevision(previous, null);
     }
 
     /** 최근 배포 이력 (최신순). DIRECT 고객사의 list_recent_changes에 쓴다. */
     @Override
     public List<Revision> history(Tenant tenant, ServiceCatalog.Entry service) {
-        return replicaSets(tenant, service).stream().map(KubernetesClient::toRevision).toList();
+        List<JsonNode> sets = replicaSets(tenant, service);
+        if (sets.isEmpty()) {
+            return List.of();
+        }
+        // 현재 리비전이 언제 배포됐는지는 Deployment의 Progressing 상태가 마지막으로 바뀐 시각으로 본다.
+        // ReplicaSet 생성 시각만 보면 예전 설정으로 다시 배포했을 때 "직전 변경 없음"이 된다 (b-pool E2E)
+        JsonNode deployment = call(tenant, c -> c.get().uri(deploymentPath(service)).retrieve().body(JsonNode.class));
+        String deployedAt = null;
+        for (JsonNode condition : deployment.path("status").path("conditions")) {
+            if ("Progressing".equals(condition.path("type").asText())) {
+                deployedAt = condition.path("lastUpdateTime").asText(null);
+            }
+        }
+        List<Revision> revisions = new ArrayList<>();
+        for (int i = 0; i < sets.size(); i++) {
+            revisions.add(toRevision(sets.get(i), i == 0 ? deployedAt : null));
+        }
+        return revisions;
     }
 
     // ── 순차 재시작 ────────────────────────────────────────────
@@ -229,10 +246,10 @@ public class KubernetesClient implements RuntimeAdapter {
 
     // ── 응답 변환 ──────────────────────────────────────────────
 
-    private static Revision toRevision(JsonNode rs) {
+    private static Revision toRevision(JsonNode rs, String deployedAt) {
         JsonNode container = rs.path("spec").path("template").path("spec").path("containers").path(0);
         return new Revision(revisionOf(rs), container.path("image").asText(), env(container),
-                rs.path("metadata").path("creationTimestamp").asText());
+                rs.path("metadata").path("creationTimestamp").asText(), deployedAt);
     }
 
     private static OffsetDateTime createdAt(JsonNode rs) {

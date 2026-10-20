@@ -24,7 +24,7 @@ from langgraph.graph.message import add_messages
 from langgraph.runtime import Runtime
 from langgraph.types import interrupt
 
-from agent import harness, summary
+from agent import customer_notice, harness, summary
 from agent.backend import backend
 from agent.toolbox import ToolBox, parse_json
 
@@ -414,13 +414,18 @@ async def propose_action(state: State, runtime: Rt) -> dict:
     ]
     ai: AIMessage = await model.ainvoke(messages)
     turns = state["turns"] + 1
-    mismatch = _clause_mismatch(ai, bool((state.get("signals") or {}).get("recent_change")))
-    if mismatch and turns < harness.MAX_TURNS:
-        # 조항과 맞지 않는 조치를 골랐다. 이유를 돌려주고 한 번만 다시 고르게 한다 (판단은 여전히 모델이 한다)
+    recent_change = bool((state.get("signals") or {}).get("recent_change"))
+    sent_back: list[AnyMessage] = []
+    for _ in range(PROPOSE_SEND_BACKS):
+        # 조항과 맞지 않거나 할 수 없는 조치를 골랐다. 이유를 돌려주고 다시 고르게 한다 (판단은 여전히 모델이 한다).
+        # 거부 이유는 쌓아서 넘긴다. 재시작을 거부하자 계약상 불가한 롤백을 고른 적이 있다 (b-pool E2E)
+        problem = _clause_mismatch(ai, recent_change) or _unsupported_action(ai, context)
+        if not problem or turns >= harness.MAX_TURNS:
+            break
         call = ai.tool_calls[0]
-        ai = await model.ainvoke(messages + [ai, ToolMessage(content=mismatch, tool_call_id=call["id"], status="error")]
-                                 + [ToolMessage(content="이 호출은 실행하지 않았다", tool_call_id=c["id"], status="error")
-                                    for c in ai.tool_calls[1:]])
+        sent_back += [ai, ToolMessage(content=problem, tool_call_id=call["id"], status="error")] + [
+            ToolMessage(content="이 호출은 실행하지 않았다", tool_call_id=c["id"], status="error") for c in ai.tool_calls[1:]]
+        ai = await model.ainvoke(messages + sent_back)
         turns += 1
     base = {"context": context, "tool_counts": counts, "turns": turns}
     if not ai.tool_calls:
@@ -432,6 +437,8 @@ async def propose_action(state: State, runtime: Rt) -> dict:
         # 필수 인자가 빠진 조치는 승인 요청으로 올리지 않는다. 사람이 빈 조치를 승인하게 만들지 않는다
         return {**base, "proposed_action": None}
     args = {**call["args"], "incident_id": state.get("incident_id")} if "incident_id" in call["args"] else call["args"]
+    if call["name"] == "business_send_customer_notice":   # 조치로 고른 공지도 같은 규칙으로 확인한다
+        args = {**args, "message": await customer_notice.finalize(str(args.get("message") or ""), state)}
     return {**base, "proposed_action": {"tool": call["name"], "args": args, "reason": str(ai.content)}}
 
 
@@ -446,6 +453,27 @@ CLAUSE_ACTIONS: dict[str, set[str]] = {
 _CLAUSE = re.compile(r"RB-STD-0\d")
 
 
+PROPOSE_SEND_BACKS = 2   # 맞지 않는 조치를 돌려보내는 최대 횟수
+
+
+def _unsupported_action(ai: AIMessage, context: dict) -> str | None:
+    """고른 조치가 그 서비스의 supportedActions(계약과 실행 환경이 모두 허용하는 조치)에 없으면 그 이유.
+
+    backend도 422로 막지만, 실행할 수 없는 조치가 사람의 승인 요청으로 올라가지 않게 제안 단계에서 돌려보낸다.
+    """
+    if not ai.tool_calls or ai.tool_calls[0]["name"] != "business_execute_runbook_action":
+        return None
+    args = ai.tool_calls[0]["args"]
+    services = context.get("services") if isinstance(context.get("services"), list) else []
+    item = next((s for s in services if isinstance(s, dict) and s.get("name") == args.get("service")), None)
+    supported = (item or {}).get("supportedActions")
+    if not isinstance(supported, list) or args.get("action") in supported:
+        return None
+    return (f"거부: {args.get('service')}의 supportedActions는 {supported}다. '{args.get('action')}'는 계약이나 실행 환경상 "
+            "할 수 없다. 다른 조치로 대신하지 말고 business_escalate_incident(category=\"ACTION_BLOCKED\", "
+            f"required_action=\"{args.get('action')}\", blocked_by=\"CONTRACT\" 또는 \"RUNTIME\")를 호출한다 (RB-STD-06).")
+
+
 RECENT_CHANGE_MINUTES = 15   # 이상 시작 전 이 시간 안의 배포·설정 변경을 "직전 변경"으로 본다 (RB-STD-01)
 
 
@@ -455,8 +483,11 @@ def _recent_change(changes: Any, started_at: str | None) -> bool | None:
         return None
     try:
         start = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
-        times = [datetime.fromisoformat(str(c.get("createdAt") or c.get("date")).replace("Z", "+00:00"))
-                 for c in (changes.get("revisions") or changes.get("commits") or []) if isinstance(c, dict)]
+        # 배포 이력은 deployedAt(실제로 배포된 시각, 현재 리비전만)을 먼저 본다. createdAt은 예전 설정으로 다시
+        # 배포하면 옛 ReplicaSet의 생성 시각이 남아 직전 변경을 놓친다 (b-pool E2E)
+        times = [datetime.fromisoformat(str(c.get(key)).replace("Z", "+00:00"))
+                 for c in (changes.get("revisions") or changes.get("commits") or []) if isinstance(c, dict)
+                 for key in ("deployedAt", "createdAt", "date") if c.get(key)]
     except ValueError:
         return None
     return any(start - timedelta(minutes=RECENT_CHANGE_MINUTES) <= t <= start for t in times)
@@ -608,8 +639,9 @@ async def report(state: State, runtime: Rt) -> dict:
     information_question = state.get("type") == "QUESTION" and state.get("incident_id") is None
 
     async def write() -> str:
-        report_prompt = "answer" if information_question else "report"
-        messages = [SystemMessage(harness.prompt("system") + "\n\n" + harness.prompt(report_prompt)),
+        instructions = (harness.prompt("answer") if information_question
+                        else harness.prompt("report") + "\n\n" + harness.prompt("notice"))
+        messages = [SystemMessage(harness.prompt("system") + "\n\n" + instructions),
                     HumanMessage(payload)]
         chunks: list[str] = []
         async for chunk in harness.chat_model().astream(messages):
@@ -625,6 +657,8 @@ async def report(state: State, runtime: Rt) -> dict:
     else:
         text, classification = await asyncio.gather(write(), summary.classify(payload))
     body, _, notice = text.partition("## 고객 공지 문안")
+    if notice.strip():   # 고객에게 나가는 글이라 규칙을 코드로 한 번 더 확인한다 (customer_notice)
+        notice = await customer_notice.finalize(notice.strip(), state)
     return {"report": body.strip(), "notice_draft": notice.strip(), "classification": classification}
 
 

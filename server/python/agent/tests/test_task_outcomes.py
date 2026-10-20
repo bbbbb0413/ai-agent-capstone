@@ -117,10 +117,25 @@ class ToolOutcomeTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(graph._within_thresholds({"error_rate": None, "p95_seconds": 0.1}))   # 요청 메트릭 미수집
         self.assertFalse(graph._within_thresholds({"error_rate": 0.0, "p95_seconds": 3.0}))
 
+    def test_action_outside_supported_actions_is_sent_back(self):
+        from langchain_core.messages import AIMessage
+        def ai(action):
+            return AIMessage(content="", tool_calls=[{"name": "business_execute_runbook_action", "id": "c1",
+                                                      "args": {"action": action, "service": "reservation-api"}}])
+        context = {"services": [{"name": "reservation-api", "supportedActions": ["restart_pods"]}]}
+        problem = graph._unsupported_action(ai("rollback_deployment"), context)
+        self.assertIn("ACTION_BLOCKED", problem)
+        self.assertIn("rollback_deployment", problem)
+        self.assertIsNone(graph._unsupported_action(ai("restart_pods"), context))
+        self.assertIsNone(graph._unsupported_action(ai("restart_pods"), {}))   # 서비스 목록이 없으면 판단하지 않는다
+
     def test_recent_change_is_a_change_shortly_before_the_incident(self):
         b = {"revisions": [{"createdAt": "2026-10-20T04:13:12Z"}, {"createdAt": "2026-10-20T02:38:12Z"}]}
         self.assertTrue(graph._recent_change(b, "2026-10-20T04:14:34Z"))
         self.assertFalse(graph._recent_change(b, "2026-10-20T05:00:00Z"))
+        # 예전 설정으로 다시 배포하면 ReplicaSet 생성 시각은 옛 값이고, 실제 배포 시각은 deployedAt에 있다
+        reused = {"revisions": [{"createdAt": "2026-10-20T05:00:00Z", "deployedAt": "2026-10-20T06:28:25Z"}]}
+        self.assertTrue(graph._recent_change(reused, "2026-10-20T06:29:20Z"))
         a = {"commits": [{"date": "2026-10-20T02:50:01Z"}]}
         self.assertTrue(graph._recent_change(a, "2026-10-20T03:00:00+00:00"))
         self.assertIsNone(graph._recent_change(None, "2026-10-20T03:00:00Z"))

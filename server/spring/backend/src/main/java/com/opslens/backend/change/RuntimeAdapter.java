@@ -35,7 +35,11 @@ public interface RuntimeAdapter {
         }
     }
 
-    record Revision(int revision, String image, Map<String, String> env, String createdAt) {}
+    /**
+     * createdAt은 이 설정의 ReplicaSet이 처음 생긴 시각이다. 예전 설정으로 다시 배포하면 Kubernetes가 그 ReplicaSet을
+     * 다시 쓰므로 createdAt이 옛 시각으로 남는다. 그래서 현재 리비전에는 실제로 배포가 진행된 시각(deployedAt)을 따로 준다.
+     */
+    record Revision(int revision, String image, Map<String, String> env, String createdAt, String deployedAt) {}
 
     /** rolling이면 하나씩 재시작하고 새 파드가 Ready가 된 뒤 다음으로 넘어갔다. */
     record Restart(List<String> restarted, boolean rolling) {}

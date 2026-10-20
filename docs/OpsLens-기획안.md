@@ -76,13 +76,14 @@ flowchart LR
 |---|---|---|---|---|
 | frontend | Vue 3 + nginx | 인시던트 목록, 진행 상황(SSE), 근거 패널, 승인 카드, 고객사 포털 | 80 | O |
 | backend | Spring Boot 3 | 인증(JWT), 업무 API, 작업 API(202), SSE 중계, `/internal/**`, SLA 계산 등 **업무 규칙 전부**, **고객사별 조치 반영(GitOps PR 또는 직접 API)** | 8080 | O |
-| agent | FastAPI + LangGraph | Harness, 장애 대응 Graph, Kafka consumer, 승인·반영 대기와 재개 | 8000 | X |
+| agent | FastAPI + LangGraph | Harness, 장애 대응 Graph, Kafka consumer(등급별), 승인·반영 대기와 재개, 실행 임대 | 8000 | X |
+| agent-migrate | Alembic (1회성) | agent 스키마 마이그레이션과 checkpointer 표 생성. agent보다 먼저 한 번 돌고 끝난다(ADR 0002) | — | X |
 | business-mcp | FastMCP (직접 구현) | 고객사·SLA·인시던트 조회 도구와 변경 도구. `/internal/**` 호출 | 9101 | X |
 | rag-mcp | FastMCP (직접 구현) | 고객사별 계약서·런북·포스트모템 검색, 원문 Resource | 9102 | X |
 | mcp-grafana | 기존 이미지 | Prometheus·Loki 조회 (조회 도구만 허용) | 9103 | X |
 | indexer | Python 작업 | 문서 Chunking → Embedding → Indexing (오프라인, 재색인은 비동기 작업) | — | X |
 | postgres | PostgreSQL 16 + pgvector | 업무 데이터, 작업 이력, checkpointer·store, 문서 벡터 (스키마·계정 분리) | 5432 | X |
-| kafka | Apache Kafka (KRaft 모드) | 작업 토픽(SLA 등급별), retry·DLT 토픽 | 9092 | X |
+| kafka | Apache Kafka (KRaft 모드) | **기본 작업 전달 경로**(ADR 0002). 작업 토픽(`tasks.gold`·`tasks.silver`), 등급별 재시도(`tasks.retry.gold`·`tasks.retry.silver`), DLT | 9092 | X |
 | prometheus, prom-label-proxy, loki, alertmanager | 기존 이미지 | 고객사 환경의 메트릭·로그 수집, 알림 발생, 고객사별 조회 범위 강제 | — | X |
 | grafana | 기존 이미지 | mcp-grafana의 데이터 창구. UI는 개발 프로필에서만 연다 | 3000 | X |
 
@@ -94,10 +95,11 @@ LLM API 키는 `.env`에만 두고, 외부 LLM은 agent만 HTTPS로 호출한다
 |---|---|
 | 클러스터 | kind 클러스터 1개. compose와 같은 Docker 네트워크에 붙여 backend가 API 서버를 호출한다 |
 | 네임스페이스 | 고객사마다 하나: `tenant-a`, `tenant-b` |
-| 서비스 | A사 `order-api`, B사 `reservation-api` (기존 demo-app 이미지를 Deployment로 배포) |
+| 서비스 | A사 `order-api`(HPA 최소 2·최대 3), B사 `reservation-api`(레플리카 1) (demo-app 이미지를 Deployment로 배포) |
+| 부하 발생기 | `traffic` 네임스페이스의 `loadgen-tenant-a`·`loadgen-tenant-b`(평소 레플리카 0). 트래픽 급증 장애를 만든다 |
 | ArgoCD | `tenant-a`만 관리한다. 설정 저장소의 매니페스트와 클러스터를 동기화하고, 동기화가 끝나면 backend에 알린다 |
-| 설정 저장소 | A사의 Kubernetes 매니페스트(Deployment 레플리카 수, 이미지 버전, 설정값). **이 프로젝트 저장소의 `gitops/tenants/tenant-a/`** 경로이며, ArgoCD는 GitHub `main`의 이 경로만 본다. 클러스터 구성은 `gitops/cluster/`, B사 초기 배포는 `gitops/tenants/tenant-b/`(ArgoCD 미관리) |
-| 고객사별 권한 | 네임스페이스마다 ServiceAccount와 Role. 그 네임스페이스의 파드 재시작·Deployment 확장만 허용한다. 실제 클라우드의 고객사별 역할(AssumeRole)에 해당한다 |
+| 설정 저장소 | A사의 Kubernetes 매니페스트(Deployment 레플리카 수, 이미지 버전, 설정값). **이 프로젝트 저장소의 `gitops/tenants/tenant-a/`** 경로이며, ArgoCD는 GitHub `main`의 이 경로만 본다(E2E 실행 중에는 임시 브랜치 `e2e/<시각>`). 클러스터 구성은 `gitops/cluster/`, B사 초기 배포는 `gitops/tenants/tenant-b/`(ArgoCD 미관리) |
+| 고객사별 권한 | 네임스페이스마다 ServiceAccount와 Role. 그 네임스페이스의 파드 재시작·Deployment 확장·HPA 조회와 최대치 변경만 허용한다. 실제 클라우드의 고객사별 역할(AssumeRole)에 해당한다 |
 | 관측 수집 | Prometheus가 kind 안의 서비스를 수집한다(tenant 라벨 부착). 클러스터 안의 로그 수집기가 Loki로 보낸다(고객사별 조직 ID) |
 
 ### 3.3 조치 반영 방식 (ADR 0001 D3·D4)
@@ -109,25 +111,42 @@ LLM API 키는 `.env`에만 두고, 외부 LLM은 agent만 HTTPS로 호출한다
 | `restart_pods` 파드 재시작 | 일회성 (원하는 상태 그대로) | API로 바로 실행 | API로 바로 실행 |
 | `scale_deployment` 레플리카 변경 | 원하는 상태 변경 | **설정 저장소 PR** → 병합 → 동기화 | API로 바로 실행 |
 | `rollback_deployment` 이미지 롤백 | 원하는 상태 변경 | **설정 저장소 PR**(이미지 태그 되돌리기) → 병합 → 동기화 | API로 바로 실행 |
+| `adjust_autoscaler` HPA 최대치 올리기 | 원하는 상태 변경 | **설정 저장소 PR**(`hpa.yaml`의 `maxReplicas`) → 병합 → 동기화 | HPA가 있으면 API로 바로 실행 |
+
+- HPA가 관리하는 서비스의 `scale_deployment`는 backend가 거부한다(HPA가 덮어쓴다). 트래픽 급증은 HPA가 대응하고, Agent는 HPA 최대치가 모자랄 때 안전 상한까지 최대치만 올린다(ADR 0001 D9).
 
 - 조치 허용 여부(계약)와 반영 방식은 모두 backend가 판단한다. Agent와 MCP 도구는 반영 방식을 모른다.
 - 고객사 자격증명(ServiceAccount 토큰, Git 토큰)은 backend만 가진다. Agent는 자격증명을 보지 못한다.
 - CLI(`kubectl`, `aws`, `gcloud`)를 셸로 실행하지 않고 API 클라이언트로 호출한다.
 - 실제 AWS·GCP는 다루지 않는다. 같은 구조에 클라우드 어댑터를 추가하는 설계로만 설명한다(14장).
 
+### 3.3.1 무엇을 근거로 조치를 고르는가 (ADR 0001 D7·D8)
+
+| 판단 | 누가 | 근거 |
+|---|---|---|
+| ① 장애 형태 → 후보 조치 | Agent | **MSP 공통 런북** RB-STD-01~07(커넥션 풀 고갈, 스레드 고갈, 트래픽 급증, 외부 지연, DB 장애, 할 수 없는 조치, 원인 미확정)과 진단 근거(로그 신호, 에러율, 직전 변경) |
+| ② 구조 검토 | Agent + backend | **서비스 카탈로그**(실행 플랫폼, 의존 대상과 소유자, 최대 연결 수, 풀 크기, 레플리카 범위)와 backend 계산값(안전 상한, 무중단 재시작 여부, 할 수 있는 조치) |
+| ③ 계약 | backend | 계약서와 `allowed_actions` |
+| ④ 반영 | backend | 실행 플랫폼(`runtime`)과 변경 방식(GITOPS·DIRECT) |
+
+- 고객사 문서에는 계약과 서비스별 절차·주의만 둔다. 조치 근거는 RB-STD로 통일한다.
+- 할 수 없는 조치가 필요하면 다른 조치로 대신하지 않고 **에스컬레이션**한다. 분류(`ACTION_BLOCKED`·`DEPENDENCY`·`CAUSE_UNKNOWN`, 흐름이 정하는 `P1`·`NOT_RECOVERED`·`CHANGE_TIMEOUT`)에 따라 backend가 받는 사람(MSP 담당, 고객사 담당, 의존 대상 소유자)과 메시지를 정해 **발송 대기열**(`escalations`)에 넣는다. 실제 발송기는 연결하지 않았다.
+- backend는 조치 요청을 계약·구조 제약으로 다시 검사해 422로 거부한다. Agent가 잘못 제안해도 실행되지 않는다(E2E `guard`).
+
 ### 3.4 PostgreSQL 스키마와 계정 분리
 
 | 스키마 | 내용 | 쓰기 계정 | 읽기 계정 |
 |---|---|---|---|
-| `app` | 고객사(변경 방식 포함), 계약, 인시던트, 작업 이력, 감사 로그 | backend | backend |
-| `agent` | LangGraph checkpointer, store(장기 기억) | agent | agent |
+| `app` | 고객사(변경 방식 포함), 계약, 서비스 카탈로그, 인시던트, 작업 이력, 작업 전달 대기열(`task_outbox`), 에스컬레이션 대기열, 감사 로그 | backend | backend |
+| `agent` | LangGraph checkpointer, store(장기 기억), 작업별 실행 시간과 실행 임대(`task_budget`) | agent | agent |
 | `docs` | 문서 chunk, Embedding, 출처 메타데이터 | indexer | rag-mcp |
 
 agent와 rag-mcp는 `app` 스키마에 접근할 수 없다. "Agent는 DB 직접 쓰기 금지"와 "업무 데이터는 Spring Boot만"을 계정 권한으로 강제한다.
+스키마 변경은 `app`은 backend의 Flyway, `agent`는 `agent-migrate`의 Alembic, `docs`는 indexer가 한다. agent 서버는 기동할 때 DDL을 하지 않는다.
 
 ### 3.5 데모 고객사
 
-- **A사, 온라인 쇼핑몰:** Gold 등급. 가용성 99.9%, 15분 내 응답. 주문 서비스 운영. **GitOps(ArgoCD)** 로 운영하고 원하는 상태 변경은 PR로만 받는다. 허용 조치: 재시작, 확장, 롤백
+- **A사, 온라인 쇼핑몰:** Gold 등급. 가용성 99.9%, 15분 내 응답. 주문 서비스 운영. **GitOps(ArgoCD)** 로 운영하고 원하는 상태 변경은 PR로만 받는다. 허용 조치: 재시작, 확장, 롤백, HPA 최대치 조정. 레플리카 계약 상한 6, 구조 상한(안전 상한) 4. 의존 대상 PostgreSQL은 A사 DBA팀 소유
 - **B사, 예약 플랫폼:** Silver 등급. 가용성 99.5%, 1시간 내 응답. 외부 결제 API 사용. **직접 운영**. 허용 조치: 재시작만 (확장·롤백은 고객사 승인 필요, 계약서 제3조)
 
 ### 3.6 레퍼런스 금지 사항 준수 (표 5-4, 5-6)
@@ -146,10 +165,10 @@ agent와 rag-mcp는 `app` 스키마에 접근할 수 없다. "Agent는 DB 직접
 
 1. 시나리오 스크립트가 고객사 환경에 장애를 만든다(10장).
 2. Alertmanager가 backend의 **`/internal/alerts`**(docker network 내부, webhook 토큰 필요)를 호출한다.
-3. backend가 고객사를 식별하고 **인시던트와 AI 작업(taskId)을 만든 뒤**, SLA 등급에 맞는 토픽(`tasks.gold`, `tasks.silver`)에 발행한다. 메시지 키는 `tenant_id`, 헤더에 `task_id`, `trace_id`를 싣는다.
-4. agent consumer가 메시지를 꺼내 **worker pool**에 넘긴다. Graph는 poll 루프 밖에서 실행된다.
+3. backend가 고객사를 식별하고 **인시던트와 AI 작업(taskId), 작업 전달 대기열 행을 한 트랜잭션에 만든다**(Transactional Outbox). 커밋 뒤 Relay가 SLA 등급에 맞는 토픽(`tasks.gold`, `tasks.silver`)에 발행하고 브로커 응답을 기다린다. 실패하면 2ⁿ초 뒤 다시 보내고, 5번 실패하면 작업을 FAILED로 끝낸다. 메시지 키는 `tenant_id`, 헤더에 `task_id`, `trace_id`를 싣는다.
+4. agent의 등급별 consumer(Gold·Silver 그룹)가 메시지를 꺼낸다. **같은 파티션(같은 고객사)은 순서대로, 다른 파티션끼리는 동시에** 실행한다. 실행 슬롯은 승인 재개와 공유하고, Gold가 기다리면 Silver가 양보한다. Graph는 poll 루프 밖에서 실행되고, 실행하는 파드가 DB에 실행 임대를 잡는다.
 5. agent는 진행 이벤트를 backend `/internal/tasks/{id}/events`로 보내고, backend가 SSE로 화면에 중계한다.
-6. 변경 도구 앞에서 interrupt가 걸리면 checkpointer에 저장하고 `APPROVAL_REQUIRED`를 보낸다. **이 시점에 Kafka 오프셋을 커밋**한다. 승인 대기가 consumer를 막지 않는다.
+6. 변경 도구 앞에서 interrupt가 걸리면 checkpointer에 저장하고 `APPROVAL_REQUIRED`를 보낸다. **이 시점에 그 레코드의 오프셋을 바로 커밋**한다. 승인 대기가 consumer를 막지 않는다.
 7. 담당 엔지니어가 `POST /api/ai/tasks/{id}/approval`을 보낸다. backend가 **승인자 역할과 담당 고객사를 검증**하고 승인 기록을 저장한 뒤, agent `/agent/tasks/{id}/resume`을 호출한다. agent는 같은 `thread_id`로 재개한다. 재개는 Kafka를 거치지 않는다.
 8. 조치를 고객사 방식으로 반영한다(4.4). 회복 확인 → 보고서 작성 순으로 진행한다. agent는 결과를 `DONE` 이벤트와 `/internal/tasks/{id}/result`로 넘기고, **보고서 저장은 backend가 한다**.
 9. 고객사 담당자는 포털에 로그인하면 **자기 회사의 인시던트와 보고서만** 본다. 필터링은 backend가 한다.
@@ -264,14 +283,14 @@ flowchart LR
 | intake | 코드 | tenant_id, incident_id, task_id를 확정한다. **tenant_id는 backend가 넘긴 컨텍스트에서 오고 모델이 바꿀 수 없다** |
 | load_context | 코드 | `get_tenant_profile`, `get_sla_terms`로 SLA 등급, **backend가 계산한 응답 기한**, 담당자, 변경 방식을 가져온다 |
 | triage | 코드 | backend가 준 심각도와 기한으로 분기한다. P1이면 에스컬레이션부터 한다. 기한은 Agent가 직접 계산하지 않는다 |
-| diagnose | **LLM** | 허용목록(메트릭·로그 조회, 인시던트 이력, 최근 배포 이력) 안에서 **모델이 도구를 골라** 이상 시작 시점 → 해당 시간대 ERROR 로그 → 직전 배포와의 관계 → 원인 후보를 찾는다 |
+| diagnose | 코드 + **LLM** | 코드가 먼저 기본 지표(에러율·p95·처리량), 인시던트 전후 ERROR·WARN 로그의 반복 메시지와 알려진 로그 신호 건수, 최근 변경을 조회해 넘긴다(재진단 때 다시 조회). 그 위에서 **모델이 허용목록 도구를 골라** 원인 후보를 찾는다(의존 대상 상태 `get_dependency_health` 포함) |
 | retrieve_runbook | 코드 + RAG | 해당 고객사의 런북·포스트모템을 검색하고, 장기 기억(store)에서 비슷한 과거 인시던트를 불러온다 |
-| propose_action | **LLM** | 런북 조항과 메트릭 근거로 조치안을 만들고, **모델이 변경 도구와 인자를 고른다**. 반영 방식은 정하지 않는다 |
+| propose_action | **LLM** + 코드 검사 | 제안 직전 서비스 목록을 다시 읽고, 공통 런북 판정표로 장애 형태를 정해 **모델이 조치·공지·에스컬레이션 중 하나를 고른다**. 코드가 인용 조항과 맞지 않는 조치(예: 직전 변경이 있는데 RB-STD-01 재시작)와 `supportedActions`에 없는 조치를 이유와 함께 최대 두 번 돌려보낸다. HPA가 확장 중일 때만 조치하지 않는다 |
 | approval, notice_approval | interrupt | checkpointer에 저장하고 사람의 결정을 기다린다 |
 | execute | 코드 | 승인된 변경 도구를 business-mcp로 호출한다. 결과가 "PR 생성됨"이면 await_change로 간다 |
 | await_change | interrupt | GitOps PR의 병합과 동기화를 기다린다. backend가 동기화 완료 알림을 받으면 재개한다. 실행 시간 한도에서 제외한다 |
-| verify | **LLM** | 조치 후 메트릭을 다시 조회해 회복 여부를 **자기 검증**한다 |
-| report | **LLM** | 요약, 근거(출처 포함), 추정 원인, 조치와 반영 방식(PR 링크 포함), 조사 과정, SLA 영향(backend 계산값)을 작성한다 |
+| verify | 코드 + **LLM** | 조치 20초 뒤 15초 창의 에러율·p95를 코드가 조회하고, 기준 안이면 20초 뒤 한 번 더 잰다. 두 값으로 모델이 회복 여부를 **자기 검증**한다(둘 다 기준 안이어야 회복) |
+| report | **LLM** + 코드 검사 | 요약, 근거(출처 포함), 추정 원인, 조치와 반영 방식(PR 링크 포함), 조사 과정, SLA 영향(backend 계산값)과 고객 공지 문안을 작성한다. 공지는 코드가 규칙(내부 절차·식별자·지표 용어·다른 언어 문자 금지, 회복 전이면 다음 안내 시각)을 검사하고, 어기면 한 번 고쳐 쓰고 그래도 어기면 기본 문안을 쓴다 |
 
 **State:** `task_id`, `tenant_id`, `incident_id`, `sla_tier`, `deadline`, `plan[]`, `findings[]`, `evidence[]`, `proposed_actions[]`, `approvals[]`, `change`(반영 방식, PR 주소, 상태), `attempts`, `turns`, `messages`, `trace_id`
 
@@ -310,10 +329,11 @@ Spring Boot `/internal/**`만 호출하고 DB에는 접근하지 않는다. **�
 | 조회 | `get_sla_terms` | 가용성 목표(%), 응답 기한(분), backend가 계산한 남은 시간 | readOnlyHint |
 | 조회 | `list_incidents` | 최근 인시던트와 상태, 기간 필터 | readOnlyHint |
 | 조회 | `get_oncall_contacts` | 에스컬레이션 대상 | readOnlyHint |
-| 조회 | `get_service_inventory` | 고객사 서비스 목록, 의존성, 현재 레플리카 수와 이미지 버전 | readOnlyHint |
-| 조회 | `list_recent_changes` | 최근 배포·설정 변경 이력 (GitOps는 커밋, 직접 운영은 Deployment 이력) | readOnlyHint |
-| 변경 | `create_incident`, `escalate_incident` | 인시던트 생성, 담당자 호출 | destructiveHint, 승인 |
-| 변경 | `execute_runbook_action` | 허용목록 조치만: `restart_pods`, `scale_deployment`(replicas), `rollback_deployment`(이전 버전). 반영 방식은 backend가 정한다. 결과는 "실행됨" 또는 "PR 생성됨(주소)" | destructiveHint, 승인 |
+| 조회 | `get_service_inventory` | 서비스 카탈로그: 실행 플랫폼, 의존 대상, 현재 레플리카·이미지, HPA 상태, backend 계산값(안전 상한, 무중단 재시작, 할 수 있는 조치) | readOnlyHint |
+| 조회 | `list_recent_changes` | 최근 배포·설정 변경 이력 (GitOps는 커밋, 직접 운영은 Deployment 이력과 현재 리비전의 실제 배포 시각) | readOnlyHint |
+| 조회 | `get_dependency_health` | 의존 대상(DB, 외부 API)의 최근 1분 p95와 상태(HEALTHY·DEGRADED·DOWN), 소유자 | readOnlyHint |
+| 변경 | `create_incident`, `escalate_incident` | 인시던트 생성, 에스컬레이션(분류·필요한 조치·막힌 이유·의존 대상 → backend가 받는 사람을 정해 발송 대기열에 넣음) | destructiveHint, 승인 |
+| 변경 | `execute_runbook_action` | 허용목록 조치만: `restart_pods`(무중단이면 순차), `scale_deployment`(replicas, HPA 없는 서비스), `rollback_deployment`(이전 버전), `adjust_autoscaler`(max_replicas). 반영 방식은 backend가 정한다. 결과는 "실행됨" 또는 "PR 생성됨(주소)" | destructiveHint, 승인 |
 | 변경 | `send_customer_notice` | 고객사 공지 발송 | destructiveHint, 승인(MSP_ADMIN) |
 | 변경 | `confirm_sla_credit` | backend가 계산한 크레딧 확정 | destructiveHint, 승인(MSP_ADMIN) |
 
@@ -371,7 +391,7 @@ Grafana Labs가 공개한 기존 MCP Server([grafana/mcp-grafana](https://github
 | Context | 메시지 정리·RAG 주입 | Token 예산을 두고, **넘으면 오래된 도구 결과와 대화를 요약**한다. 로그는 대표 메시지와 건수로 집계해 넣는다 |
 | State·Memory | PostgreSQL checkpointer·store | thread_id 단위 저장, 승인·반영 대기 후 그대로 재개, 고객사별 장기 기억 |
 | Guardrails | approval Node + 도구 래퍼 + backend | 변경 도구 interrupt. **테넌트 격리**(헤더 강제, datasource 강제, 문서 필터). **조치 권한 이중 제한**(backend의 계약 허용목록 + 고객사 네임스페이스 RBAC). 도구 결과의 이메일·전화번호·토큰 마스킹. 로그 속 지시문은 데이터로만 취급(프롬프트 주입 차단) |
-| Recovery | 모델 호출·agent·Kafka | 429·503은 2회 재시도 후 대체 모델, 그래도 실패하면 FAILED. 작업 실패는 `tasks.retry` → 3회 실패 시 `tasks.dlt`. agent가 재시작되면 checkpointer에서 재개. PR이 30분 안에 병합되지 않으면 에스컬레이션 |
+| Recovery | 모델 호출·agent·Kafka | 429·503은 2회 재시도 후 대체 모델, 그래도 실패하면 FAILED. 발행 실패는 Outbox Relay가 5회까지 다시 보낸다. 작업 실패는 등급별 재시도 토픽(`retry_after_ms` 헤더, 그 파티션만 기다림) → 3회 실패 시 `tasks.dlt`. 실행 파드가 죽으면 실행 임대가 끊긴 뒤(60초) 다른 파드가 checkpointer에서 재개. PR이 30분 안에 병합되지 않으면 에스컬레이션 |
 | Observability | LangSmith + 로그 | trace_id 하나를 Kafka 헤더, 로그, MCP 헤더, LangSmith, **PR 본문**에 실어 연결. Node·도구·Token·지연·비용 기록, tenant 태그. FAILED 작업은 trace 링크를 작업 이력에 저장. 한도 초과·재시도·대체 모델 건수 집계 |
 
 8턴이나 120초가 부족하면 값을 조정하고 **Harness 명세**(`docs/harness-spec.md`)에 바꾼 값과 이유를 남긴다.
@@ -421,17 +441,25 @@ backend가 JWT를 발급한다. SSE는 `EventSource`가 헤더를 못 싣기 때
 
 ## 10. 데모 시나리오
 
-| 시나리오 | 고객사 (방식) | 장애 만들기 | Agent가 내야 할 결론과 행동 |
-|---|---|---|---|
-| A. 잘못된 배포 | A사 (GITOPS) | `gitops/tenants/tenant-a/`에 커넥션 풀 크기(`DEMO_POOL_SIZE`)를 20 미만으로 줄이는 커밋 → ArgoCD 반영 → 에러율 50% | "직전 배포 이후 커넥션 풀 고갈로 5xx 급증". 런북 조항을 근거로 **롤백 PR**(해당 커밋 되돌리기) 제안 → 승인 → PR 생성 → 병합 → 동기화 → 회복 확인 |
-| A2. 트래픽 급증 | A사 (GITOPS) | 부하를 높여 p95 1초 초과 | **레플리카 확장 PR** → 승인 → 병합 → 동기화 → 회복 확인 |
-| B. 파드 멈춤 | B사 (DIRECT) | 파드를 응답 불능 상태로 만듦 | **파드 재시작을 API로 바로 실행** → 승인 → 회복 확인. 확장은 계약상 불가라 제안하지 않음 |
-| B2. 외부 API 지연 | B사 (DIRECT) | 외부 결제 API 지연 모드 | "외부 결제 API 지연". 자체 조치가 없으니 고객사 공지 제안 → 승인 → 발송 |
-| C. 동시 장애 | A·B | A와 B 동시 주입 | Gold 토픽을 먼저 소비해 **A사부터** 처리 |
-| D. 격리 공격 | B사 | B사 담당자가 A사 정보 요청, 로그에 주입 문구 삽입, B사 작업에서 A사 네임스페이스 조치 시도 | 접근 거부, 감사 로그 기록 |
-| E. 장애 복구 | — | 진단 중 LLM 503, rag-mcp 중단 | 재시도·대체 모델로 계속 진행하거나, DLT로 보내고 FAILED + trace 링크 |
+장애 형태 × 고객사 매트릭스다. 장애는 `scripts/inject.sh <고객사> <장애>`로 넣고 빼며, 전체 판정은 `scripts/e2e.py`가 한다(키와 판정 항목은 [testing.md](testing.md)).
 
-시나리오마다 주입 스크립트(`scripts/scenario-*.sh`)를 두고 같은 스크립트로 반복 시연한다.
+| 키 | 장애 (만드는 방법) | 고객사 | Agent가 내야 할 결론과 행동 |
+|---|---|---|---|
+| `a-pool` | 잘못된 설정 배포: 설정 저장소에 커넥션 풀 5 커밋 → ArgoCD 반영 | A (GITOPS) | RB-STD-01. **롤백 PR** → 승인 → 병합 → 동기화 → 회복 확인 |
+| `a-hang` | 파드 멈춤 (작업 스레드 고갈) | A | RB-STD-02. 파드 **순차 재시작**을 API로 바로 실행(무중단) → 회복 |
+| `a-surge` | 트래픽 급증 +250건/초 (부하 발생기) | A | RB-STD-03. HPA가 최대 3에 닿음 → **HPA 최대치 4 PR** → 병합 → HPA가 4로 확장 → 회복. 레플리카 직접 변경·4 초과 제안 없음 |
+| `a-surge-max` | 트래픽 급증 +400건/초 | A | 최대치 4로도 미회복 → **에스컬레이션**(`ACTION_BLOCKED`, `STRUCTURE`) + 공지 |
+| `a-latency` | 외부 결제 API 지연 | A | RB-STD-04. 앱 조치 없이 **고객 공지** |
+| `a-dbslow` | DB 자체 지연 | A | RB-STD-05. 앱 조치·확장 없이 **A사 DBA 에스컬레이션**(`DEPENDENCY`) + 공지 |
+| `b-hang` | 파드 멈춤 | B (DIRECT) | RB-STD-02. 재시작을 API로 바로 실행. 승인 카드에 **전체 중단 영향**(레플리카 1) 표시 |
+| `b-latency` | 외부 결제 API 지연 | B | RB-STD-04. 재시작 없이 **고객 공지** |
+| `b-pool` | 잘못된 배포 (B사 운영자가 직접 풀 5 배포) | B | RB-STD-01이지만 롤백이 계약상 불가 → **에스컬레이션**(`ACTION_BLOCKED`, `CONTRACT`, B사 운영 승인 담당) + 공지. 재시작으로 대신하지 않음 |
+| `b-surge` | 트래픽 급증 | B | 확장이 계약상 불가 → **에스컬레이션**(`ACTION_BLOCKED`, `CONTRACT`) + 공지 |
+| `guard` | Agent를 거치지 않고 backend 내부 API에 직접 요청 | A·B | HPA 서비스 직접 확장, 안전 상한 초과, 지원하지 않는 실행 환경(Docker), 계약상 불가한 롤백이 모두 **422** |
+| `isolation` | B사 담당자가 A사 정보 요청, B사 작업에서 A사 네임스페이스·문서 접근 | B | 접근 거부, 감사 로그 기록 |
+
+- A사·B사 묶음은 동시에 돈다. 같은 시각에 들어온 Gold(A사)와 Silver(B사) 작업은 등급별 소비자가 각각 처리하고, 실행 슬롯이 모자라면 Gold가 먼저 받는다.
+- 장애 복구(LLM 503, 브로커 중단, 실행 파드 강제 종료)는 [Harness 명세](harness-spec.md)와 [SPEC-kafka-scale](specs/SPEC-kafka-scale.md) 14장의 측정으로 확인한다.
 
 ## 11. 평가 방법
 
@@ -460,7 +488,7 @@ backend가 JWT를 발급한다. SSE는 `EventSource`가 헤더를 못 싣기 때
 |---|---|
 | 보안성 (기밀성, 책임 추적성, 인증성) | 테넌트 격리, 역할 기반 접근 제어, 서비스 토큰, **고객사별 최소 권한 자격증명(backend만 보관)**, 감사 trace, 공개 포트 2개 |
 | **안전성 (Safety)** | 승인 없는 변경 금지, 조치 허용목록, 고객사 계약상 금지된 조치 차단, **GitOps 고객사는 PR 리뷰를 거쳐서만 반영**, 되돌릴 수 있는 조치(재시작·확장·롤백)만 허용 |
-| 신뢰성 | Kafka retry·DLT, interrupt 시점 오프셋 커밋, 멱등 처리, 대체 모델, checkpointer 재개 |
+| 신뢰성 | Transactional Outbox(발행 유실 방지), Kafka 등급별 retry·DLT, 레코드 단위 오프셋 커밋, 실행 임대(중복 실행 방지·죽은 파드의 작업 이어받기), 대체 모델, checkpointer 재개 |
 | 성능 효율성 | 202 접수 + SSE, Kafka로 동시 알림 흡수, worker pool 병렬 처리 |
 | 호환성 (상호운용성) | MCP 표준(Streamable HTTP)으로 도구 연동, 기존 mcp-grafana 재사용, Kubernetes API·Git 서버 API 표준 연동 |
 | 유지보수성 | MCP 서버 분리, 프롬프트 버전 관리, 업무 규칙은 Spring Boot 한 곳에만, **반영 방식은 backend 어댑터로 분리**(클라우드 어댑터 추가 시 Agent·MCP 변경 없음) |
@@ -494,10 +522,10 @@ backend가 JWT를 발급한다. SSE는 `EventSource`가 헤더를 못 싣기 때
 | PR 병합·동기화가 느려 데모가 늘어짐 | ArgoCD 동기화 주기를 짧게 두고, 동기화 완료 알림으로 즉시 재개한다 |
 | mcp-grafana 연동이나 고객사별 데이터소스 구성이 막힘 | Prometheus·Loki API를 감싼 obs-mcp를 직접 만들고 tenant를 서버에서 고정 |
 | LLM이 엉뚱한 결론을 냄 | 조사 순서를 프롬프트에 명시, Node별 도구 축소, 평가셋 회귀 테스트 |
-| 범위가 계속 늘어남 | Kafka(가산점)는 MVP 이후. 그 전까지는 backend가 `/agent/tasks/{id}/run`을 직접 호출 |
-| Kafka에 우선순위 기능이 없음 | SLA 등급별 토픽을 두고, Gold에 대기 메시지가 있으면 Silver 파티션을 pause |
+| 범위가 계속 늘어남 | 스펙 단위로 나눠 진행한다. Kafka는 2026-10-20부터 기본 경로이고, HTTP 직접 호출(`DISPATCH_MODE=http`)은 원인을 좁힐 때만 쓴다 |
+| Kafka에 우선순위 기능이 없음 | SLA 등급별 토픽과 소비자 그룹을 나누고, Gold가 실행 슬롯을 기다리면 Silver가 양보한다 |
 | 승인·병합 대기로 consumer가 막힘 | interrupt 시점에 오프셋 커밋, 재개는 HTTP 경로, Graph는 worker pool에서 실행 |
-| 같은 작업이 중복 소비됨 (at-least-once) | `task_id`로 멱등 처리. 재시도 토픽으로 온 작업은 checkpoint에서 이어서 실행 |
+| 같은 작업이 중복 소비됨 (at-least-once) | 실행 임대로 판정한다. 임대가 살아 있으면 건너뛰고, 끊겼으면 checkpoint에서 이어서 실행 |
 | 8턴·120초 한도가 부족함 | 평가 결과로 조정하고 Harness 명세에 기록 |
 | 데모 당일 장애 | 성공한 실행을 녹화해 백업 |
 
@@ -514,7 +542,7 @@ backend가 JWT를 발급한다. SSE는 `EventSource`가 헤더를 못 싣기 때
 | 3.6 | **backend 반영 어댑터 (Kubernetes API, 설정 저장소 PR), 동기화 완료 알림 수신** | A사 확장 요청은 PR로, B사 재시작 요청은 API로 반영된다 | 신규 |
 | 4 | LangGraph Graph(await_change 포함), 작업 API(202), 진행 이벤트·SSE, 승인·재개 | 시나리오 A가 승인부터 PR 병합, 회복 확인까지 끝까지 동작 | 부분 (v2 Graph 동작 확인) |
 | 5 | Harness 8요소와 요소별 테스트, LangSmith, 화면(승인 카드, PR 대기 표시, 포털) | 8.2 테스트 통과, 시나리오 A·B·D·E 통과 | |
-| 6 | Kafka(가산점), 반복 평가, 아키텍처 뷰 6종, 발표 준비 | 시나리오 C 통과, 5회 중 4회 이상 정답, 데모 영상 확보 | 부분 (Kafka 경로 검증) |
+| 6 | Kafka 기본화와 확장성(Outbox, 등급별 소비, 실행 임대), 장애 × 고객사 매트릭스 E2E, 반복 평가, 아키텍처 뷰 6종, 발표 준비 | 매트릭스 E2E 통과, 5회 중 4회 이상 정답, 데모 영상 확보 | 부분 (Kafka·매트릭스 E2E 완료, 반복 평가·발표 준비 남음) |
 
 ## 17. 미정 사항
 
