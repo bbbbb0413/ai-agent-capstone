@@ -295,6 +295,10 @@ def handle_pr(pending: dict, result: Result, merge: bool) -> None:
         return
     out = github("PUT", f"/pulls/{number}/merge", {"merge_method": "merge"})
     result.check(out.get("merged") is True, f"PR #{number} 병합 ({out.get('message', '')})")
+    head = github("GET", f"/pulls/{number}").get("head", {}).get("ref")
+    if out.get("merged") and head:   # 병합한 PR 브랜치가 원격에 쌓이지 않게 지운다 (PR 기록은 남는다)
+        github("DELETE", f"/git/refs/heads/{head}")
+        say(f"PR 브랜치 {head}를 지웠다")
 
 
 def check_proposals(task_id: str, expect: Expect, result: Result) -> dict | None:

@@ -327,9 +327,16 @@ async def diagnose(state: State, runtime: Rt) -> dict:
         prefetch_counts: dict[str, int] = {}
         metrics = {name: await _metric(runtime.context.toolbox, expr, prefetch_counts, node="diagnose")
                    for name, expr in DIAGNOSE_QUERIES.items()}
+        # 직전 변경 여부는 RB-STD-01(롤백)과 RB-STD-02(재시작)를 가른다. 모델이 조회하지 않고 "직전 변경 없음"이라고
+        # 단정해 롤백 대신 재시작을 제안한 적이 있어 코드가 미리 조회한다 (docs/harness-spec.md)
+        service = (state.get("context", {}).get("incident") or {}).get("service")
+        changes = parse_json(await runtime.context.toolbox.call(
+            "diagnose", "business_list_recent_changes", {"service": service}, prefetch_counts)) if service else None
         state = {**state, "tool_counts": counts, "signals": {"metrics": metrics, "logs": logged.get("signals", {})}}
         prefetch = [logged, {"tool": "grafana_query_prometheus", "args": DIAGNOSE_QUERIES,
-                             "summary": json.dumps(metrics, ensure_ascii=False)}]
+                             "summary": json.dumps(metrics, ensure_ascii=False)},
+                    {"tool": "business_list_recent_changes", "args": {"service": service},
+                     "summary": json.dumps(changes, ensure_ascii=False, default=str)[:500]}]
         intro = [
             SystemMessage(harness.prompt("system") + "\n\n" + harness.prompt("diagnose")),
             HumanMessage(f"요청: {state['question']}\n\n고객사 컨텍스트(backend 계산값):\n"
@@ -338,7 +345,10 @@ async def diagnose(state: State, runtime: Rt) -> dict:
                          f"(코드가 조회, 많은 순. 인시던트 시작 2분 전부터, 최대 10분):\n"
                          f"{harness.as_untrusted(logs)}\n\n"
                          f"현재 지표(코드가 조회, 최근 1분. 에러율은 0~1):\n{json.dumps(metrics, ensure_ascii=False)}\n\n"
-                         f"알려진 로그 신호 건수(코드가 셈, 0이면 없음):\n{json.dumps(logged.get('signals', {}), ensure_ascii=False)}"),
+                         f"알려진 로그 신호 건수(코드가 셈, 0이면 없음):\n{json.dumps(logged.get('signals', {}), ensure_ascii=False)}\n\n"
+                         f"인시던트 시작: {(state.get('context', {}).get('incident') or {}).get('startedAt')}\n"
+                         f"최근 배포·설정 변경(코드가 조회, 최신순):\n"
+                         f"{harness.as_untrusted(json.dumps(changes, ensure_ascii=False, default=str)[:3000])}"),
         ]
     history = list(state.get("messages", [])) + intro
     new, turns, counts, evidence = await _tool_loop("diagnose", state, runtime, history, harness.MAX_TURNS,
