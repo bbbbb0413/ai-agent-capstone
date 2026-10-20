@@ -7,7 +7,8 @@ PDF 표 6-3의 권장값을 기준으로 둔 값과, 팀이 바꾼 값과 이유
 | 구성 요소 | 항목 | 값 | PDF 권장값 | 비고 |
 |---|---|---|---|---|
 | Agent Loop | 모델 호출 최대 턴 | 8 | 8 | |
-| Agent Loop | 작업 실행 시간 | 120초 | 120초 | 승인·PR 반영 대기, 회복 확인 대기(20초)는 빼고 구간별로 잰다 (`agent.task_budget`) |
+| Agent Loop | 작업 실행 시간 | 120초 | 120초 | 승인·PR 반영 대기, 회복 확인 대기(20초, 재측정 20초)는 빼고 구간별로 잰다 (`agent.task_budget`) |
+| Agent Loop | 회복 확인 | 조치 20초 뒤 15초 창, 기준 안이면 20초 뒤 한 번 더 | — | 둘 다 알림 기준(에러율 0.2, p95 1초) 안이어야 회복 (`harness.VERIFY_*_SECONDS`, `graph._within_thresholds`) |
 | Agent Loop | 같은 도구 호출 | Node마다 3회 | 3회 | |
 | Tools | 도구 결과 길이 | 4,000자 | 길이 제한 | |
 | Context | 대화 예산 | 24,000자 | Token 예산 | 넘으면 오래된 도구 결과를 줄인다. 모델 요약은 TODO |
@@ -43,3 +44,8 @@ PDF 표 6-3의 권장값을 기준으로 둔 값과, 팀이 바꾼 값과 이유
 | 2026-10-20 | 대체 조치 금지 | 조항의 조치를 할 수 없으면 `supportedActions`의 다른 조치로 대신하지 않고 에스컬레이션 (`prompts/propose.md`, RB-STD-03) | B사 급증에서 확장이 계약상 불가하자 효과 없는 재시작을 "백로그 완화"로 제안 | 같음 |
 | 2026-10-20 | 조항-조치 검사 | 없음 → 제안 이유가 인용한 공통 런북 조항(RB-STD-0x)과 고른 조치가 맞지 않으면 거부 이유를 도구 결과로 돌려주고 한 번 다시 고르게 한다 (`graph.CLAUSE_ACTIONS`, `_clause_mismatch`). 에스컬레이션·공지는 검사하지 않는다 | 판정표를 준 뒤 B사 급증을 RB-STD-03으로 맞게 판단하고도 "큐를 비운다"며 재시작을 제안 (gpt-5-mini, 추론 low) | `probe b-surge` |
 | 2026-10-20 | 진단 변경 이력 | 모델이 선택 → 진단 시작 때 코드가 인시던트 서비스의 최근 변경을 조회해 인시던트 시작 시각과 함께 전달. 같은 도구 한도에 넣지 않는다 | 기본 지표를 미리 넘긴 뒤 시나리오 A에서 모델이 변경 이력을 조회하지 않고 "직전 변경 없음"이라고 단정해 롤백 대신 재시작을 제안 (RB-STD-01 → 02 오판) | `scripts/e2e.py a` |
+| 2026-10-20 | 에스컬레이션 `required_action` 값 | `restart_pods`·`scale_deployment`·`rollback_deployment` → `adjust_autoscaler` 추가 (business-mcp `escalate_incident`) | E2E `a-surge-max`에서 최대치를 안전 상한 4로 올린 뒤에도 미회복이라 `ACTION_BLOCKED`, `required_action="adjust_autoscaler"`로 에스컬레이션했지만 MCP 인자 검증에서 거부돼 대기열에 들어가지 않음. 실패 뒤 고객 공지 문안에 내부 오류("형식 오류로 실패")와 다른 언어 단어가 섞임 | `scripts/e2e.py a-surge-max` |
+| 2026-10-20 | 안전 상한에 막힌 확장의 `blocked_by` | 규칙만 → "최대치가 이미 `safeMaxReplicas`면 `STRUCTURE`, 계약 상한은 더 높아 `CONTRACT`가 아니다"를 명시 (`prompts/propose.md`) | 위 실행에서 모델이 `blocked_by="CONTRACT"`로 적음 | 같음 |
+| 2026-10-20 | RB-STD-01의 재시작 허용 | 언제나 → 직전 변경이 없을 때만. 진단 때 코드가 인시던트 시작 전 15분 안의 변경 여부(`signals.recent_change`)를 계산하고, 있으면 RB-STD-01 인용 재시작을 거부해 다시 고르게 한다 (`graph._recent_change`, `_clause_mismatch`) | E2E `b-pool`에서 직전 배포(풀 5)가 있는데 롤백이 계약상 불가하자 "RB-STD-01 1차 조치로 재시작"을 제안. 조항-조치 검사가 RB-STD-01의 재시작 예외를 그대로 허용함 | `scripts/e2e.py b-pool`: 재시작 제안 없이 `ACTION_BLOCKED rollback_deployment CONTRACT`, B사 운영 승인 담당 |
+| 2026-10-20 | 재진단 신호 | 첫 진단 값 재사용 → 재진단 때 코드가 로그 반복 메시지·로그 신호·기본 지표를 다시 조회해 전달 (`graph.diagnose`) | `a-surge-max` 재실행에서 첫 진단 시점에는 `request queue backlog` 로그가 아직 Loki에 없어 신호 0건이었고, 재진단에서도 그 0건을 써서 판정표에 맞는 행이 없어 `CAUSE_UNKNOWN`으로 에스컬레이션. Loki에는 그 뒤 분당 168~220건이 있었다 | `scripts/e2e.py a-surge-max` |
+| 2026-10-20 | 회복 확인 재측정 | 한 번 → 첫 값이 기준 안이면 20초 뒤 다시 재서 둘 다 기준 안이어야 회복 (`graph.verify`, `prompts/verify.md`) | `a-surge-max`(+400건/초)에서 최대치 4 동기화 직후 15초 창 p95 0.60초를 보고 RECOVERED. 직접 재 보니 파드 4개의 안정 상태 p95는 약 3초이고, 새 파드가 Ready가 된 직후 15초만 0.98초로 내려갔다(빈 파드가 대기 요청을 받음) | 측정: 400건/초, HPA 최대 4, 15초 간격 16회 p95 5.4→1.0→2.8~3.8초 |

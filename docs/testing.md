@@ -7,32 +7,43 @@
 
 ## 1. 전체 시나리오 E2E (`scripts/e2e.py`)
 
-compose 스택과 kind 클러스터(`scripts/cluster-up.sh`)가 떠 있어야 한다. backend에 `GITHUB_TOKEN`이 있어야 한다 (임시 브랜치, 시나리오 A의 PR).
+compose 스택과 kind 클러스터(`scripts/cluster-up.sh`)가 떠 있어야 한다. backend에 `GITHUB_TOKEN`이 있어야 한다 (임시 브랜치, A사 PR).
 문서가 추가·수정된 커밋을 받은 뒤에는 indexer를 다시 실행한다. 사전 점검은 공통 표준 런북의 현재 파일 버전이 RAG DB에 있는지 확인한다.
 
 ```bash
-python3 scripts/e2e.py                 # 전체: 사전 점검 → 격리 → 문서 질문 → B → B2 → A → A-hang
-python3 scripts/e2e.py b a-hang        # 고른 시나리오만 (사전 점검은 항상)
+python3 scripts/e2e.py                 # 전체: 사전 점검 → 공통 묶음 → A사·B사 묶음 동시에 (약 30~40분)
+python3 scripts/e2e.py b-hang a-dbslow # 고른 시나리오만 (사전 점검은 항상). 예전 키 a·b·b2도 받는다
+python3 scripts/e2e.py --quick         # PR이 없는 빠른 확인: guard a-hang a-dbslow b-surge
 python3 scripts/e2e.py --list          # 시나리오 목록
-python3 scripts/e2e.py a --no-merge    # 롤백 PR은 사람이 병합 (병합될 때까지 기다린다)
+python3 scripts/e2e.py a-pool --no-merge  # A사 PR은 사람이 병합 (병합될 때까지 기다린다)
+python3 scripts/e2e.py --serial        # 고객사 묶음을 하나씩 (원인을 좁힐 때)
 python3 scripts/e2e.py --auto-approve  # backend 자동 승인 설정을 그대로 쓴다
 python3 scripts/e2e.py --cleanup       # 중단된 실행이 남긴 임시 브랜치·설정을 정리한다
 ```
 
-| 키 | 시나리오 | 기대 결과 |
-|---|---|---|
-| `isolation` | D. 고객사 격리 | B사 담당자·B사 작업·B사 ServiceAccount로 A사 자원 접근 거부, 감사 로그 |
-| `guard` | backend 방어선 | Agent를 거치지 않고 내부 API로 요청: A사 확장 6(안전 상한 4)·축소 1(하한 2), B사 Docker 서비스 재시작, B사 롤백이 모두 422로 거부되고 클러스터가 바뀌지 않는다 |
-| `question` | 문서 질문 | RAG로 계약 조항을 찾아 답하고 출처를 단다 |
-| `b` | B. 파드 멈춤 (B사, DIRECT) | `restart_pods`를 Kubernetes API로 실행, 회복 |
-| `b2` | B2. 외부 결제 API 지연 (B사) | 재시작하지 않고 고객 공지 |
-| `a` | A. 잘못된 설정 배포 (A사, GITOPS) | 롤백 PR → 병합 → ArgoCD 동기화 → 회복, 풀 크기 20 원복 |
-| `a-hang` | A-hang. 파드 멈춤 (A사, GITOPS) | 승인 카드에 현재 레플리카·무중단 순차 재시작 영향을 표시하고, `restart_pods`를 Kubernetes API로 실행 → 실제 `ROLLING` 결과 → 회복 |
+| 묶음 | 키 | 시나리오 | 기대 결과 |
+|---|---|---|---|
+| 공통 | `isolation` | 고객사 격리 | B사 담당자·B사 작업·B사 ServiceAccount로 A사 자원 접근 거부, 감사 로그 |
+| 공통 | `question` | 문서 질문 | RAG로 계약 조항을 찾아 답하고 출처를 단다 |
+| 공통 | `no-issue` | 이상 없음 | 열린 인시던트가 없는 고객사 질문은 진단·조치 없이 30초 안에 "이상 없음" |
+| A사 | `guard` | backend 방어선 | 내부 API로 직접 요청: A사 HPA 서비스 직접 확장, HPA 최대치 5(안전 상한 4), B사 Docker 서비스 재시작, B사 롤백이 모두 422. 레플리카 불변 |
+| A사 | `a-hang` | 파드 멈춤 | 승인 카드에 순차 재시작·무중단 표시, `restart_pods`를 API로 실행(`ROLLING`) → 회복 |
+| A사 | `a-latency` | 외부 결제 지연 | 앱 조치 없이 고객 공지 |
+| A사 | `a-dbslow` | DB 자체 지연 | `DEPENDENCY`(postgres) 에스컬레이션, 받는 사람 A사 DBA팀, 공지, 앱 조치 없음 |
+| A사 | `a-pool` (예전 `a`) | 잘못된 설정 배포 | 롤백 PR → 병합 → ArgoCD 동기화 → 회복, 풀 크기 20 |
+| A사 | `a-surge` | 트래픽 급증 +250건/초 | `adjust_autoscaler` 최대 4 PR → 병합 → HPA 최대 4 → 회복. 직접 확장·4 초과 제안 없음 |
+| A사 | `a-surge-max` | 트래픽 급증 +400건/초 | 최대 4로 올린 뒤에도 미회복 → `ACTION_BLOCKED`/`STRUCTURE` 에스컬레이션(A사 운영 담당), 공지 |
+| B사 | `b-hang` (예전 `b`) | 파드 멈춤 | 승인 카드에 전체 중단 표시, `restart_pods`를 API로 실행 → 회복 |
+| B사 | `b-latency` (예전 `b2`) | 외부 결제 지연 | 재시작하지 않고 고객 공지 |
+| B사 | `b-pool` | 잘못된 배포 | 롤백이 계약상 불가 → `ACTION_BLOCKED`/`CONTRACT` 에스컬레이션(B사 운영 승인 담당), 공지, 재시작 제안 없음 |
+| B사 | `b-surge` | 트래픽 급증 | 확장이 계약상 불가 → `ACTION_BLOCKED`/`CONTRACT` 에스컬레이션, 공지 |
 
+- **실행 순서:** 공통 묶음(장애가 없을 때 돌린다)을 먼저 돌리고, A사 묶음과 B사 묶음을 동시에 돌린다. 한 고객사 안에서는 순서대로 돈다(서비스가 하나라 장애가 섞이고 같은 알림은 인시던트 하나로 합쳐진다). A사 묶음이 가장 길다(확장 시나리오의 PR 병합과 원복 대기).
+- **정리:** 시나리오마다 장애를 모두 뺀다(관리 API 장애, 부하 발생기 0·기본 건수, 풀 20, A사 HPA 최대 3 복원 커밋). A사는 HPA가 레플리카 2로 줄고 최대 3이 동기화될 때까지 기다린다.
 - **승인:** 스크립트가 제안을 검사해 기대한 조치만 승인하고, 나머지는 거절한다. 잘못된 조치가 실행되지 않게 하기 위해서다. 실행하는 동안 backend 자동 승인을 끄고, 끝나면 되돌린다.
 - **판정:** 기대한 조치를 한 번만 제안했는지, 반영 방식, 회복 확인, 보고서·공지, 정리 상태를 본다. 승인 요청은 저장된 이벤트로 판정하므로 자동 승인으로 진행돼도 기준이 같다.
 - **장애 사이 간격:** 같은 고객사에서 앞 장애를 정리하고 75초가 지나야 다음 장애를 주입한다. Agent는 인시던트 시작 2분 전부터 로그를 보므로, 간격이 짧으면 앞 장애의 로그가 다음 진단 근거에 섞인다.
-- **결과:** 화면 요약 표와 `.local/e2e/<시각>.md`(작업 링크·보고서 포함, git에 올리지 않음).
+- **결과:** `.local/e2e/<시각>/` 폴더(git에 올리지 않음): `summary.md`(실행 중에도 갱신), 시나리오별 `<키>.log`·`<키>.md`(판정, 작업 링크, 보고서).
 - **임시 브랜치:** 실행 동안 A사 설정 저장소 기준을 `e2e/<시각>` 브랜치로 바꾼다(backend `tenants.gitops_branch`, ArgoCD `targetRevision`). 장애 주입 커밋·롤백 PR·병합이 그 브랜치에서 일어나 `main`에 남지 않고, 실행 중 다른 사람이 `main`에 푸시해도 A사가 다시 동기화되지 않는다. 끝나면(실패·중단 포함) `main`으로 되돌리고 브랜치를 지운다. 남았으면 사전 점검이 잡고 `--cleanup`으로 정리한다. PR 기록은 GitHub에 닫힌 PR로 남는다([SPEC 5.8](specs/SPEC-fault-based-actions.md)).
 - 실행이 겹치면 두 번째 실행은 시작하지 않는다.
 

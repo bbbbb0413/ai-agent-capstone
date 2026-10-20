@@ -318,7 +318,22 @@ DIAGNOSE_QUERIES = {
 async def diagnose(state: State, runtime: Rt) -> dict:
     prefetch: list[dict] = []
     if state.get("messages"):
-        intro = [HumanMessage("조치 후에도 회복되지 않았다. 조치 이후 시간대를 다시 조사한다.")]
+        # 조치 후 재진단. 로그 신호와 지표를 지금 시점으로 다시 센다. 첫 진단 때는 경고 로그가 아직 Loki에 들어오지
+        # 않아 0건이었고, 그 값을 그대로 쓰자 장애 형태 표에 맞는 행이 없어 원인 미확정이 된 적이 있다
+        # (A사 a-surge-max, docs/harness-spec.md). 정해진 조회라 모델의 탐색 한도에 넣지 않는다
+        prefetch_counts: dict[str, int] = {}
+        logs, logged = await _recent_log_patterns(runtime.context.toolbox, prefetch_counts, state.get("incident_id"),
+                                                  state.get("context", {}).get("incident"))
+        metrics = {name: await _metric(runtime.context.toolbox, expr, prefetch_counts, node="diagnose")
+                   for name, expr in DIAGNOSE_QUERIES.items()}
+        state = {**state, "signals": {**(state.get("signals") or {}), "metrics": metrics,
+                                      "logs": logged.get("signals", {})}}
+        prefetch = [logged, {"tool": "grafana_query_prometheus", "args": DIAGNOSE_QUERIES,
+                             "summary": json.dumps(metrics, ensure_ascii=False)}]
+        intro = [HumanMessage(f"조치 후에도 회복되지 않았다. 조치 이후 시간대를 다시 조사한다.\n\n"
+                              f"지금 시점의 ERROR·WARN 로그 반복 메시지(코드가 조회, 많은 순):\n{harness.as_untrusted(logs)}\n\n"
+                              f"현재 지표(코드가 조회, 최근 1분):\n{json.dumps(metrics, ensure_ascii=False)}\n\n"
+                              f"알려진 로그 신호 건수(코드가 셈):\n{json.dumps(logged.get('signals', {}), ensure_ascii=False)}")]
     else:
         counts = dict(state["tool_counts"])
         logs, logged = await _recent_log_patterns(runtime.context.toolbox, counts, state.get("incident_id"),
@@ -332,7 +347,9 @@ async def diagnose(state: State, runtime: Rt) -> dict:
         service = (state.get("context", {}).get("incident") or {}).get("service")
         changes = parse_json(await runtime.context.toolbox.call(
             "diagnose", "business_list_recent_changes", {"service": service}, prefetch_counts)) if service else None
-        state = {**state, "tool_counts": counts, "signals": {"metrics": metrics, "logs": logged.get("signals", {})}}
+        started_at = (state.get("context", {}).get("incident") or {}).get("startedAt")
+        state = {**state, "tool_counts": counts, "signals": {"metrics": metrics, "logs": logged.get("signals", {}),
+                                                             "recent_change": _recent_change(changes, started_at)}}
         prefetch = [logged, {"tool": "grafana_query_prometheus", "args": DIAGNOSE_QUERIES,
                              "summary": json.dumps(metrics, ensure_ascii=False)},
                     {"tool": "business_list_recent_changes", "args": {"service": service},
@@ -397,7 +414,7 @@ async def propose_action(state: State, runtime: Rt) -> dict:
     ]
     ai: AIMessage = await model.ainvoke(messages)
     turns = state["turns"] + 1
-    mismatch = _clause_mismatch(ai)
+    mismatch = _clause_mismatch(ai, bool((state.get("signals") or {}).get("recent_change")))
     if mismatch and turns < harness.MAX_TURNS:
         # 조항과 맞지 않는 조치를 골랐다. 이유를 돌려주고 한 번만 다시 고르게 한다 (판단은 여전히 모델이 한다)
         call = ai.tool_calls[0]
@@ -429,15 +446,37 @@ CLAUSE_ACTIONS: dict[str, set[str]] = {
 _CLAUSE = re.compile(r"RB-STD-0\d")
 
 
-def _clause_mismatch(ai: AIMessage) -> str | None:
-    """제안 이유가 인용한 공통 런북 조항과 고른 조치가 맞지 않으면 그 이유. 조항을 인용하지 않았으면 검사하지 않는다."""
+RECENT_CHANGE_MINUTES = 15   # 이상 시작 전 이 시간 안의 배포·설정 변경을 "직전 변경"으로 본다 (RB-STD-01)
+
+
+def _recent_change(changes: Any, started_at: str | None) -> bool | None:
+    """인시던트 시작 전 RECENT_CHANGE_MINUTES 안에 배포·설정 변경이 있었나. 판단할 수 없으면 None."""
+    if not isinstance(changes, dict) or not started_at:
+        return None
+    try:
+        start = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+        times = [datetime.fromisoformat(str(c.get("createdAt") or c.get("date")).replace("Z", "+00:00"))
+                 for c in (changes.get("revisions") or changes.get("commits") or []) if isinstance(c, dict)]
+    except ValueError:
+        return None
+    return any(start - timedelta(minutes=RECENT_CHANGE_MINUTES) <= t <= start for t in times)
+
+
+def _clause_mismatch(ai: AIMessage, recent_change: bool = False) -> str | None:
+    """제안 이유가 인용한 공통 런북 조항과 고른 조치가 맞지 않으면 그 이유. 조항을 인용하지 않았으면 검사하지 않는다.
+
+    RB-STD-01의 재시작은 직전 변경이 없을 때만이다. 직전 변경이 있는데 롤백이 계약상 불가하자 재시작으로
+    대신한 적이 있다 (B사 풀 고갈, docs/harness-spec.md).
+    """
     if not ai.tool_calls or ai.tool_calls[0]["name"] != "business_execute_runbook_action":
         return None
     args = ai.tool_calls[0]["args"]
     clauses = sorted(set(_CLAUSE.findall(f"{args.get('reason', '')} {ai.content}")) & CLAUSE_ACTIONS.keys())
-    if not clauses or any(args.get("action") in CLAUSE_ACTIONS[c] for c in clauses):
+    fits = {c: CLAUSE_ACTIONS[c] - ({"restart_pods"} if c == "RB-STD-01" and recent_change else set())
+            for c in clauses}
+    if not clauses or any(args.get("action") in fits[c] for c in clauses):
         return None
-    allowed = sorted({a for c in clauses for a in CLAUSE_ACTIONS[c]})
+    allowed = sorted({a for c in clauses for a in fits[c]})
     return (f"거부: {', '.join(clauses)}의 조치는 {allowed or '앱 조치 없음'}이다. '{args.get('action')}'는 이 장애 형태를 "
             "고치지 못한다. 그 조치가 supportedActions에 없거나 상한에 막히면 다른 조치로 대신하지 말고 "
             "business_escalate_incident(category=\"ACTION_BLOCKED\", required_action=…, blocked_by=…)를 호출한다. "
@@ -480,6 +519,13 @@ async def _metric(box: ToolBox, expr: str, counts: dict[str, int], node: str = "
         return None
 
 
+def _within_thresholds(sample: dict[str, Any]) -> bool:
+    """알림 기준 안이다. 에러율이 없으면(요청 메트릭 미수집) 기준 안으로 보지 않고, p95가 없으면 지연은 보지 않는다."""
+    error_rate = sample.get("error_rate")
+    return (error_rate is not None and error_rate < ERROR_RATE_THRESHOLD
+            and (sample.get("p95_seconds") or 0) < P95_THRESHOLD_SECONDS)
+
+
 async def verify(state: State, runtime: Rt) -> dict:
     """조치 후 메트릭을 다시 보고 회복 여부를 판단한다 (Reflection).
 
@@ -496,11 +542,19 @@ async def verify(state: State, runtime: Rt) -> dict:
     metrics = {"error_rate": error_rate, "p95_seconds": await _metric(box, VERIFY_QUERIES["p95_seconds"], counts),
                "window": "조치 직후 15초", "thresholds": {"error_rate": ERROR_RATE_THRESHOLD,
                                                         "p95_seconds": P95_THRESHOLD_SECONDS}}
+    by_threshold = _within_thresholds(metrics)
+    if by_threshold:
+        # 새 파드가 막 Ready가 된 순간에는 빈 파드가 대기 요청을 받아 p95가 잠깐 기준 아래로 내려간다.
+        # 그 15초만 보고 회복으로 판정한 적이 있어(a-surge-max) 한 번 더 재서 둘 다 기준 안이어야 회복이다
+        # 코드가 정한 재측정이라 같은 도구 한도(3회)에 넣지 않는다. 넣으면 재시도와 합쳐 한도를 넘는다
+        await runtime.context.settle(harness.VERIFY_CONFIRM_SECONDS)
+        confirm_counts: dict[str, int] = {}
+        metrics["confirm"] = {"error_rate": await _metric(box, VERIFY_QUERIES["error_rate"], confirm_counts),
+                              "p95_seconds": await _metric(box, VERIFY_QUERIES["p95_seconds"], confirm_counts),
+                              "window": f"그 {harness.VERIFY_CONFIRM_SECONDS}초 뒤 15초"}
+        by_threshold = _within_thresholds(metrics["confirm"])
     evidence = state["evidence"] + [{"tool": "grafana_query_prometheus", "args": VERIFY_QUERIES,
                                      "summary": json.dumps(metrics, ensure_ascii=False)}]
-
-    by_threshold = (error_rate is not None and error_rate < ERROR_RATE_THRESHOLD
-                    and (metrics["p95_seconds"] or 0) < P95_THRESHOLD_SECONDS)
     turns = state["turns"]
     if turns < harness.MAX_TURNS:
         runtime.context.check_time()
@@ -515,6 +569,9 @@ async def verify(state: State, runtime: Rt) -> dict:
         # 모델이 "회복 여부 확인: RECOVERED"처럼 첫 줄 형식을 어긴 적이 있다. 판정 단어를 어디서든 찾고, 없으면 기준값으로 정한다
         token = re.search(r"NOT_RECOVERED|RECOVERED", verdict.upper())
         recovered = token.group() == "RECOVERED" if token else by_threshold
+        if recovered and "confirm" in metrics and not by_threshold:   # 다시 잰 값이 기준을 넘으면 회복이 아니다
+            recovered = False
+            verdict = f"NOT_RECOVERED (다시 잰 값이 기준 초과)\n{json.dumps(metrics['confirm'], ensure_ascii=False)}"
     else:  # 턴 한도를 다 썼으면 알림 기준으로 코드가 판단한다
         recovered = by_threshold
         verdict = f"{'RECOVERED' if recovered else 'NOT_RECOVERED'} (턴 한도로 기준값 판단)\n{json.dumps(metrics)}"

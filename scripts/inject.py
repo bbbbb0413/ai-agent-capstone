@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """고객사 서비스에 장애를 넣고 뺀다 (SPEC-fault-based-actions 5.7). scripts/inject.sh가 이 파일을 부른다.
 
-  scripts/inject.sh <tenant-a|tenant-b> <pool|hang|latency|dbslow|surge|clear> [--size N] [--allow-main]
+  scripts/inject.sh <tenant-a|tenant-b> <pool|hang|latency|dbslow|surge|clear> [--size N] [--rate N] [--allow-main]
 
   pool     커넥션 풀 크기를 줄인 잘못된 배포. A사(GITOPS)는 ArgoCD가 따라가는 브랜치에 커밋, B사(DIRECT)는 직접 배포
   hang     작업 스레드 고갈 (데모 앱 관리 API WORKER_HANG)
   latency  외부 결제 API 지연 (PAYMENT_LATENCY)
   dbslow   DB 자체 지연 (DB_SLOW)
-  surge    트래픽 급증 (traffic 네임스페이스의 부하 발생기 레플리카 1)
-  clear    위를 모두 원래대로 (관리 API 장애 해제, 부하 발생기 0, 풀 크기 20)
+  surge    트래픽 급증 (traffic 네임스페이스의 부하 발생기 레플리카 1). --rate로 초당 건수를 바꾼다
+  clear    위를 모두 원래대로 (관리 API 장애 해제, 부하 발생기 0·기본 건수, 풀 크기 20, A사 HPA 최대 3)
 
-A사 pool 커밋은 ArgoCD Application tenant-a가 따라가는 브랜치에 한다. 그 브랜치가 main이면 --allow-main 없이는 거부한다.
+A사 pool 커밋과 HPA 최대치 복원 커밋은 ArgoCD Application tenant-a가 따라가는 브랜치에 한다. 그 브랜치가 main이면 --allow-main 없이는 거부한다.
 E2E는 실행 동안 임시 브랜치(e2e/<시각>)를 쓰므로 main에 기록이 남지 않는다 (5.8, 결정 4).
 비밀 값(SERVICE_TOKEN, GITHUB_TOKEN)은 backend 컨테이너 환경변수로만 쓰고 이 스크립트는 읽지 않는다.
 """
@@ -30,6 +30,9 @@ NODE_PORT = {"tenant-a": 30081, "tenant-b": 30082}
 SERVICE = {"tenant-a": "order-api", "tenant-b": "reservation-api"}
 POOL_FILE = "gitops/tenants/tenant-a/order-api.yaml"
 POOL_NORMAL = 20
+HPA_FILE = "gitops/tenants/tenant-a/hpa.yaml"
+HPA_MAX_NORMAL = 3   # A사가 평소 쓰는 최대치. E2E가 adjust_autoscaler PR을 병합하면 올라가므로 clear가 되돌린다
+LOADGEN_RATE = {"tenant-a": 250, "tenant-b": 120}   # gitops/cluster/traffic.yaml의 기본값
 FAULTS = {"hang": "WORKER_HANG", "latency": "PAYMENT_LATENCY", "dbslow": "DB_SLOW"}
 KINDS = ["pool", *FAULTS, "surge", "clear"]
 
@@ -69,16 +72,46 @@ def set_fault(tenant: str, fault: str | None) -> None:
     in_backend(f'curl -sf {method} -H "Authorization: Bearer $SERVICE_TOKEN" {url} > /dev/null')
 
 
-def set_surge(tenant: str, on: bool) -> None:
-    kubectl("-n", "traffic", "scale", f"deploy/loadgen-{tenant}", f"--replicas={1 if on else 0}")
+def set_surge(tenant: str, on: bool, rate: int | None = None) -> None:
+    """부하 발생기를 켜고 끈다. rate를 주면 초당 건수를 바꾸고, 응답 대기 상한도 건수에 맞춰 늘린다
+    (상한이 그대로면 대기열이 길어져도 처리량이 상한/지연에 묶여 과부하가 덜 보인다). 끌 때는 기본값으로 되돌린다."""
+    deploy = f"deploy/loadgen-{tenant}"
+    if on and rate:
+        kubectl("-n", "traffic", "set", "env", deploy, f"LOADGEN_RATE={rate}", f"LOADGEN_MAX_IN_FLIGHT={rate * 2}")
+    kubectl("-n", "traffic", "scale", deploy, f"--replicas={1 if on else 0}")
+    if not on:
+        kubectl("-n", "traffic", "set", "env", deploy, f"LOADGEN_RATE={LOADGEN_RATE[tenant]}", "LOADGEN_MAX_IN_FLIGHT-")
 
 
-# ── 커넥션 풀 (잘못된 배포) ─────────────────────────────────────
+# ── A사 설정 저장소 커밋 ───────────────────────────────────────
 
 
 def tracked_branch() -> str:
     """ArgoCD Application tenant-a가 따라가는 브랜치."""
     return kubectl("-n", "argocd", "get", "application", "tenant-a", "-o", "jsonpath={.spec.source.targetRevision}")
+
+
+def commit_tracked(path: str, pattern: str, value: int, message: str, allow_main: bool) -> str:
+    """ArgoCD tenant-a가 따라가는 브랜치의 path에서 pattern(앞·뒤 두 그룹 사이의 숫자)을 value로 바꿔 커밋한다."""
+    branch = tracked_branch()
+    if branch == "main" and not allow_main:
+        raise SystemExit("ArgoCD tenant-a가 main을 따라간다. main에 장애 커밋을 남기려면 --allow-main을 준다 "
+                         "(E2E는 임시 브랜치를 쓴다)")
+    current = github("GET", f"/contents/{path}?ref={branch}")
+    text = base64.b64decode(current["content"]).decode()
+    updated = re.sub(pattern, rf"\g<1>{value}\g<2>", text, count=1)
+    if updated == text:
+        return f"{branch}의 {path.rsplit('/', 1)[-1]} 값이 이미 {value}다"
+    commit = github("PUT", f"/contents/{path}", {
+        "message": message, "branch": branch, "sha": current["sha"],
+        "content": base64.b64encode(updated.encode()).decode()})
+    sha = (commit.get("commit") or {}).get("sha", "")
+    if not sha:
+        raise RuntimeError(f"커밋 실패: {str(commit)[:200]}")
+    return f"{branch}에 커밋 {sha[:7]} ({message}. ArgoCD가 30초 안에 반영한다)"
+
+
+# ── 커넥션 풀 (잘못된 배포) ─────────────────────────────────────
 
 
 def pool_size(tenant: str) -> int | None:
@@ -92,49 +125,54 @@ def set_pool(tenant: str, size: int, allow_main: bool = False) -> str:
         # B사 운영자가 직접 잘못 배포한 상황. 새 ReplicaSet이 생겨 배포 이력(롤백 대상)이 된다
         kubectl("-n", "tenant-b", "set", "env", f"deploy/{SERVICE[tenant]}", f"DEMO_POOL_SIZE={size}")
         return f"B사 reservation-api에 DEMO_POOL_SIZE={size} 배포"
-    branch = tracked_branch()
-    if branch == "main" and not allow_main:
-        raise SystemExit("ArgoCD tenant-a가 main을 따라간다. main에 장애 커밋을 남기려면 --allow-main을 준다 "
-                         "(E2E는 임시 브랜치를 쓴다)")
-    current = github("GET", f"/contents/{POOL_FILE}?ref={branch}")
-    text = base64.b64decode(current["content"]).decode()
-    updated = re.sub(r'(name: DEMO_POOL_SIZE\s*\n\s*value: ")\d+(")', rf"\g<1>{size}\g<2>", text, count=1)
-    if updated == text:
-        return f"{branch}의 풀 크기가 이미 {size}다"
-    commit = github("PUT", f"/contents/{POOL_FILE}", {
-        "message": f"Tune order-api DB connection pool to {size}", "branch": branch, "sha": current["sha"],
-        "content": base64.b64encode(updated.encode()).decode()})
-    sha = (commit.get("commit") or {}).get("sha", "")
-    if not sha:
-        raise RuntimeError(f"커밋 실패: {str(commit)[:200]}")
-    return f"{branch}에 풀 크기 {size} 커밋 {sha[:7]} (ArgoCD가 30초 안에 반영한다)"
+    return commit_tracked(POOL_FILE, r'(name: DEMO_POOL_SIZE\s*\n\s*value: ")\d+(")', size,
+                          f"Tune order-api DB connection pool to {size}", allow_main)
+
+
+# ── 자동 확장 최대치 (A사 HPA) ──────────────────────────────────
+
+
+def hpa_max() -> int | None:
+    value = kubectl("-n", "tenant-a", "get", "hpa", SERVICE["tenant-a"], "-o", "jsonpath={.spec.maxReplicas}",
+                    check=False)
+    return int(value) if value.isdigit() else None
+
+
+def set_hpa_max(size: int, allow_main: bool = False) -> str:
+    return commit_tracked(HPA_FILE, r"(maxReplicas: )\d+(\b)", size,
+                          f"Restore order-api autoscaler max to {size}", allow_main)
 
 
 # ── 진입점 ────────────────────────────────────────────────────
 
 
-def inject(tenant: str, kind: str, size: int = 5, allow_main: bool = False) -> str:
+def inject(tenant: str, kind: str, size: int = 5, allow_main: bool = False, rate: int | None = None) -> str:
     if kind == "pool":
         return set_pool(tenant, size, allow_main)
     if kind in FAULTS:
         set_fault(tenant, FAULTS[kind])
         return f"{tenant} {SERVICE[tenant]}에 {FAULTS[kind]} 주입"
     if kind == "surge":
-        set_surge(tenant, True)
-        return f"{tenant} 부하 발생기 켬"
+        set_surge(tenant, True, rate)
+        return f"{tenant} 부하 발생기 켬 (초당 {rate or LOADGEN_RATE[tenant]}건)"
     return clear(tenant, allow_main)
 
 
 def clear(tenant: str, allow_main: bool = False) -> str:
-    """주입한 장애를 모두 뺀다. 풀 크기는 클러스터 값이 20이 아닐 때만 되돌린다."""
+    """주입한 장애를 모두 뺀다. 풀 크기와 A사 HPA 최대치는 클러스터 값이 평소와 다를 때만 되돌린다."""
     notes = []
     set_fault(tenant, None)
     set_surge(tenant, False)
+    restores = []
     if pool_size(tenant) not in (None, POOL_NORMAL):
+        restores.append(("풀 크기", lambda: set_pool(tenant, POOL_NORMAL, allow_main)))
+    if tenant == "tenant-a" and hpa_max() not in (None, HPA_MAX_NORMAL):
+        restores.append(("HPA 최대치", lambda: set_hpa_max(HPA_MAX_NORMAL, allow_main)))
+    for name, restore in restores:
         try:
-            notes.append(set_pool(tenant, POOL_NORMAL, allow_main))
+            notes.append(restore())
         except SystemExit as e:
-            notes.append(f"풀 크기 복원 안 함: {e}")
+            notes.append(f"{name} 복원 안 함: {e}")
     return f"{tenant} 장애 해제" + (f" ({'; '.join(notes)})" if notes else "")
 
 
@@ -143,9 +181,10 @@ def main() -> int:
     parser.add_argument("tenant", choices=list(SERVICE))
     parser.add_argument("kind", choices=KINDS)
     parser.add_argument("--size", type=int, default=5, help="pool의 풀 크기 (기본 5, 정상은 20)")
+    parser.add_argument("--rate", type=int, help="surge의 초당 건수 (기본 A사 250, B사 120)")
     parser.add_argument("--allow-main", action="store_true", help="A사 pool 커밋을 main에 남기는 것을 허용한다")
     args = parser.parse_args()
-    print(inject(args.tenant, args.kind, args.size, args.allow_main))
+    print(inject(args.tenant, args.kind, args.size, args.allow_main, args.rate))
     return 0
 
 

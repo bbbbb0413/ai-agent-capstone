@@ -106,6 +106,24 @@ class ToolOutcomeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(graph._clause_mismatch(ai("adjust_autoscaler", "RB-STD-03에 따라 최대치를 올린다")))
         self.assertIsNone(graph._clause_mismatch(ai("restart_pods", "RB-STD-02 작업 스레드 고갈")))
         self.assertIsNone(graph._clause_mismatch(ai("restart_pods", "조항 인용 없음")))
+        # RB-STD-01의 재시작은 직전 변경이 없을 때만. 직전 변경이 있으면 롤백, 불가하면 에스컬레이션
+        self.assertIsNone(graph._clause_mismatch(ai("restart_pods", "RB-STD-01 풀 고갈, 직전 변경 없음")))
+        self.assertIn("ACTION_BLOCKED", graph._clause_mismatch(ai("restart_pods", "RB-STD-01 풀 고갈"), recent_change=True))
+        self.assertIsNone(graph._clause_mismatch(ai("rollback_deployment", "RB-STD-01 풀 고갈"), recent_change=True))
+
+    def test_recovery_needs_error_metrics_and_both_thresholds(self):
+        self.assertTrue(graph._within_thresholds({"error_rate": 0.0, "p95_seconds": 0.6}))
+        self.assertTrue(graph._within_thresholds({"error_rate": 0.0, "p95_seconds": None}))
+        self.assertFalse(graph._within_thresholds({"error_rate": None, "p95_seconds": 0.1}))   # 요청 메트릭 미수집
+        self.assertFalse(graph._within_thresholds({"error_rate": 0.0, "p95_seconds": 3.0}))
+
+    def test_recent_change_is_a_change_shortly_before_the_incident(self):
+        b = {"revisions": [{"createdAt": "2026-10-20T04:13:12Z"}, {"createdAt": "2026-10-20T02:38:12Z"}]}
+        self.assertTrue(graph._recent_change(b, "2026-10-20T04:14:34Z"))
+        self.assertFalse(graph._recent_change(b, "2026-10-20T05:00:00Z"))
+        a = {"commits": [{"date": "2026-10-20T02:50:01Z"}]}
+        self.assertTrue(graph._recent_change(a, "2026-10-20T03:00:00+00:00"))
+        self.assertIsNone(graph._recent_change(None, "2026-10-20T03:00:00Z"))
 
     def test_flow_escalation_category_follows_the_reason(self):
         base = {"incident_id": 1, "proposed_action": {"args": {"action": "restart_pods", "service": "order-api"}}}

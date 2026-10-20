@@ -122,7 +122,7 @@ async def escalate_incident(
     category: Literal["P1", "NOT_RECOVERED", "CHANGE_TIMEOUT", "ACTION_BLOCKED", "DEPENDENCY", "CAUSE_UNKNOWN"],
     reason: str,
     service: str | None = None,
-    required_action: Literal["restart_pods", "scale_deployment", "rollback_deployment"] | None = None,
+    required_action: Literal["restart_pods", "scale_deployment", "rollback_deployment", "adjust_autoscaler"] | None = None,
     blocked_by: Literal["CONTRACT", "STRUCTURE", "RUNTIME"] | None = None,
     dependency: str | None = None,
 ) -> dict[str, Any]:
