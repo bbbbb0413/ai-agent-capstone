@@ -37,7 +37,7 @@ spec:
             periodSeconds: 5
           resources:
             requests: { cpu: 100m, memory: 192Mi }
-            limits: { memory: 384Mi }
+            limits: { memory: 512Mi }   # 부하 중 최대 약 340Mi를 썼다 (스펙 5.6 실측)
 ---
 apiVersion: v1
 kind: Service

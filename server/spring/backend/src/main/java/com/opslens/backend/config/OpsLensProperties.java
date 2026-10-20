@@ -24,5 +24,6 @@ public record OpsLensProperties(
     public record Kubernetes(String credentialsDir) {}
 
     /** 설정 저장소(GitHub). token은 이 저장소의 브랜치·PR 생성 권한만 있으면 된다. */
-    public record Gitops(String apiUrl, String repo, String baseBranch, String token, Duration mergeTimeout) {}
+    /** 기준 브랜치는 고객사마다 다르다(tenants.gitops_branch). 여기에는 두지 않는다. */
+    public record Gitops(String apiUrl, String repo, String token, Duration mergeTimeout) {}
 }

@@ -7,7 +7,7 @@
 
 ## 1. 전체 시나리오 E2E (`scripts/e2e.py`)
 
-compose 스택과 kind 클러스터(`scripts/cluster-up.sh`)가 떠 있어야 한다. 시나리오 A는 backend에 `GITHUB_TOKEN`이 있어야 한다.
+compose 스택과 kind 클러스터(`scripts/cluster-up.sh`)가 떠 있어야 한다. backend에 `GITHUB_TOKEN`이 있어야 한다 (임시 브랜치, 시나리오 A의 PR).
 문서가 추가·수정된 커밋을 받은 뒤에는 indexer를 다시 실행한다. 사전 점검은 공통 표준 런북의 현재 파일 버전이 RAG DB에 있는지 확인한다.
 
 ```bash
@@ -16,6 +16,7 @@ python3 scripts/e2e.py b a-hang        # 고른 시나리오만 (사전 점검�
 python3 scripts/e2e.py --list          # 시나리오 목록
 python3 scripts/e2e.py a --no-merge    # 롤백 PR은 사람이 병합 (병합될 때까지 기다린다)
 python3 scripts/e2e.py --auto-approve  # backend 자동 승인 설정을 그대로 쓴다
+python3 scripts/e2e.py --cleanup       # 중단된 실행이 남긴 임시 브랜치·설정을 정리한다
 ```
 
 | 키 | 시나리오 | 기대 결과 |
@@ -32,7 +33,29 @@ python3 scripts/e2e.py --auto-approve  # backend 자동 승인 설정을 그대�
 - **판정:** 기대한 조치를 한 번만 제안했는지, 반영 방식, 회복 확인, 보고서·공지, 정리 상태를 본다. 승인 요청은 저장된 이벤트로 판정하므로 자동 승인으로 진행돼도 기준이 같다.
 - **장애 사이 간격:** 같은 고객사에서 앞 장애를 정리하고 75초가 지나야 다음 장애를 주입한다. Agent는 인시던트 시작 2분 전부터 로그를 보므로, 간격이 짧으면 앞 장애의 로그가 다음 진단 근거에 섞인다.
 - **결과:** 화면 요약 표와 `.local/e2e/<시각>.md`(작업 링크·보고서 포함, git에 올리지 않음).
-- **주의:** 지금은 시나리오 A가 실행할 때마다 `main`에 커밋 3개(장애, 되돌리기, 병합)를 남긴다. 임시 브랜치로 바꿀 예정이다([SPEC 5.8](specs/SPEC-fault-based-actions.md)). 실행이 겹치면 두 번째 실행은 시작하지 않는다.
+- **임시 브랜치:** 실행 동안 A사 설정 저장소 기준을 `e2e/<시각>` 브랜치로 바꾼다(backend `tenants.gitops_branch`, ArgoCD `targetRevision`). 장애 주입 커밋·롤백 PR·병합이 그 브랜치에서 일어나 `main`에 남지 않고, 실행 중 다른 사람이 `main`에 푸시해도 A사가 다시 동기화되지 않는다. 끝나면(실패·중단 포함) `main`으로 되돌리고 브랜치를 지운다. 남았으면 사전 점검이 잡고 `--cleanup`으로 정리한다. PR 기록은 GitHub에 닫힌 PR로 남는다([SPEC 5.8](specs/SPEC-fault-based-actions.md)).
+- 실행이 겹치면 두 번째 실행은 시작하지 않는다.
+
+### 장애 주입 (`scripts/inject.sh`)
+
+E2E 밖에서 손으로 장애를 넣고 뺄 때 쓴다. E2E도 같은 코드(`scripts/inject.py`)를 쓴다.
+
+```bash
+scripts/inject.sh tenant-b hang            # 작업 스레드 고갈
+scripts/inject.sh tenant-a dbslow          # DB 자체 지연
+scripts/inject.sh tenant-b surge           # 트래픽 급증 (부하 발생기 켬)
+scripts/inject.sh tenant-a pool            # 잘못된 설정 배포. ArgoCD가 main을 따라가면 --allow-main이 필요하다
+scripts/inject.sh tenant-a clear           # 모두 원래대로
+```
+
+| 키 | A사 (GITOPS) | B사 (DIRECT) |
+|---|---|---|
+| `pool` | ArgoCD가 따라가는 브랜치에 풀 5 커밋 | `DEMO_POOL_SIZE=5` 직접 배포 |
+| `hang` · `latency` · `dbslow` | 데모 앱 관리 API (`WORKER_HANG`·`PAYMENT_LATENCY`·`DB_SLOW`) | 같음 |
+| `surge` | `loadgen-tenant-a` 레플리카 1 (초당 250건) | `loadgen-tenant-b` 레플리카 1 (초당 120건) |
+| `clear` | 관리 API 해제, 부하 발생기 0, 풀 크기 20 | 같음 |
+
+`scenario-a.sh`, `scenario-b.sh`는 이 스크립트의 래퍼로 남아 있다.
 - 장애 형태 × 고객사 교차 매트릭스로 확장하는 계획: [specs/SPEC-fault-based-actions.md](specs/SPEC-fault-based-actions.md)
 
 ## 2. 작업 결과·승인 회귀 검증

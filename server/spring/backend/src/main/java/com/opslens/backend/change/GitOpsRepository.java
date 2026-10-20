@@ -99,7 +99,7 @@ public class GitOpsRepository {
             String path = f.path("filename").asText();
             if (path.startsWith(tenant.gitopsPath() + "/")) {
                 String before = readFile(path, parent);
-                restored &= before.equals(readFile(path, props.baseBranch()));
+                restored &= before.equals(readFile(path, tenant.gitopsBranch()));
                 edits.put(path, current -> before);
             }
         }
@@ -133,6 +133,20 @@ public class GitOpsRepository {
         return commits;
     }
 
+    /** 브랜치가 저장소에 있는가. 고객사 기준 브랜치를 바꾸기 전에 확인한다. */
+    public boolean branchExists(String branch) {
+        try {
+            http.get().uri("/git/ref/heads/{b}", branch).retrieve().toBodilessEntity();
+            return true;
+        } catch (RestClientResponseException e) {
+            if (e.getStatusCode().value() == 404) {
+                return false;
+            }
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "설정 저장소(GitHub) %d: %s".formatted(e.getStatusCode().value(), e.getStatusText()));
+        }
+    }
+
     public JsonNode pullRequest(int number) {
         return get("/pulls/{n}", number);
     }
@@ -148,7 +162,7 @@ public class GitOpsRepository {
                         "%s는 %s의 설정 경로(%s) 밖이다".formatted(path, tenant.name(), tenant.gitopsPath()));
             }
         }
-        String base = get("/git/ref/heads/{b}", props.baseBranch()).path("object").path("sha").asText();
+        String base = get("/git/ref/heads/{b}", tenant.gitopsBranch()).path("object").path("sha").asText();
         String branch = "opslens/%s/%s-%d".formatted(tenant.id(), branchPrefix, System.currentTimeMillis() / 1000);
         send(http.post().uri("/git/refs")
                 .body(Map.of("ref", "refs/heads/" + branch, "sha", base)));
@@ -171,7 +185,7 @@ public class GitOpsRepository {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 원하는 상태와 같아서 바꿀 내용이 없다");
         }
         JsonNode pr = send(http.post().uri("/pulls").body(Map.of(
-                "title", "[OpsLens] " + title, "head", branch, "base", props.baseBranch(),
+                "title", "[OpsLens] " + title, "head", branch, "base", tenant.gitopsBranch(),
                 "body", "OpsLens가 승인된 조치로 만든 PR이다. 병합하면 ArgoCD가 클러스터에 반영한다.\n\n" + reason)));
         return new PullRequest(pr.path("number").asInt(), pr.path("html_url").asText(), branch, changed);
     }
@@ -182,8 +196,8 @@ public class GitOpsRepository {
     private List<JsonNode> commitNodes(Tenant tenant, int limit, OffsetDateTime until) {
         List<JsonNode> list = new ArrayList<>();
         JsonNode commits = until == null
-                ? get("/commits?sha={b}&path={path}&per_page={n}", props.baseBranch(), tenant.gitopsPath(), limit)
-                : get("/commits?sha={b}&path={path}&per_page={n}&until={until}", props.baseBranch(),
+                ? get("/commits?sha={b}&path={path}&per_page={n}", tenant.gitopsBranch(), tenant.gitopsPath(), limit)
+                : get("/commits?sha={b}&path={path}&per_page={n}&until={until}", tenant.gitopsBranch(),
                         tenant.gitopsPath(), limit, until.toInstant().toString());
         commits.forEach(list::add);
         return list;

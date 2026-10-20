@@ -9,6 +9,12 @@
     --no-merge       시나리오 A의 롤백 PR을 스크립트가 병합하지 않는다. 사람이 GitHub에서 병합할 때까지 기다린다
     --auto-approve   backend 자동 승인 설정을 그대로 쓴다. 기본은 실행 동안 끄고, 스크립트가 제안을 검사한 뒤 승인한다
     --timeout 초     시나리오 하나의 최대 시간 (기본 600)
+    --no-branch      임시 브랜치를 쓰지 않는다 (A사 설정 저장소 기준이 main 그대로. 시나리오 a는 실패한다)
+    --cleanup        지난 실행이 남긴 임시 브랜치와 설정을 정리하고 끝낸다
+
+임시 브랜치 (SPEC-fault-based-actions 5.8): 실행 동안 A사 설정 저장소 기준을 e2e/<시각> 브랜치로 바꾼다
+(backend 고객사 설정과 ArgoCD targetRevision). 장애 주입 커밋과 롤백 PR이 그 브랜치에서 일어나 main에 남지 않고,
+실행 중 다른 사람이 main에 푸시해도 A사가 다시 동기화되지 않는다. 끝나면(실패·중단 포함) main으로 되돌리고 브랜치를 지운다.
 
 승인 정책: 기대한 조치면 승인하고, 아니면 거절하고 실패로 기록한다. 잘못된 조치가 실행되지 않게 하기 위해서다.
 결과는 화면 표와 .local/e2e/<시각>.md 에 남는다. 비밀값은 출력하지 않는다(컨테이너 환경변수만 쓴다).
@@ -27,6 +33,8 @@ import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+
+import inject as faults  # scripts/inject.py: 장애 주입·해제의 한 곳
 
 ROOT = Path(__file__).resolve().parent.parent
 API = "http://localhost:8080"
@@ -132,18 +140,71 @@ def inject(tenant: str, fault: str | None) -> None:
     if fault and (wait := QUIET_SECONDS - (time.time() - _cleared_at.get(tenant, 0))) > 0:
         say(f"앞 장애의 로그가 진단 구간에 섞이지 않게 {wait:.0f}초 기다린다")
         time.sleep(wait)
-    url = f"http://opslens-tenants-control-plane:{NODE_PORT[tenant]}/admin/faults"
-    method = f"-X POST -H 'Content-Type: application/json' -d '{{\"fault\":\"{fault}\"}}'" if fault else "-X DELETE"
-    in_backend(f'curl -sf {method} -H "Authorization: Bearer $SERVICE_TOKEN" {url} > /dev/null')
-    if not fault:
+    if fault:
+        faults.set_fault(tenant, fault)
+    else:
+        say(faults.clear(tenant))   # 관리 API 장애, 부하 발생기, 풀 크기를 모두 되돌린다
         _cleared_at[tenant] = time.time()
 
 
 def github(method: str, path: str, body: dict | None = None) -> dict:
-    data = f"-d '{json.dumps(body)}'" if body else ""
-    out = in_backend(f'curl -s -X {method} -H "Authorization: Bearer $GITHUB_TOKEN" '
-                     f'-H "Accept: application/vnd.github+json" {data} https://api.github.com/repos/{REPO}{path}')
-    return json.loads(out or "{}")
+    return faults.github(method, path, body)
+
+
+# ── 임시 브랜치 (SPEC 5.8) ─────────────────────────────────────
+
+
+def gitops_state() -> tuple[str, str]:
+    """(backend A사 기준 브랜치, ArgoCD tenant-a targetRevision)"""
+    return (sql("select gitops_branch from app.tenants where id = 'tenant-a'"), faults.tracked_branch())
+
+
+def leftover_branches() -> list[str]:
+    refs = github("GET", "/git/matching-refs/heads/e2e/")
+    return [r["ref"].removeprefix("refs/heads/") for r in refs] if isinstance(refs, list) else []
+
+
+def switch_branch(branch: str) -> None:
+    """A사 설정 저장소 기준을 branch로 바꾸고, ArgoCD가 그 브랜치 최신 커밋으로 동기화될 때까지 기다린다."""
+    status, body = Session("admin").call("PUT", "/api/admin/tenants/tenant-a/gitops-branch", {"branch": branch})
+    if status != 200:
+        raise RuntimeError(f"backend 기준 브랜치 변경 실패 {status}: {str(body)[:200]}")
+    kubectl("-n", "argocd", "patch", "application", "tenant-a", "--type", "merge",
+            "-p", json.dumps({"spec": {"source": {"targetRevision": branch}}}))
+    kubectl("-n", "argocd", "annotate", "application", "tenant-a", "argocd.argoproj.io/refresh=normal", "--overwrite")
+    sha = github("GET", f"/git/ref/heads/{branch}")["object"]["sha"]
+    deadline = time.time() + 180
+    while time.time() < deadline:
+        state = kubectl("-n", "argocd", "get", "application", "tenant-a", "-o",
+                        "jsonpath={.status.sync.revision} {.status.sync.status} {.status.health.status}", check=False)
+        if state == f"{sha} Synced Healthy":
+            return
+        time.sleep(5)
+    raise TimeoutError(f"ArgoCD tenant-a가 {branch}({sha[:7]})로 동기화되지 않았다 (마지막 {state})")
+
+
+def start_branch() -> str:
+    branch = f"e2e/{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    main_sha = github("GET", "/git/ref/heads/main")["object"]["sha"]
+    out = github("POST", "/git/refs", {"ref": f"refs/heads/{branch}", "sha": main_sha})
+    if "ref" not in out:
+        raise RuntimeError(f"임시 브랜치를 만들지 못했다: {str(out)[:200]}")
+    switch_branch(branch)
+    say(f"A사 설정 저장소 기준을 임시 브랜치 {branch}로 바꿨다 (main {main_sha[:7]}에서 시작)")
+    return branch
+
+
+def end_branch(branch: str | None) -> None:
+    """main으로 되돌리고, 남은 임시 브랜치를 지운다. 실패해도 다음 단계는 계속한다 (사전 점검이 남은 것을 잡는다)."""
+    try:
+        if gitops_state() != ("main", "main"):
+            switch_branch("main")
+            say("A사 설정 저장소 기준을 main으로 되돌렸다 (ArgoCD 동기화 확인)")
+    except Exception as e:
+        say(f"⚠️  main으로 되돌리지 못했다: {e}. python3 scripts/e2e.py --cleanup")
+    for name in [branch] if branch else leftover_branches():
+        github("DELETE", f"/git/refs/heads/{name}")
+        say(f"임시 브랜치 {name}을 지웠다")
 
 
 # ── 작업 추적 ──────────────────────────────────────────────────
@@ -285,6 +346,14 @@ def preflight(args) -> Result:
         r.check(indexed not in ("", "0"), "현재 버전의 공통 표준 런북이 색인됐다 (RAG)")
     else:
         r.check(False, "현재 버전의 공통 표준 런북이 색인됐다 (PostgreSQL 미실행)")
+    if "postgres" in running:
+        backend_branch, argocd_branch = gitops_state()
+        left = leftover_branches() if "backend" in running else []
+        ok = r.check((backend_branch, argocd_branch) == ("main", "main") and not left,
+                     f"지난 실행의 임시 브랜치가 남지 않았다 (backend {backend_branch}, ArgoCD {argocd_branch}"
+                     + (f", 남은 브랜치 {', '.join(left)}" if left else "") + ")")
+        if not ok:
+            r.notes.append("python3 scripts/e2e.py --cleanup 으로 정리한다")
     if "a" in args.scenarios:
         token = in_backend('[ -n "$GITHUB_TOKEN" ] && echo yes || echo no') if "backend" in running else "no"
         r.check(token == "yes", "backend에 GITHUB_TOKEN이 있다 (시나리오 A의 PR)")
@@ -482,8 +551,7 @@ def scenario_b2(args) -> Result:
 def scenario_a(args) -> Result:
     r = Result("A. 잘못된 설정 배포 → 롤백 PR (A사, GITOPS)")
     started, since = time.time(), datetime.now(timezone.utc)
-    say("A사 설정 저장소에 풀 크기 5 커밋을 푸시 (main에 기록이 남는다)")
-    say(sh(str(ROOT / "scripts/scenario-a.sh")))
+    say(faults.set_pool("tenant-a", 5))   # ArgoCD가 따라가는 임시 브랜치에 커밋한다 (main에는 남지 않는다)
     try:
         _, task = wait_for_incident_task(Session("admin"), "tenant-a", since, args.timeout)
         expect = Expect("business_execute_runbook_action", "rollback_deployment", "order-api")
@@ -499,8 +567,7 @@ def scenario_a(args) -> Result:
                        "jsonpath={.spec.template.spec.containers[0].env[?(@.name==\"DEMO_POOL_SIZE\")].value}")
         r.check(size == "20", f"클러스터의 풀 크기가 20으로 돌아왔다 (현재 {size})")
         if size != "20":
-            r.notes.append("A사 풀 크기가 원래대로가 아니다. gitops/tenants/tenant-a/order-api.yaml을 20으로 되돌리는 커밋이 필요하다")
-        sh("git", "pull", "-q", "--ff-only", check=False)
+            r.notes.append("A사 풀 크기가 원래대로가 아니다. 실행이 끝나 main으로 돌아가면 20으로 동기화된다")
     r.seconds = time.time() - started
     return r
 
@@ -598,10 +665,16 @@ def main() -> int:
     parser.add_argument("--no-merge", action="store_true")
     parser.add_argument("--auto-approve", action="store_true")
     parser.add_argument("--timeout", type=float, default=600)
+    parser.add_argument("--no-branch", action="store_true")
+    parser.add_argument("--cleanup", action="store_true")
     args = parser.parse_args()
     if args.list:
         for key, (title, _) in SCENARIOS.items():
             print(f"  {key:10} {title}")
+        return 0
+    if args.cleanup:
+        end_branch(None)
+        print(f"정리 완료: backend·ArgoCD {gitops_state()}, 남은 임시 브랜치 {leftover_branches() or '없음'}")
         return 0
     args.scenarios = args.scenarios or list(SCENARIOS)
     unknown = [s for s in args.scenarios if s not in SCENARIOS]
@@ -634,7 +707,10 @@ def run_all(args) -> int:
     previous = None if args.auto_approve else set_auto_approve(False)
     if previous:
         say("backend 자동 승인을 실행 동안 끈다 (끝나면 되돌린다)")
+    branch = None
     try:
+        if not args.no_branch:
+            branch = start_branch()
         for key in args.scenarios:
             title, run = SCENARIOS[key]
             print(f"\n▶ {title}")
@@ -648,7 +724,13 @@ def run_all(args) -> int:
             results.append(result)
     except KeyboardInterrupt:
         print("\n중단됨")
+    except Exception as e:  # 임시 브랜치 준비 실패 등. 아래 finally에서 되돌린다
+        result = Result("임시 브랜치 준비")
+        result.check(False, f"중단: {type(e).__name__}: {e}")
+        results.append(result)
     finally:
+        if not args.no_branch:
+            end_branch(branch)
         if previous:
             set_auto_approve(True)
             say("backend 자동 승인을 다시 켰다")
