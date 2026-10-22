@@ -43,6 +43,15 @@ public class IncidentRepository {
                 .param(fingerprint).update();
     }
 
+    /** 사람이 복구를 확인한 인시던트를 닫는다. 알림 fingerprint가 없는 제보 인시던트도 이 경로로 종료할 수 있다. */
+    public boolean resolveManually(String tenantId, long id) {
+        return jdbc.sql("""
+                        UPDATE incidents SET status = 'RESOLVED', resolved_at = now()
+                        WHERE id = ? AND tenant_id = ? AND status != 'RESOLVED'
+                        """)
+                .params(id, tenantId).update() == 1;
+    }
+
     public void saveReport(String tenantId, long id, String report) {
         int updated = jdbc.sql("UPDATE incidents SET report = ? WHERE id = ? AND tenant_id = ?")
                 .params(report, id, tenantId).update();

@@ -75,4 +75,16 @@ class PostmortemRepositoryDatabaseTest {
         jdbc.sql("UPDATE incidents SET report='report 1' WHERE id=1").update();
         assertEquals(1L, incidents.postmortems("tenant-a", 0).getFirst().id());
     }
+
+    @Test
+    void manualResolutionClosesOpenIncidentForItsTenantOnly() {
+        insert(1, "tenant-a", "OPEN", "complete", "DONE");
+        insert(2, "tenant-b", "OPEN", "other", "DONE");
+
+        assertTrue(incidents.resolveManually("tenant-a", 1));
+        assertEquals("RESOLVED", incidents.get(1).status());
+        assertFalse(incidents.resolveManually("tenant-a", 1));
+        assertFalse(incidents.resolveManually("tenant-a", 2));
+        assertEquals("OPEN", incidents.get(2).status());
+    }
 }
