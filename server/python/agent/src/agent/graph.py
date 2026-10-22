@@ -24,7 +24,7 @@ from langgraph.graph.message import add_messages
 from langgraph.runtime import Runtime
 from langgraph.types import interrupt
 
-from agent import customer_notice, harness, jev, summary
+from agent import attachments, customer_notice, harness, jev, summary
 from agent.backend import backend
 from agent.toolbox import ToolBox, parse_json
 
@@ -97,20 +97,26 @@ async def intake(state: State, runtime: Rt) -> dict:
 
 async def load_context(state: State, runtime: Rt) -> dict:
     box, counts = runtime.context.toolbox, dict(state["tool_counts"])
+    async def read(name, args):
+        try:
+            return await box.call("load_context", name, args, counts)
+        except Exception:
+            if state.get("type") != "ATTACHMENT":
+                raise
+            return ToolMessage(content="고객사 컨텍스트 조회 실패 — 확인 불가", status="error", tool_call_id="context")
     context: dict[str, Any] = {
-        "tenant": parse_json(await box.call("load_context", "business_get_tenant_profile", {}, counts)),
-        "services": parse_json(await box.call("load_context", "business_get_service_inventory", {}, counts)),
+        "tenant": parse_json(await read("business_get_tenant_profile", {})),
+        "services": parse_json(await read("business_get_service_inventory", {})),
     }
     if state.get("incident_id"):
         incident_id = state["incident_id"]
-        context["sla"] = parse_json(await box.call("load_context", "business_get_sla_terms",
-                                                   {"incident_id": incident_id}, counts))
-        incidents = parse_json(await box.call("load_context", "business_list_incidents", {"status": "OPEN"}, counts))
+        context["sla"] = parse_json(await read("business_get_sla_terms", {"incident_id": incident_id}))
+        incidents = parse_json(await read("business_list_incidents", {"status": "OPEN"}))
         if isinstance(incidents, list):
             context["incident"] = next((i for i in incidents if i.get("id") == incident_id), None)
     else:
         # 질문 작업: 인식된 장애가 있는지 본다. 조회에 실패하면(None) 장애가 없다고 단정하지 않는다
-        incidents = parse_json(await box.call("load_context", "business_list_incidents", {"status": "OPEN"}, counts))
+        incidents = parse_json(await read("business_list_incidents", {"status": "OPEN"}))
         if incidents == "":
             incidents = []  # MCP 어댑터는 빈 목록을 빈 내용으로 넘긴다
         context["open_incidents"] = incidents if isinstance(incidents, list) else None
@@ -158,7 +164,9 @@ def _needs_incident_registration(state: State) -> bool:
     return _reported_service(state) is not None and any(marker in question for marker in _SYMPTOM_MARKERS)
 
 
-def route_triage(state: State) -> Literal["escalate", "diagnose", "retrieve_runbook", "register_incident", "no_issue"]:
+def route_triage(state: State) -> Literal["escalate", "diagnose", "retrieve_runbook", "register_incident", "no_issue", "analyze_attachments"]:
+    if state.get("type") == "ATTACHMENT":
+        return "analyze_attachments"
     if _needs_document_lookup(state):
         return "retrieve_runbook"
     context = state.get("context", {})
@@ -204,7 +212,12 @@ async def retrieve_runbook(state: State, runtime: Rt) -> dict:
         searches[1]["doc_type"] = "runbook"
     docs: list[dict[str, Any]] = []
     for args in searches:
-        found = parse_json(await runtime.context.toolbox.call("retrieve_runbook", "rag_search_documents", args, counts))
+        try:
+            found = parse_json(await runtime.context.toolbox.call("retrieve_runbook", "rag_search_documents", args, counts))
+        except Exception:
+            if state.get("type") != "ATTACHMENT":
+                raise
+            found = None
         docs += found if isinstance(found, list) else []
     unique = list({(d.get("uri"), d.get("section")): d for d in docs}.values())  # 검색이 겹치면 한 번만
     return {"runbook": unique, "tool_counts": {**state["tool_counts"], **counts}}
@@ -756,11 +769,13 @@ async def report(state: State, runtime: Rt) -> dict:
         "context": state.get("context", {}),
     }, ensure_ascii=False, default=str)
 
-    information_question = state.get("type") == "QUESTION" and state.get("incident_id") is None
+    information_question = state.get("type") == "ATTACHMENT" or (state.get("type") == "QUESTION" and state.get("incident_id") is None)
 
     async def write() -> str:
         instructions = (harness.prompt("answer") if information_question
                         else harness.prompt("report") + "\n\n" + harness.prompt("notice"))
+        if state.get("type") == "ATTACHMENT":
+            instructions = harness.prompt("attachment") + "\n첨부 분석 사실과 검색한 런북 근거를 구분하고 문서가 없으면 미대조임을 밝힌다. 한국어로 답한다."
         messages = [SystemMessage(harness.prompt("system") + "\n\n" + instructions),
                     HumanMessage(payload)]
         chunks: list[str] = []
@@ -783,6 +798,8 @@ async def report(state: State, runtime: Rt) -> dict:
 
 
 def route_report(state: State) -> Literal["notice_approval", "__end__"]:
+    if state.get("type") == "ATTACHMENT":
+        return END
     sent = (state.get("proposed_action") or {}).get("tool") == "business_send_customer_notice"
     return "notice_approval" if state.get("incident_id") and state.get("notice_draft") and not sent else END
 
@@ -864,6 +881,10 @@ async def approval(state: State) -> dict:
     return {"approvals": state["approvals"] + [{**decision, "tool": action["tool"]}]}
 
 
+def route_after_runbook(state: State) -> Literal["report", "propose_action"]:
+    return "report" if state.get("type") == "ATTACHMENT" else "propose_action"
+
+
 def route_approval(state: State) -> Literal["execute", "report"]:
     return "execute" if state["approvals"][-1].get("decision") == "APPROVE" else "report"
 
@@ -940,7 +961,7 @@ def build(checkpointer):
         ("retrieve_runbook", retrieve_runbook), ("propose_action", propose_action), ("approval", approval),
         ("execute", execute), ("await_change", await_change), ("verify", verify), ("bump_attempt", bump_attempt),
         ("final_escalate", escalate), ("report", report), ("notice_approval", notice_approval),
-        ("no_issue", no_issue), ("register_incident", register_incident),
+        ("analyze_attachments", attachments.analyze), ("no_issue", no_issue), ("register_incident", register_incident),
     ]:
         g.add_node(name, node)
 
@@ -950,7 +971,8 @@ def build(checkpointer):
     g.add_conditional_edges("register_incident", route_register_incident)
     g.add_edge("escalate", "diagnose")
     g.add_conditional_edges("diagnose", route_diagnose)
-    g.add_edge("retrieve_runbook", "propose_action")
+    g.add_edge("analyze_attachments", "retrieve_runbook")
+    g.add_conditional_edges("retrieve_runbook", route_after_runbook)
     g.add_conditional_edges("propose_action", route_propose)
     g.add_conditional_edges("approval", route_approval)
     g.add_conditional_edges("execute", route_execute)

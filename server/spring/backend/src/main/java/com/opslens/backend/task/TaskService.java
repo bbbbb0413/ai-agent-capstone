@@ -1,6 +1,8 @@
 package com.opslens.backend.task;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.opslens.backend.attachment.TaskAttachments;
+import java.util.List;
 import com.opslens.backend.audit.AuditLog;
 import com.opslens.backend.auth.CurrentUser;
 import com.opslens.backend.incident.IncidentRepository;
@@ -42,10 +44,12 @@ public class TaskService {
     private final AuditLog audit;
     private final SettingsService settings;
     private final TransactionTemplate transactions;
+    private final TaskAttachments attachments;
 
     public TaskService(TaskRepository tasks, TenantRepository tenants, IncidentRepository incidents,
             TaskOutboxRepository outbox, TaskOutboxRelay relay, AgentClient agent, TaskEventHub events, AuditLog audit,
-            SettingsService settings, PlatformTransactionManager transactionManager) {
+            SettingsService settings, PlatformTransactionManager transactionManager, TaskAttachments attachments) {
+        this.attachments = attachments;
         this.tasks = tasks;
         this.tenants = tenants;
         this.incidents = incidents;
@@ -64,6 +68,11 @@ public class TaskService {
      * 발행이 실패해도 작업이 QUEUED로 남지 않는다: Relay가 다시 보내고, 끝내 실패하면 FAILED로 끝낸다.
      */
     public UUID create(String tenantId, Long incidentId, String type, String question, Long requestedBy) {
+        return create(tenantId, incidentId, type, question, requestedBy, List.of());
+    }
+
+    public UUID create(String tenantId, Long incidentId, String type, String question, Long requestedBy,
+            List<TaskAttachments.Prepared> files) {
         Tenant tenant = tenants.get(tenantId);
         if (incidentId != null) {
             incidents.getForTenant(tenantId, incidentId);
@@ -73,6 +82,7 @@ public class TaskService {
         TaskMessage message = new TaskMessage(taskId, tenantId, tenant.slaTier(), incidentId, type, question, traceId);
         transactions.executeWithoutResult(tx -> {
             tasks.create(taskId, tenantId, incidentId, type, question, requestedBy);
+            attachments.save(taskId, files);
             outbox.enqueue(message);
         });
         relay.kick(taskId);
