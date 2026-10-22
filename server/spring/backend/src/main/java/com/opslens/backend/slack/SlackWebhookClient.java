@@ -8,6 +8,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -26,11 +27,19 @@ public class SlackWebhookClient {
     }
 
     public Result send(String webhook, String message) {
+        return sendPayload(webhook, payload(message));
+    }
+
+    public Result sendInteractive(String webhook, String message, UUID deliveryId) {
+        return sendPayload(webhook, SlackTrackingService.payload(message, deliveryId, "WAITING", null, null));
+    }
+
+    private Result sendPayload(String webhook, Map<String, Object> payload) {
         try {
             SlackConnectionService.validateWebhook(webhook);
             HttpRequest request = HttpRequest.newBuilder(URI.create(webhook)).timeout(Duration.ofSeconds(10))
                     .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(payload(message)))).build();
+                    .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(payload))).build();
             HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
             return classify(response.statusCode(), response.body(), response.headers().firstValue("Retry-After").orElse("60"));
         } catch (InterruptedException e) {

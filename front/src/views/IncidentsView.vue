@@ -6,6 +6,7 @@ import StatusBadge from '../components/StatusBadge.vue'
 import TaskStats from '../components/TaskStats.vue'
 import TrendChart from '../components/TrendChart.vue'
 import SlackSettings from '../components/SlackSettings.vue'
+import ServiceImpact from '../components/ServiceImpact.vue'
 import { clockTime, shortDateTime } from '../format.js'
 import { useSession } from '../session.js'
 import { useSettings } from '../settings.js'
@@ -36,6 +37,7 @@ const openCount = computed(() => incidents.value.filter((i) => i.status !== 'RES
 const activeTaskCount = computed(() => tasks.value.filter((t) => !['DONE', 'FAILED'].includes(t.status)).length)
 const tabs = computed(() => [
   { key: 'dashboard', label: '대시보드' },
+  { key: 'impact', label: '장애 영향 분석' },
   { key: 'tasks', label: `Agent 작업${activeTaskCount.value ? ` (${activeTaskCount.value})` : ''}` },
   ...(session.isAdmin ? [{ key: 'settings', label: '설정' }] : []),
 ])
@@ -157,6 +159,8 @@ function taskFor(incident) {
 
     <TrendChart :incidents="incidents" :tasks="tasks" :updated-at="updatedAt" @refresh="load" />
   </template>
+
+  <ServiceImpact v-else-if="tab === 'impact'" :tenants="tenants" />
 
   <section v-else-if="tab === 'tasks'" class="card flush">
     <table class="grid-table">

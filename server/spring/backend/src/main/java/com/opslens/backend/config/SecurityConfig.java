@@ -40,9 +40,22 @@ public class SecurityConfig {
         return http.build();
     }
 
-    /** /api/** : 화면이 호출한다. JWT(Authorization 헤더 또는 HttpOnly 쿠키)로 인증한다. */
+    /** Slack 콜백은 요청 본문 서명으로 인증한다. */
     @Bean
     @Order(2)
+    SecurityFilterChain slackInteractionChain(HttpSecurity http) throws Exception {
+        // 이 한 경로만 Slack HMAC 서명으로 인증한다. Controller가 raw body와 시각을 검증한다.
+        http.securityMatcher("/api/slack/interactions")
+                .csrf(AbstractHttpConfigurer::disable)
+                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(a -> a.requestMatchers(org.springframework.http.HttpMethod.POST, "/api/slack/interactions")
+                        .permitAll().anyRequest().denyAll());
+        return http.build();
+    }
+
+    /** 화면 API는 JWT(Authorization 헤더 또는 HttpOnly 쿠키)로 인증한다. */
+    @Bean
+    @Order(3)
     SecurityFilterChain apiChain(HttpSecurity http) throws Exception {
         // TODO: 쿠키 인증은 SameSite=Strict로 CSRF를 완화했다. 발표 전에 CSRF 토큰 적용 여부를 검토한다
         http.csrf(AbstractHttpConfigurer::disable)

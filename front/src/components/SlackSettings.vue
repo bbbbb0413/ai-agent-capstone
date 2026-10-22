@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, ref, watch } from 'vue'
 import { api } from '../api.js'
+import SlackTrackingSettings from './SlackTrackingSettings.vue'
 
 const props = defineProps({ tenants: { type: Array, required: true } })
 const tenant = ref('')
@@ -72,5 +73,6 @@ async function save() {
       <button :disabled="busy">{{ busy ? '저장 중…' : '연결 정보 저장' }}</button>
       <p v-if="saved" role="status">저장했습니다. 작업 상세에서 문안을 검토한 뒤 발송할 수 있습니다.</p>
     </form>
+    <SlackTrackingSettings v-if="tenant" :tenant="tenant" @saved="load" />
   </section>
 </template>
