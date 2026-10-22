@@ -1,6 +1,6 @@
 # Spec: 코드 리뷰 지적 사항 수정
 
-- 상태: **진행 중** (2026-10-23). 1~10·12단계 완료, 11단계(파일 분리) 남음
+- 상태: **완료** (2026-10-23). 남은 일은 4장(하지 않는 것)
 - 근거: 2026-10-23 전체 구조·코드 품질 리뷰
 - 원칙: 단계마다 테스트를 붙이고 따로 커밋한다. 기능 수정과 파일 분리(리팩터링)는 섞지 않는다.
 
@@ -22,7 +22,7 @@
 | 8 | 보고서 토큰 묶어 보내기 | `graph.report`, `TaskService.onEvent` | 토큰을 짧은 간격으로 모아 보낸다. TOKEN 이벤트는 상태 UPDATE를 하지 않는다 | 완료 |
 | 9 | Kafka 소비자 생존 여부를 health에 반영 | `kafka_worker.consume`, `main.py` | 모든 예외에 재연결하고 로그를 남긴다. 소비 루프가 죽으면 `/health`가 실패 | 완료 |
 | 10 | runner 정리 코드가 원래 예외를 가리지 않게 | `runner._drive_claimed` | `finally`의 DB 실패는 로그만 남긴다 | 완료 |
-| 11 | `graph.py` 분리 (리팩터링만) | `graph.py` → `signals.py`, `action_guards.py` | 동작 변화 없음. 진단 사전 조회 중복과 RB-STD-01 재시작 제외 중복을 하나로. 기존 테스트 그대로 통과 | 대기 |
+| 11 | `graph.py` 분리 (리팩터링만) | `graph.py` → `signals.py`, `action_guards.py` | 동작 변화 없음. 진단 사전 조회 중복과 RB-STD-01 재시작 제외 중복을 하나로. 기존 테스트 그대로 통과 | 완료 |
 | 12 | 조항별 조치 규칙 일치 테스트 | `CLAUSE_ACTIONS`, `runbook-standard.md` | 문서의 RB-STD 조항 목록과 코드가 어긋나면 테스트 실패 | 완료 |
 
 단계마다 agent 단위 테스트(`uv run python -m unittest discover -s tests`)와 backend `./gradlew test`를 돌린다. 모두 끝나면 E2E `--quick`으로 확인한다.
@@ -38,6 +38,7 @@
 - 6단계: backend를 바꾸지 않고 agent가 임대를 기다린다(최대 75초). 끝내 못 잡으면 작업을 FAILED로 끝내 화면에 드러낸다.
 - 8단계: 토큰을 0.1초씩 모아 보낸다. backend는 TOKEN 이벤트에 DB를 건드리지 않고 화면에만 중계한다.
 - 9단계: compose에는 agent healthcheck가 없다. `/health`가 503을 돌려주는 것으로 운영자가 확인한다.
+- 11단계: `graph.py` 997줄 → 784줄. `signals.py`(로그 신호·지표·직전 변경·회복 기준, `observe()`로 진단 사전 조회 중복 제거)와 `action_guards.py`(조항별 조치, 돌려보내기 검사 4개, `fixes()`로 RB-STD-01 재시작 제외 중복 제거, `first_problem()`). 첫 진단의 로그 조회는 지금처럼 모델 한도에 들어가고, 재진단은 들어가지 않는다. 검사 묶음을 보는 테스트를 더했다.
 
 ### 뮤테이션 목록
 
