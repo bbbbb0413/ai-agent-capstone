@@ -41,4 +41,10 @@ public record CurrentUser(long id, String username, String role, List<String> te
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "MSP staff only");
         }
     }
+
+    public void requireAdmin() {
+        if (!isAdmin()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "MSP_ADMIN only");
+        }
+    }
 }

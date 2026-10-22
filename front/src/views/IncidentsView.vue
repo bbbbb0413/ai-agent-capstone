@@ -79,6 +79,16 @@ async function ask() {
   router.push(`/tasks/${taskId}`)
 }
 
+async function resolveIncident(incident) {
+  if (!confirm(`'${incident.title}' 인시던트를 해결됨으로 처리할까? 복구가 확인된 뒤에만 종료해야 한다.`)) return
+  try {
+    await api.resolveIncident(incident.id)
+    await load()
+  } catch (e) {
+    error.value = e.message
+  }
+}
+
 async function toggleAutoApprove(event) {
   const enabled = event.target.checked
   if (enabled && !confirm('자동 승인을 켜면 파드 재시작 같은 조치도 사람 확인 없이 실행된다. 켤까?')) {
@@ -136,7 +146,7 @@ function taskFor(incident) {
       </div>
       <table class="grid-table">
         <thead>
-          <tr><th>시작</th><th>고객사</th><th>서비스</th><th>제목</th><th>심각도</th><th>상태</th><th>Agent 작업</th></tr>
+          <tr><th>시작</th><th>고객사</th><th>서비스</th><th>제목</th><th>심각도</th><th>상태</th><th>Agent 작업</th><th v-if="session.isAdmin">관리</th></tr>
         </thead>
         <tbody>
           <tr v-for="i in filteredIncidents" :key="i.id">
@@ -151,8 +161,11 @@ function taskFor(incident) {
                 <StatusBadge kind="task" :value="taskFor(i).status" /> 보기 →
               </RouterLink>
             </td>
+            <td v-if="session.isAdmin">
+              <button v-if="i.status !== 'RESOLVED'" class="secondary" @click="resolveIncident(i)">해결 처리</button>
+            </td>
           </tr>
-          <tr v-if="!filteredIncidents.length"><td colspan="7" class="muted empty">해당하는 인시던트가 없다</td></tr>
+          <tr v-if="!filteredIncidents.length"><td :colspan="session.isAdmin ? 8 : 7" class="muted empty">해당하는 인시던트가 없다</td></tr>
         </tbody>
       </table>
     </section>

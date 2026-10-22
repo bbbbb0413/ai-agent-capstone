@@ -33,6 +33,7 @@ export const api = {
   impact: (tenant) => request('GET', `/api/tenants/${encodeURIComponent(tenant)}/impact`),
   incidents: () => request('GET', '/api/incidents'),
   incident: (id) => request('GET', `/api/incidents/${id}`),
+  resolveIncident: (id) => request('POST', `/api/incidents/${id}/resolve`),
   incidentNotices: (id) => request('GET', `/api/incidents/${id}/notices`),
   incidentEscalations: (id) => request('GET', `/api/incidents/${id}/escalations`),
   slackSettings: (tenant) => request('GET', `/api/tenants/${encodeURIComponent(tenant)}/slack`),
