@@ -47,7 +47,8 @@ public class SlackRelay {
                 deliveries.finish(claimed, new SlackWebhookClient.Result("FAILED", "Slack 연결 정보를 다시 저장해야 한다", 0));
                 continue;
             }
-            deliveries.finish(claimed, client.send(webhook, claimed.message()));
+            deliveries.finish(claimed, claimed.trackingEnabled()
+                    ? client.sendInteractive(webhook, claimed.message(), claimed.id()) : client.send(webhook, claimed.message()));
         }
     }
 }

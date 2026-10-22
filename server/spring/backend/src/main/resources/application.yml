@@ -33,7 +33,7 @@ opslens:
   service-token: ${SERVICE_TOKEN:}
   alert-webhook-token: ${ALERT_WEBHOOK_TOKEN:}
   agent-url: ${AGENT_URL:http://localhost:8000}
-  prometheus-url: http://prometheus:9090   # 의존 대상 상태(get_dependency_health) 조회. compose 내부 주소
+  prometheus-url: ${PROMETHEUS_URL:http://prometheus:9090}   # 의존 대상 상태와 영향 분석. 로컬 실행 시 변경 가능
   dispatch-mode: ${DISPATCH_MODE:kafka}   # kafka(기본) | http
   kafka:
     partitions: ${KAFKA_PARTITIONS:3}   # 작업 토픽 파티션 수 (tasks.gold·silver·retry.*)

@@ -20,7 +20,7 @@ public class SlackDeliveryService {
     public record Approval(String message, long connectionVersion) {}
     public record Delivery(UUID id, long escalationId, String channelLabel, String message, String status,
             String approvedBy, int attempts, String lastError, OffsetDateTime sentAt) {}
-    record Claimed(UUID id, String tenantId, String message, long connectionVersion, int attempts) {}
+    record Claimed(UUID id, String tenantId, String message, long connectionVersion, int attempts, boolean trackingEnabled) {}
 
     private final JdbcClient jdbc;
     private final IncidentRepository incidents;
@@ -63,15 +63,15 @@ public class SlackDeliveryService {
         UUID id = UUID.randomUUID();
         int changed = jdbc.sql("""
                 INSERT INTO slack_deliveries(id, tenant_id, escalation_id, channel_label, connection_version,
-                                             message, approved_by)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                                             message, approved_by, tracking_enabled)
+                VALUES (?, ?, ?, ?, ?, ?, ?, EXISTS(SELECT 1 FROM slack_tracking_settings WHERE tenant_id=? AND enabled))
                 ON CONFLICT (escalation_id) DO UPDATE SET channel_label=EXCLUDED.channel_label,
                   connection_version=EXCLUDED.connection_version, message=EXCLUDED.message,
                   approved_by=EXCLUDED.approved_by, approved_at=now(), status='QUEUED', attempts=0,
-                  available_at=now(), claimed_at=NULL, last_error=NULL
+                  available_at=now(), claimed_at=NULL, last_error=NULL, tracking_enabled=EXCLUDED.tracking_enabled
                 WHERE slack_deliveries.status IN ('FAILED', 'CANCELLED')
                 """).params(id, incident.tenantId(), escalationId, preview.connection().channelLabel(),
-                        approval.connectionVersion(), approval.message(), user.username()).update();
+                        approval.connectionVersion(), approval.message(), user.username(), incident.tenantId()).update();
         if (changed != 1) throw new ResponseStatusException(HttpStatus.CONFLICT,
                 "이미 발송을 승인했거나 발송 결과를 확인해야 하는 메시지다");
         audit.record(incident.tenantId(), user.username(), "SLACK_SEND_APPROVED",
@@ -99,9 +99,9 @@ public class SlackDeliveryService {
                 UPDATE slack_deliveries SET status='SENDING', attempts=attempts+1, claimed_at=now()
                 WHERE id IN (SELECT id FROM slack_deliveries WHERE status='QUEUED' AND available_at<=now()
                              ORDER BY available_at FOR UPDATE SKIP LOCKED LIMIT 1)
-                RETURNING id, tenant_id, message, connection_version, attempts
+                RETURNING id, tenant_id, message, connection_version, attempts, tracking_enabled
                 """).query((r, n) -> new Claimed(r.getObject("id", UUID.class), r.getString("tenant_id"),
-                        r.getString("message"), r.getLong("connection_version"), r.getInt("attempts"))).list();
+                        r.getString("message"), r.getLong("connection_version"), r.getInt("attempts"), r.getBoolean("tracking_enabled"))).list();
     }
 
     void finish(Claimed claimed, SlackWebhookClient.Result result) {
