@@ -5,6 +5,7 @@ export const STAGES = {
   diagnose: '진단',
   retrieve_runbook: '런북 검색',
   retrieve_history: '과거 장애 검색',
+  register_incident: '제보 인시던트 등록',
   propose_action: '조치',
   verify: '회복 확인',
   escalate: '담당자 호출',
@@ -17,6 +18,7 @@ export const TOOL_LABELS = {
   business_get_sla_terms: 'SLA 조건 조회',
   business_get_service_inventory: '서비스 구성 조회',
   business_list_incidents: '인시던트 목록 조회',
+  business_create_incident: '인시던트 등록',
   business_list_recent_changes: '최근 배포·변경 이력 조회',
   business_execute_runbook_action: '런북 조치 실행',
   business_send_customer_notice: '고객 공지 발송',
@@ -62,6 +64,12 @@ export const ADMIN_ONLY_TOOLS = ['business_send_customer_notice', 'business_conf
 /** 승인 카드에 보여 줄 인자. 도구별로 사람이 읽는 항목 이름을 붙인다 */
 export function approvalFields({ tool, args = {} }) {
   switch (tool) {
+    case 'business_create_incident':
+      return [
+        ['대상 서비스', args.service],
+        ['심각도', args.severity],
+        ['제목', args.title],
+      ].filter(([, value]) => value)
     case 'business_execute_runbook_action':
       return [
         ['조치', RUNBOOK_ACTIONS[args.action] || args.action],
@@ -117,6 +125,7 @@ export function approvalImpactFields({ tool, args = {}, impact = {} }) {
 
 /** 승인하면 무엇이 바뀌는가 (기획안 5.3: 승인 카드의 '영향') */
 export function approvalImpact({ tool, args = {}, changeMode, impact = {} }) {
+  if (tool === 'business_create_incident') return `${args.service || '서비스'}의 P2 인시던트를 등록하고 기존 진단 흐름을 시작한다. 실제 조치나 고객 공지는 별도 승인 없이는 실행되지 않는다.`
   if (tool === 'business_send_customer_notice') return '고객사 담당자에게 위 내용으로 공지가 발송된다. 발송 후에는 취소할 수 없다.'
   if (tool === 'business_escalate_incident') {
     const who = { ACTION_BLOCKED: 'MSP 담당과 고객사 담당', DEPENDENCY: 'MSP 담당과 의존 대상 소유자' }[args.category] || 'MSP 담당'

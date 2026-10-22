@@ -130,11 +130,41 @@ def _needs_document_lookup(state: State) -> bool:
     return any(marker in question for marker in _DOCUMENT_QUESTION_MARKERS)
 
 
-def route_triage(state: State) -> Literal["escalate", "diagnose", "retrieve_runbook", "no_issue"]:
+_SYMPTOM_MARKERS = (
+    "느려", "지연", "오류", "에러", "실패", "장애", "안 돼", "안되", "먹통", "timeout", "error", "slow",
+)
+
+
+def _reported_service(state: State) -> str | None:
+    """알림 없이 들어온 제보는 질문에 서비스명이 분명할 때만 등록 후보로 삼는다.
+
+    모호한 "서비스가 느리다"를 임의의 서비스 인시던트로 만들면 잘못된 담당자에게 알림이 갈 수 있다.
+    서비스 선택 UI가 생기기 전까지는 질문 속 서비스명과 inventory 이름이 정확히 맞는 경우만 허용한다.
+    """
+    question = state.get("question", "").lower()
+    for service in (state.get("context", {}).get("services") or []):
+        name = service.get("name") if isinstance(service, dict) else None
+        if isinstance(name, str) and name.lower() in question:
+            return name
+    return None
+
+
+def _needs_incident_registration(state: State) -> bool:
+    if state.get("type") != "QUESTION" or state.get("incident_id") is not None:
+        return False
+    if state.get("context", {}).get("open_incidents") != []:
+        return False
+    question = state.get("question", "").lower()
+    return _reported_service(state) is not None and any(marker in question for marker in _SYMPTOM_MARKERS)
+
+
+def route_triage(state: State) -> Literal["escalate", "diagnose", "retrieve_runbook", "register_incident", "no_issue"]:
     if _needs_document_lookup(state):
         return "retrieve_runbook"
     context = state.get("context", {})
     if not state.get("incident_id") and context.get("open_incidents") == []:
+        if _needs_incident_registration(state):
+            return "register_incident"
         return "no_issue"
     incident = context.get("incident") or {}
     return "escalate" if incident.get("severity") == "P1" and not state.get("approvals") else "diagnose"
@@ -143,8 +173,12 @@ def route_triage(state: State) -> Literal["escalate", "diagnose", "retrieve_runb
 async def no_issue(state: State) -> dict:
     """인식된 장애(열린 인시던트)가 없는 질문에는 진단·조치 없이 이상 없음으로 답한다 (docs/기능별-변경사항.md 7장)."""
     tenant = (state.get("context", {}).get("tenant") or {}).get("name") or state["tenant_id"]
-    text = (f"## 이상 없음\n\n현재 {tenant}에 인식된 장애(처리 중인 인시던트)가 없다.\n\n"
-            "알림 기준에 못 미치는 문제는 여기에 나타나지 않는다. 문제가 계속되면 담당 엔지니어에게 확인을 요청한다.")
+    if state.get("registration_rejected"):
+        text = (f"## 인시던트 미등록\n\n현재 {tenant}에 처리 중인 인시던트가 없고, 제보 기반 인시던트 등록도 승인되지 않았다.\n\n"
+                "문제가 계속되면 서비스명과 증상을 함께 적어 다시 등록을 요청하거나 담당 엔지니어에게 확인을 요청한다.")
+    else:
+        text = (f"## 이상 없음\n\n현재 {tenant}에 인식된 장애(처리 중인 인시던트)가 없다.\n\n"
+                "알림 기준에 못 미치는 문제는 여기에 나타나지 않는다. 문제가 계속되면 담당 엔지니어에게 확인을 요청한다.")
     await backend.emit(state["task_id"], "TOKEN", {"text": text})
     return {"report": text}
 
@@ -789,6 +823,41 @@ def _approval_request(tool: str, args: dict, reason: str, state: State) -> dict:
     return request
 
 
+async def register_incident(state: State, runtime: Rt) -> dict:
+    """사람이 제보한 증상을 P2 인시던트로 남길지 승인받는다.
+
+    이 node는 interrupt 앞에서 읽기나 쓰기를 하지 않는다. 재개할 때 node가 처음부터 실행되므로,
+    승인 전에는 등록이 절대 일어나지 않고 승인 후 한 번만 MCP 변경 도구를 호출한다.
+    """
+    service = _reported_service(state)
+    if service is None:  # route가 지키지만, UI/재개 상태가 달라도 임의 서비스로 등록하지 않는다
+        return {"registration_rejected": True}
+    args = {"service": service, "title": f"제보 기반 점검: {service}", "severity": "P2"}
+    reason = (f"열린 인시던트는 없지만 '{service}'가 포함된 증상 제보가 들어왔다. "
+              "자동 알림이 아닌 사람 제보이므로 P2 인시던트 등록 후 진단을 시작하려면 승인이 필요하다.")
+    decision = interrupt(_approval_request("business_create_incident", args, reason, state))
+    approvals = state["approvals"] + [{**decision, "tool": "business_create_incident"}]
+    if decision.get("decision") != "APPROVE":
+        return {"approvals": approvals, "registration_rejected": True}
+
+    counts = dict(state["tool_counts"])
+    result = await runtime.context.toolbox.call("register_incident", "business_create_incident", args, counts)
+    created = parse_json(result)
+    incident_id = created.get("incidentId") if result.status != "error" and isinstance(created, dict) else None
+    if not isinstance(incident_id, int):
+        # 등록 실패를 인시던트가 생긴 것처럼 진단하지 않는다. 실패 사실을 보고서로 남긴다.
+        return {"approvals": approvals, "tool_counts": counts, "registration_rejected": True,
+                "evidence": state["evidence"] + [{"tool": "business_create_incident", "status": "FAILED",
+                                                       "summary": str(created)[:500]}]}
+    return {"approvals": approvals, "tool_counts": counts, "incident_id": incident_id,
+            "evidence": state["evidence"] + [{"tool": "business_create_incident", "status": "CREATED",
+                                                   "summary": f"incidentId={incident_id}, service={service}"}]}
+
+
+def route_register_incident(state: State) -> Literal["load_context", "no_issue"]:
+    return "load_context" if state.get("incident_id") is not None else "no_issue"
+
+
 async def approval(state: State) -> dict:
     action = state["proposed_action"]
     decision = interrupt(_approval_request(action["tool"], action["args"], action["reason"], state))
@@ -871,13 +940,14 @@ def build(checkpointer):
         ("retrieve_runbook", retrieve_runbook), ("propose_action", propose_action), ("approval", approval),
         ("execute", execute), ("await_change", await_change), ("verify", verify), ("bump_attempt", bump_attempt),
         ("final_escalate", escalate), ("report", report), ("notice_approval", notice_approval),
-        ("no_issue", no_issue),
+        ("no_issue", no_issue), ("register_incident", register_incident),
     ]:
         g.add_node(name, node)
 
     g.add_edge(START, "intake")
     g.add_edge("intake", "load_context")
     g.add_conditional_edges("load_context", route_triage)          # triage
+    g.add_conditional_edges("register_incident", route_register_incident)
     g.add_edge("escalate", "diagnose")
     g.add_conditional_edges("diagnose", route_diagnose)
     g.add_edge("retrieve_runbook", "propose_action")
