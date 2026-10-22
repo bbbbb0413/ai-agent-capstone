@@ -5,6 +5,7 @@ import { api } from '../api.js'
 import StatusBadge from '../components/StatusBadge.vue'
 import TaskStats from '../components/TaskStats.vue'
 import TrendChart from '../components/TrendChart.vue'
+import SlackSettings from '../components/SlackSettings.vue'
 import { clockTime, shortDateTime } from '../format.js'
 import { useSession } from '../session.js'
 import { useSettings } from '../settings.js'
@@ -36,7 +37,7 @@ const activeTaskCount = computed(() => tasks.value.filter((t) => !['DONE', 'FAIL
 const tabs = computed(() => [
   { key: 'dashboard', label: '대시보드' },
   { key: 'tasks', label: `Agent 작업${activeTaskCount.value ? ` (${activeTaskCount.value})` : ''}` },
-  ...(session.isAdmin && settings.autoApproveAllowed ? [{ key: 'settings', label: '설정' }] : []),
+  ...(session.isAdmin ? [{ key: 'settings', label: '설정' }] : []),
 ])
 const tab = computed(() => (tabs.value.some((t) => t.key === route.query.tab) ? route.query.tab : 'dashboard'))
 const filteredIncidents = computed(() => {
@@ -176,7 +177,9 @@ function taskFor(incident) {
     </table>
   </section>
 
-  <section v-else-if="tab === 'settings'" class="card">
+  <template v-else-if="tab === 'settings'">
+  <SlackSettings :tenants="tenants" />
+  <section v-if="settings.autoApproveAllowed" class="card">
     <h2>테스트 설정</h2>
     <label class="toggle">
       <input type="checkbox" :checked="settings.autoApprove" @change="toggleAutoApprove" />
@@ -184,7 +187,8 @@ function taskFor(incident) {
     </label>
     <p class="muted">
       켜면 조치·담당자 호출·고객 공지 승인 요청을 사람 확인 없이 바로 승인한다.
-      켜기 전부터 승인 대기 중인 작업에는 적용되지 않는다.
+      켜기 전부터 승인 대기 중인 작업에는 적용되지 않는다. Slack 외부 발송은 항상 별도로 검토·승인한다.
     </p>
   </section>
+  </template>
 </template>

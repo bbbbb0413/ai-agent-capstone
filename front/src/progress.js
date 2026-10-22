@@ -4,6 +4,7 @@ export const STAGES = {
   load_context: '컨텍스트 수집',
   diagnose: '진단',
   retrieve_runbook: '런북 검색',
+  retrieve_history: '과거 장애 검색',
   propose_action: '조치',
   verify: '회복 확인',
   escalate: '담당자 호출',
@@ -26,7 +27,7 @@ export const TOOL_LABELS = {
   grafana_query_loki_logs: '로그 조회',
   grafana_query_loki_patterns: '로그 패턴 분석',
   grafana_query_loki_stats: '로그 통계 조회',
-  rag_search_documents: '런북·계약 문서 검색',
+  rag_search_documents: '런북·계약·회고 검색',
 }
 
 export const RUNBOOK_ACTIONS = {
@@ -119,7 +120,7 @@ export function approvalImpact({ tool, args = {}, changeMode, impact = {} }) {
   if (tool === 'business_send_customer_notice') return '고객사 담당자에게 위 내용으로 공지가 발송된다. 발송 후에는 취소할 수 없다.'
   if (tool === 'business_escalate_incident') {
     const who = { ACTION_BLOCKED: 'MSP 담당과 고객사 담당', DEPENDENCY: 'MSP 담당과 의존 대상 소유자' }[args.category] || 'MSP 담당'
-    return `${who}에게 보낼 호출을 발송 대기열에 넣는다. 실제 메신저·전화 발송은 아직 연결되지 않았다.`
+    return `${who}에게 전달할 호출 기록을 남긴다. Slack 발송은 작업 상세에서 문안과 채널을 검토한 뒤 별도로 승인한다.`
   }
   if (tool !== 'business_execute_runbook_action') return null
   const service = args.service || '서비스'
@@ -152,7 +153,7 @@ export const toolLabel = (tool) => TOOL_LABELS[tool] || tool
 export function actionResultLabel(result) {
   return {
     EXECUTED: '조치 실행 완료', PR_CREATED: 'PR 생성 (반영 상태 별도 확인)',
-    SENT: '공지 발송 완료', QUEUED: '호출 대기열에 등록 (발송 미연결)', FAILED: '실행 실패', UNCONFIRMED: '실행 결과 확인 불가', REJECTED: '발송 거절',
+    SENT: '공지 발송 완료', QUEUED: '호출 기록 등록 (Slack 발송 별도 검토)', FAILED: '실행 실패', UNCONFIRMED: '실행 결과 확인 불가', REJECTED: '발송 거절',
   }[result?.status] || '실행 확인 안 됨'
 }
 

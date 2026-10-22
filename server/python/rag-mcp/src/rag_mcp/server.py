@@ -57,12 +57,14 @@ async def search_documents(
     doc_type: Literal["sla", "runbook", "postmortem"] | None = None,
     top_k: int = 5,
     scope: Literal["all", "common", "tenant"] = "all",
+    exclude_doc_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """현재 고객사의 근거 문서와 MSP 공통 문서(표준 런북)에서 질문과 가까운 조항을 찾는다.
     doc_type: sla(SLA 계약서), runbook(런북: 표준 런북과 서비스 런북), postmortem(과거 장애 회고). 비우면 전체에서 찾는다.
     결과마다 문서 id, 제목, 조항(section), 버전, 본문, 유사도(score, 1에 가까울수록 가깝다), 원문 주소(uri),
     범위(scope: common=MSP 표준, tenant=이 고객사)를 돌려준다. 답변에 근거를 붙일 때 section과 uri를 함께 인용한다.
-    scope 인자로 검색 범위를 좁힐 수 있다: all(둘 다), common(표준 런북만), tenant(이 고객사 문서만)."""
+    scope 인자로 검색 범위를 좁힐 수 있다: all(둘 다), common(표준 런북만), tenant(이 고객사 문서만).
+    exclude_doc_id는 현재 장애의 회고를 과거 사례로 다시 읽지 않도록 제외할 문서 ID다."""
     tenant = _tenant()
     owners = {"all": [tenant, COMMON], "common": [COMMON], "tenant": [tenant]}[scope]
     top_k = max(1, min(top_k, 10))
@@ -75,10 +77,11 @@ async def search_documents(
                    1 - (embedding <=> %(e)s::vector) AS score
             FROM chunks
             WHERE tenant_id = ANY(%(o)s) AND (%(d)s::text IS NULL OR doc_type = %(d)s)
+              AND (%(exclude)s::text IS NULL OR doc_id <> %(exclude)s)
             ORDER BY embedding <=> %(e)s::vector
             LIMIT %(k)s
             """,
-            {"e": embedding, "o": owners, "d": doc_type, "k": top_k},
+            {"e": embedding, "o": owners, "d": doc_type, "k": top_k, "exclude": exclude_doc_id},
         )).fetchall()
 
     return [

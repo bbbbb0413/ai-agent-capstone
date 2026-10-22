@@ -109,6 +109,13 @@ public class InternalTenantController {
         return tenants.oncall(tenantId);
     }
 
+    @GetMapping("/postmortems")
+    List<Incident> postmortems(@PathVariable String tenantId, @RequestHeader("X-Tenant-Id") String caller,
+            @RequestParam(defaultValue = "0") long afterId) {
+        tenant(tenantId, caller);
+        return incidents.postmortems(tenantId, Math.max(0, afterId));
+    }
+
     // ── 변경 도구 (Agent가 사람의 승인을 받은 뒤에만 호출한다) ─────────
 
     @PostMapping("/incidents")
@@ -128,7 +135,7 @@ public class InternalTenantController {
             @Valid @RequestBody EscalateRequest request) {
         Tenant tenant = tenant(tenantId, caller);
         Incident incident = incidents.getForTenant(tenantId, incidentId);
-        // 발송 직전까지만 한다: 받는 사람과 메시지를 정해 발송 대기열에 넣는다. 실제 발송은 아직 없다
+        // 호출 기록을 만든다. 실제 Slack 발송은 사용자 API에서 문안·채널 검토 후 별도 승인한다.
         Map<String, Object> result = escalations.queue(tenant, incident, new EscalationService.Request(
                 request.category(), request.reason(), request.service(), request.requiredAction(),
                 request.blockedBy(), request.dependency()), traceId);

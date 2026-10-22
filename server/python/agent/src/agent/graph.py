@@ -42,6 +42,7 @@ class State(TypedDict, total=False):
     findings: str
     evidence: list[dict[str, Any]]  # 답변의 근거 (도구, 요약)
     runbook: list[dict[str, Any]]   # 근거 문서 조항
+    past_incidents: list[dict[str, Any]]  # 자동 수집한 과거 보고서. 현재 원인의 확정 근거는 아니다
     proposed_action: dict[str, Any] | None
     action_result: dict[str, Any] | None   # 조치 도구의 결과 (status: EXECUTED | PR_CREATED)
     change: dict[str, Any] | None          # GitOps PR과 반영 상태 (result: SYNCED | TIMEOUT)
@@ -163,6 +164,10 @@ async def retrieve_runbook(state: State, runtime: Rt) -> dict:
         {"query": "MSP가 사전 동의 없이 수행할 수 있는 허용 조치와 고객사 승인이 필요한 조치", "top_k": 1,
          "scope": "tenant", "doc_type": "sla"},
     ]
+    if state.get("incident_id") is not None:
+        # 회고가 쌓여도 조치의 기준인 런북을 검색 결과에서 밀어내지 않는다.
+        searches[0]["doc_type"] = "runbook"
+        searches[1]["doc_type"] = "runbook"
     docs: list[dict[str, Any]] = []
     for args in searches:
         found = parse_json(await runtime.context.toolbox.call("retrieve_runbook", "rag_search_documents", args, counts))
@@ -315,8 +320,36 @@ DIAGNOSE_QUERIES = {
 }
 
 
+async def retrieve_history(state: State, box: ToolBox, counts: dict[str, int], signals: dict) -> list[dict]:
+    """첫 진단에 과거 사례를 공급한다. 검색 실패·회고 없음은 현재 지표 진단을 막지 않는다."""
+    tenant = state.get("tenant_id")
+    if not tenant:
+        return []
+    incident = state.get("context", {}).get("incident") or {}
+    args = {"query": f"{incident.get('service') or ''} {state.get('question', '')} "
+                     f"로그 신호: {json.dumps(signals, ensure_ascii=False)}",
+            "doc_type": "postmortem", "scope": "tenant", "top_k": 2,
+            "exclude_doc_id": f"postmortem-incident-{state['incident_id']}" if state.get("incident_id") else None}
+    try:
+        response = await asyncio.wait_for(box.call("retrieve_history", "rag_search_documents", args, counts,
+                                                   max_chars=18000), timeout=8)
+        if response.status == "error":
+            return []
+        found = parse_json(response)
+    except Exception:
+        # 타임아웃·MCP 전송 예외는 보조 검색 실패다. 주 진단의 재시도 예산을 소비하지 않는다.
+        return []
+    if not isinstance(found, list):
+        return []
+    return [{**d, "content": str(d.get("content", ""))[:1800]} for d in found
+            if isinstance(d, dict) and d.get("doc_type") == "postmortem"
+            and str(d.get("uri", "")).startswith(f"docs://{tenant}/")
+            and d.get("doc_id") != args["exclude_doc_id"]][:2]
+
+
 async def diagnose(state: State, runtime: Rt) -> dict:
     prefetch: list[dict] = []
+    past_incidents = state.get("past_incidents", [])
     if state.get("messages"):
         # 조치 후 재진단. 로그 신호와 지표를 지금 시점으로 다시 센다. 첫 진단 때는 경고 로그가 아직 Loki에 들어오지
         # 않아 0건이었고, 그 값을 그대로 쓰자 장애 형태 표에 맞는 행이 없어 원인 미확정이 된 적이 있다
@@ -347,6 +380,7 @@ async def diagnose(state: State, runtime: Rt) -> dict:
         service = (state.get("context", {}).get("incident") or {}).get("service")
         changes = parse_json(await runtime.context.toolbox.call(
             "diagnose", "business_list_recent_changes", {"service": service}, prefetch_counts)) if service else None
+        past_incidents = await retrieve_history(state, runtime.context.toolbox, counts, logged.get("signals", {}))
         started_at = (state.get("context", {}).get("incident") or {}).get("startedAt")
         state = {**state, "tool_counts": counts, "signals": {"metrics": metrics, "logs": logged.get("signals", {}),
                                                              "recent_change": _recent_change(changes, started_at)}}
@@ -365,7 +399,9 @@ async def diagnose(state: State, runtime: Rt) -> dict:
                          f"알려진 로그 신호 건수(코드가 셈, 0이면 없음):\n{json.dumps(logged.get('signals', {}), ensure_ascii=False)}\n\n"
                          f"인시던트 시작: {(state.get('context', {}).get('incident') or {}).get('startedAt')}\n"
                          f"최근 배포·설정 변경(코드가 조회, 최신순):\n"
-                         f"{harness.as_untrusted(json.dumps(changes, ensure_ascii=False, default=str)[:3000])}"),
+                         f"{harness.as_untrusted(json.dumps(changes, ensure_ascii=False, default=str)[:3000])}\n\n"
+                         f"과거 유사 사례(미검토 보고서, 현재 근거와 비교할 참고 자료):\n"
+                         f"{harness.as_untrusted(json.dumps(past_incidents, ensure_ascii=False))}"),
         ]
     history = list(state.get("messages", [])) + intro
     new, turns, counts, evidence = await _tool_loop("diagnose", state, runtime, history, harness.MAX_TURNS,
@@ -375,7 +411,7 @@ async def diagnose(state: State, runtime: Rt) -> dict:
         # 근거 없는 글(조사 계획 등)이 런북 검색어와 조치 제안의 입력이 되지 않게 한다
         findings = "원인 미확정: 도구로 근거를 모으지 못했다"
     update = {"messages": intro + new, "findings": findings, "turns": turns, "tool_counts": counts,
-              "evidence": state["evidence"] + prefetch + evidence}
+              "evidence": state["evidence"] + prefetch + evidence, "past_incidents": past_incidents}
     if state.get("signals"):
         update["signals"] = state["signals"]
     if not state.get("plan") and new and isinstance(new[0], AIMessage):
@@ -664,6 +700,7 @@ async def report(state: State, runtime: Rt) -> dict:
         "type": state.get("type"), "incident_id": state.get("incident_id"),
         "request": state["question"], "plan": state.get("plan"), "findings": state.get("findings"),
         "evidence": state.get("evidence", []), "runbook": state.get("runbook", []),
+        "past_incidents": state.get("past_incidents", []),
         "action": state.get("proposed_action"), "approvals": state.get("approvals", []),
         "recovered": state.get("recovered"), "verification": state.get("verification"),
         "action_result": state.get("action_result"), "change": state.get("change"),

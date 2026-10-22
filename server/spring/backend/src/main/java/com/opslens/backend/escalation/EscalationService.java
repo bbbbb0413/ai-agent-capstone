@@ -17,7 +17,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 /**
  * 에스컬레이션을 발송 직전까지 처리한다: 요청을 검사하고, 받는 사람을 정하고, 메시지를 만들어 발송 대기열에 넣는다.
- * 실제 발송(메신저·전화·메일)은 하지 않는다. 발송기를 붙이면 대기열(escalations, status QUEUED)을 읽어 보낸다.
+ * 여기서는 호출 기록만 만든다. Slack은 작업 상세에서 문안·채널을 검토한 뒤 별도로 승인하면 발송한다.
  *
  * 받는 사람 (공통 런북 RB-STD-04~07):
  *   항상            담당 엔지니어와 MSP 관리자
@@ -68,7 +68,7 @@ public class EscalationService {
         result.put("category", escalation.category());
         result.put("recipients", escalation.recipients());
         result.put("message", escalation.message());
-        result.put("delivery", "발송 대기열에 저장했다. 실제 발송(메신저·전화·메일)은 아직 연결되지 않았다");
+        result.put("delivery", "호출 기록을 저장했다. Slack 발송은 작업 상세에서 문안·채널을 검토한 뒤 별도로 승인한다");
         return result;
     }
 

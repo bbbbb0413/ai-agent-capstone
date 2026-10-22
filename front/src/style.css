@@ -208,6 +208,11 @@ h2 .badge { vertical-align: middle; margin-left: 6px; }
 .notices { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
 .notices li { padding: 12px; border: 1px solid var(--border); border-radius: 6px; }
 .notices p { margin: 6px 0 0; }
+.slack-form { display: grid; gap: 12px; margin-top: 18px; }
+.slack-form label { display: grid; gap: 6px; }
+.slack-form label.toggle { display: flex; }
+.slack-form textarea { width: 100%; padding: 12px; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; resize: vertical; }
+.slack-form > button { justify-self: start; }
 .timeline { list-style: none; margin: 0; padding: 0; font-size: 14px; }
 .timeline li { display: grid; grid-template-columns: 20px 52px 96px 1fr; gap: 8px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--border); }
 .timeline li:last-child { border-bottom: 0; }

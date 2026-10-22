@@ -148,7 +148,9 @@ class Runner:
             await backend.emit(task_id, "APPROVAL_REQUIRED", value)
             return "WAITING_APPROVAL"
 
-        sources = [{"doc": d.get("uri"), "section": d.get("section")} for d in result.get("runbook", [])]
+        sources = [{"doc": uri, "section": section} for uri, section in dict.fromkeys(
+            (d.get("uri"), d.get("section"))
+            for d in result.get("runbook", []) + result.get("past_incidents", []))]
         # TODO: LangSmith trace 링크를 trace_id로 찾아 trace_url에 넣는다
         await backend.result(task_id, status="DONE", answer=result.get("report"), sources=sources,
                              summary=summary.build(result), report=result.get("report"))

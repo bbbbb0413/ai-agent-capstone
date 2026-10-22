@@ -3,7 +3,7 @@ package com.opslens.backend.escalation;
 import java.time.OffsetDateTime;
 import java.util.List;
 
-/** 발송 대기열에 들어간 에스컬레이션 한 건. status는 QUEUED에서 시작한다 (실제 발송은 아직 없다). */
+/** 에스컬레이션 호출 기록. Slack 승인·발송 상태는 slack_deliveries에서 별도로 관리한다. */
 public record Escalation(long id, String tenantId, long incidentId, String category, String reason, String service,
         String requiredAction, String blockedBy, String dependency, List<Recipient> recipients, String message,
         String status, OffsetDateTime createdAt, OffsetDateTime sentAt) {

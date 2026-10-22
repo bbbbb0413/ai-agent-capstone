@@ -56,3 +56,19 @@ PDF 표 6-3의 권장값을 기준으로 둔 값과, 팀이 바꾼 값과 이유
 | 2026-10-20 | 조치 돌려보내기 | 조항 검사 1번 → 조항 검사와 `supportedActions` 검사를 함께, 최대 2번 돌려보내고 거부 이유를 쌓아 넘긴다 (`graph._unsupported_action`, `PROPOSE_SEND_BACKS`) | 위 수정 뒤 `b-pool`에서 재시작이 거부되자 계약상 불가한 `rollback_deployment`를 골랐고, 두 번째 선택은 검사하지 않아 승인 요청으로 올라감(backend가 422로 막으므로 실행은 안 됨) | `scripts/e2e.py b-pool`: P1 → `ACTION_BLOCKED rollback_deployment CONTRACT` → 공지 |
 | 2026-10-20 | 장애 주입·해제 대상 | Service(NodePort)로 한 번 → 모든 파드에서 자기 관리 API를 부른다 (`scripts/inject.py set_fault`, `kubectl exec`) | 처음부터 구성한 전체 E2E에서 `a-latency` 해제가 장애를 넣지 않은 다른 파드(A사는 2개)로 가 지연이 남았다. p95 1.9초가 7분 이상 이어져 인시던트가 닫히지 않았고, 다음 `a-dbslow`의 알림이 그 인시던트로 합쳐져 새 작업이 생기지 않음 | 주입 후 두 파드 모두 `PAYMENT_LATENCY`, 해제 후 두 파드 모두 `NONE` |
 | 2026-10-20 | 막힌 조치 에스컬레이션 검사 | 없음 → `ACTION_BLOCKED`의 `required_action`이 코드가 신호로 정한 장애 형태(RB-STD-01~03)의 조치와 다르면 돌려보낸다 (`graph._signal_clause`, `_blocked_action_mismatch`) | 같은 실행의 `b-pool`에서 진단은 RB-STD-01(풀 고갈)로 맞히고 에스컬레이션의 필요한 조치를 `scale_deployment`로 적음. B사 승인 담당에게 엉뚱한 조치의 승인을 요청하게 된다 | 단위 테스트. 전체 E2E 재실행 |
+
+
+## 과거 장애 검색 (2026-10-22)
+
+첫 `diagnose` 진입에서 `retrieve_history` 허용목록으로 `rag_search_documents`를 한 번 호출한다.
+검색어는 서비스·질문·현재 로그 신호이며 `scope=tenant`, `doc_type=postmortem`, `top_k=2`로 제한한다.
+현재 인시던트의 자동 회고 ID는 검색에서 제외한다. 검색 제한은 8초이며 기존 작업 시간 예산에 포함된다.
+검색 결과를 파싱하기 위한 상한은 18,000자이고, 모델에 전달하는 본문은 조각당 1,800자로 제한한다.
+재진단에서는 처음 얻은 사례를 재사용한다. 오류·빈 결과이면 기존 진단을 계속한다.
+
+자동 회고는 미검토 AI 보고서임을 매 조각과 프롬프트에 명시한다. 현재 로그·지표와 비교해 관련 있을 때만
+참고하고, 기존 조치·계약·구조 검사와 승인 흐름을 유지한다. 인시던트 진단의 런북 검색은 `doc_type=runbook`으로
+분리해 회고가 런북을 밀어내지 않게 한다. 과거 사례 출처는 작업의 sources에 함께 저장한다.
+
+검증: Agent의 `test_history.py` 4개와 실제 pgvector를 사용하는 색인·RAG 통합 테스트 통과.
+실제 모델의 원인 판정 정확도나 처리 시간 개선은 아직 측정하지 않았다.

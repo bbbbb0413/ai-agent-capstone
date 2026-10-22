@@ -88,6 +88,20 @@ public class IncidentRepository {
                 .list();
     }
 
+    /** 색인기가 전체 이력을 순회한다. OPEN·빈 보고서·실패한 작업 결과는 회고로 보내지 않는다. */
+    public List<Incident> postmortems(String tenantId, long afterId) {
+        return jdbc.sql("""
+                        SELECT i.* FROM incidents i
+                        WHERE i.tenant_id = ? AND i.id > ? AND i.status = 'RESOLVED'
+                          AND i.resolved_at IS NOT NULL AND length(trim(i.report)) > 0
+                          AND EXISTS (SELECT 1 FROM ai_tasks t
+                                      WHERE t.incident_id = i.id AND t.tenant_id = i.tenant_id
+                                        AND t.status = 'DONE' AND t.answer = i.report)
+                        ORDER BY i.id LIMIT 100
+                        """)
+                .params(tenantId, afterId).query(IncidentRepository::toIncident).list();
+    }
+
     private static Incident toIncident(ResultSet rs, int rowNum) throws SQLException {
         return new Incident(rs.getLong("id"), rs.getString("tenant_id"), rs.getString("service"),
                 rs.getString("title"), rs.getString("severity"), rs.getString("status"), rs.getString("report"),
