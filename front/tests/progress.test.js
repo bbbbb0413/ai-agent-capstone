@@ -44,6 +44,16 @@ test('approval is not used as a substitute for execution outcome', () => {
   assert.notEqual(actionResultLabel({ status: 'PR_CREATED' }), actionResultLabel({ status: 'EXECUTED' }))
 })
 
+test('reported symptom registration approval explains that it does not execute a recovery action', () => {
+  const request = { tool: 'business_create_incident', args: {
+    service: 'order-api', severity: 'P2', title: '제보 기반 점검: order-api',
+  } }
+  assert.deepEqual(Object.fromEntries(approvalFields(request)), {
+    '대상 서비스': 'order-api', 심각도: 'P2', 제목: '제보 기반 점검: order-api',
+  })
+  assert.match(approvalImpact(request), /별도 승인 없이는 실행되지 않는다/)
+})
+
 test('GitOps pod restart is described as direct API execution, not a PR', () => {
   const request = { tool: 'business_execute_runbook_action', changeMode: 'GITOPS', args: { action: 'restart_pods' } }
   assert.equal(approvalChangeMode(request), 'Kubernetes API로 바로 실행')

@@ -3,7 +3,7 @@
 import json
 import unittest
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 from langchain_core.messages import ToolMessage
 
@@ -35,6 +35,14 @@ class NoIssueRouteTests(unittest.TestCase):
         state = question("A사 SLA 계약서의 P1 응답 기한은?", open_incidents=[])
         self.assertEqual(graph.route_triage(state), "retrieve_runbook")
 
+    def test_t7_4_symptom_with_named_service_requires_incident_registration_approval(self):
+        state = question("A사 order-api가 지금 너무 느려", open_incidents=[], services=[{"name": "order-api"}])
+        self.assertEqual(graph.route_triage(state), "register_incident")
+
+    def test_t7_5_ambiguous_symptom_does_not_guess_a_service(self):
+        state = question("A사 지금 너무 느려", open_incidents=[], services=[{"name": "order-api"}])
+        self.assertEqual(graph.route_triage(state), "no_issue")
+
 
 class NoIssueContextTests(unittest.IsolatedAsyncioTestCase):
     async def load(self, incidents: ToolMessage) -> dict:
@@ -42,13 +50,34 @@ class NoIssueContextTests(unittest.IsolatedAsyncioTestCase):
         update = await graph.load_context(state, runtime_with(incidents))
         return update["context"]
 
-    async def test_t7_4_empty_content_means_none_open_and_error_means_unknown(self):
+    async def test_t7_6_empty_content_means_none_open_and_error_means_unknown(self):
         empty = ToolMessage(content="<tool_output>\n\n</tool_output>", status="success", tool_call_id="t")
         self.assertEqual((await self.load(empty))["open_incidents"], [])
 
         error = ToolMessage(content="<tool_output>\n500: business-mcp 응답 없음\n</tool_output>",
                             status="error", tool_call_id="t")
         self.assertIsNone((await self.load(error))["open_incidents"])
+
+    async def test_t7_7_registration_creates_only_after_approval(self):
+        state = {**question("order-api가 느려", open_incidents=[], services=[{"name": "order-api"}]),
+                 "task_id": "task", "approvals": [], "tool_counts": {}, "evidence": []}
+        result = ToolMessage(content=json.dumps({"incidentId": 42}), status="success", tool_call_id="create")
+        call = AsyncMock(return_value=result)
+        runtime = SimpleNamespace(context=SimpleNamespace(toolbox=SimpleNamespace(call=call)))
+        with patch("agent.graph.interrupt", return_value={"decision": "APPROVE"}):
+            update = await graph.register_incident(state, runtime)
+        self.assertEqual(update["incident_id"], 42)
+        self.assertEqual(call.await_args.args[1], "business_create_incident")
+
+    async def test_t7_8_rejected_registration_does_not_call_the_write_tool(self):
+        state = {**question("order-api가 느려", open_incidents=[], services=[{"name": "order-api"}]),
+                 "task_id": "task", "approvals": [], "tool_counts": {}, "evidence": []}
+        call = AsyncMock()
+        runtime = SimpleNamespace(context=SimpleNamespace(toolbox=SimpleNamespace(call=call)))
+        with patch("agent.graph.interrupt", return_value={"decision": "REJECT"}):
+            update = await graph.register_incident(state, runtime)
+        self.assertTrue(update["registration_rejected"])
+        call.assert_not_awaited()
 
 
 if __name__ == "__main__":
