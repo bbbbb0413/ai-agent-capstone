@@ -23,7 +23,7 @@ class FakeConsumer:
     def __init__(self, partitions):
         self.assigned = set(partitions)
         self.commits: list[tuple[TopicPartition, int, float]] = []
-        self.paused, self.resumed = [], []
+        self.paused, self.resumed, self.seeks = [], [], []
 
     def assignment(self):
         return self.assigned
@@ -35,7 +35,7 @@ class FakeConsumer:
         self.resumed += tps
 
     def seek(self, tp, offset):
-        pass
+        self.seeks.append((tp, offset))
 
     async def commit(self, offsets):
         for tp, offset in offsets.items():
@@ -131,6 +131,19 @@ class KafkaWorkerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(producer.send_and_wait.await_args.args[0], kafka_worker.DLT)
         self.assertEqual(result.await_args.kwargs["status"], "FAILED")
 
+    async def test_unhandled_record_is_reread_instead_of_skipped(self):
+        tp = TopicPartition("tasks.gold", 0)
+        runner = FakeRunner({}, fail={"bad"})
+        worker, consumer, producer = self.worker(runner, [tp])
+        producer.send_and_wait.side_effect = RuntimeError("broker down")   # 재시도 발행도 실패한다
+        with unittest.mock.patch.object(kafka_worker, "CHAIN_RETRY_SECONDS", 0):
+            worker.dispatch({tp: [record("tasks.gold", 0, 4, "bad"), record("tasks.gold", 0, 5, "next")]})
+            await self.drain(worker)
+        self.assertEqual(consumer.seeks, [(tp, 4)])   # 실패한 레코드부터 다시 읽는다
+        self.assertEqual(consumer.commits, [])
+        self.assertNotIn("next", runner.started)
+        self.assertEqual(consumer.resumed, [tp])
+
     async def test_shared_slots_cap_concurrency(self):
         tps = [TopicPartition("tasks.gold", i) for i in range(3)]
         runner = FakeRunner({f"t{i}": 0.03 for i in range(3)})
@@ -157,6 +170,30 @@ class KafkaWorkerTests(unittest.IsolatedAsyncioTestCase):
         slots.release()
         await asyncio.gather(silver, gold)
         self.assertEqual(order, ["gold", "silver"])
+
+    async def test_consumer_loop_reconnects_after_any_error(self):
+        calls = []
+
+        async def broken(runner, slots):
+            calls.append(1)
+            if len(calls) == 1:
+                raise RuntimeError("unexpected")
+            raise asyncio.CancelledError
+
+        with unittest.mock.patch.object(kafka_worker, "_consume", broken), \
+                unittest.mock.patch.object(kafka_worker, "RECONNECT_SECONDS", 0):
+            with self.assertRaises(asyncio.CancelledError):
+                await kafka_worker.consume(None, asyncio.Semaphore(1))
+        self.assertEqual(len(calls), 2)   # 예외 뒤에도 다시 연결했다
+        self.assertIn("RuntimeError", kafka_worker.health.error)
+
+    def test_health_needs_a_recent_poll(self):
+        h = kafka_worker.ConsumerHealth()
+        self.assertFalse(h.alive())
+        h.polled()
+        self.assertTrue(h.alive())
+        h.last_poll -= kafka_worker.STALE_POLL_SECONDS + 1
+        self.assertFalse(h.alive())
 
     def test_consumer_role(self):
         self.assertEqual(kafka_worker.tiers("all"), ["gold", "silver"])

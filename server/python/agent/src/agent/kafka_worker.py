@@ -32,9 +32,27 @@ DLT = "tasks.dlt"
 TOPICS = {"gold": ("tasks.gold", "tasks.retry.gold"), "silver": ("tasks.silver", "tasks.retry.silver")}
 MAX_ATTEMPTS = 3
 POLL_TIMEOUT_MS = 500
+CHAIN_RETRY_SECONDS = 5   # 레코드 처리 자체가 실패했을 때 다시 읽기 전 기다리는 시간
+STALE_POLL_SECONDS = 30   # 이만큼 poll하지 못하면 /health가 실패한다
 # 작업 하나가 회복 확인까지 약 3분 걸린다. 그보다 길게 두어야 실행 중 poll 간격 때문에 그룹에서 빠지지 않는다
 # (루프는 계속 poll하므로 보통은 닿지 않는다)
 CONSUMER_OPTIONS = {"max_poll_interval_ms": 300_000, "session_timeout_ms": 45_000, "heartbeat_interval_ms": 15_000}
+
+
+@dataclass
+class ConsumerHealth:
+    """소비 루프가 살아 있는지. /health가 본다. 루프는 작업을 실행하는 동안에도 POLL_TIMEOUT_MS마다 poll한다."""
+    last_poll: float | None = None
+    error: str | None = None
+
+    def polled(self) -> None:
+        self.last_poll, self.error = time.monotonic(), None
+
+    def alive(self) -> bool:
+        return self.last_poll is not None and time.monotonic() - self.last_poll < STALE_POLL_SECONDS
+
+
+health = ConsumerHealth()
 
 
 @dataclass
@@ -84,6 +102,7 @@ class TierWorker:
     async def run(self) -> None:
         while True:
             batch = await self.consumer.getmany(timeout_ms=POLL_TIMEOUT_MS)
+            health.polled()
             self.dispatch(batch)
 
     def dispatch(self, batch: dict[TopicPartition, list[ConsumerRecord]]) -> None:
@@ -113,6 +132,13 @@ class TierWorker:
             await self.slots.acquire(self.tier)
             try:
                 await self._handle(record)
+            except Exception:  # noqa: BLE001 — 재시도 발행이나 실패 기록이 안 됐다 (브로커·backend 장애)
+                # fetch 위치는 이미 묶음 뒤에 있다. 되감지 않으면 이 레코드와 뒤 레코드를 재시작 전까지 다시 읽지 않는다
+                log.exception("%s@%d not handled, rereading after %ds", tp, record.offset, CHAIN_RETRY_SECONDS)
+                await asyncio.sleep(CHAIN_RETRY_SECONDS)
+                if tp in self.consumer.assignment():
+                    self.consumer.seek(tp, record.offset)
+                return
             finally:
                 self.slots.release()
             await self._commit(tp, record.offset + 1)
@@ -153,14 +179,22 @@ RECONNECT_SECONDS = 5
 
 
 async def consume(runner: Runner, semaphore: asyncio.Semaphore) -> None:
-    """브로커에 닿지 않으면(아직 뜨는 중, 일시 장애) 기다렸다가 다시 연결한다. 한 번 실패로 소비가 멈추지 않게 한다."""
+    """브로커에 닿지 않거나(아직 뜨는 중, 일시 장애) 소비 루프가 예외로 끝나면 기다렸다가 다시 연결한다.
+
+    연결 오류만 잡으면 다른 예외에 소비가 조용히 멈추고 /health는 계속 ok였다. 이제 모든 예외에 다시 연결하고,
+    그동안 /health가 실패한다(ConsumerHealth).
+    """
     slots = Slots(semaphore)
     while True:
         try:
             await _consume(runner, slots)
         except KafkaConnectionError as e:
+            health.error = f"Kafka unavailable: {e}"
             log.warning("Kafka unavailable (%s), reconnecting in %ds", e, RECONNECT_SECONDS)
-            await asyncio.sleep(RECONNECT_SECONDS)
+        except Exception as e:  # noqa: BLE001 — 소비 루프는 멈추지 않는다
+            health.error = f"{type(e).__name__}: {e}"
+            log.exception("Kafka consumer loop failed, reconnecting in %ds", RECONNECT_SECONDS)
+        await asyncio.sleep(RECONNECT_SECONDS)
 
 
 async def _consume(runner: Runner, slots: Slots) -> None:

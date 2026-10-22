@@ -10,7 +10,7 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Response
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
@@ -116,7 +116,11 @@ async def _limited(task_id: str, coro) -> Any:
 
 
 @app.get("/health")
-async def health() -> dict:
+async def health(response: Response) -> dict:
+    """kafka 모드에서는 소비 루프가 최근에 poll했는지도 본다. 소비가 멈춘 agent를 정상으로 보이지 않게 한다."""
+    if settings.dispatch_mode == "kafka" and not kafka_worker.health.alive():
+        response.status_code = 503
+        return {"status": "degraded", "kafka": kafka_worker.health.error or "no recent poll"}
     return {"status": "ok"}
 
 
