@@ -24,7 +24,7 @@ from langgraph.graph.message import add_messages
 from langgraph.runtime import Runtime
 from langgraph.types import interrupt
 
-from agent import customer_notice, harness, summary
+from agent import customer_notice, harness, jev, summary
 from agent.backend import backend
 from agent.toolbox import ToolBox, parse_json
 
@@ -304,7 +304,8 @@ async def _recent_log_patterns(box: ToolBox, counts: dict[str, int], incident_id
     top = sorted(patterns.values(), key=lambda p: -p["count"])[:6]
     summary_text = (json.dumps(top, ensure_ascii=False) if top
                     else "조회 구간에 ERROR·WARN 로그 없음" if result.status != "error" else "로그 조회 실패")
-    signals = {name: sum(p["count"] for key, p in patterns.items() if pattern in key)
+    # 묶음 키는 숫자를 #으로 바꿨으므로 신호 문구도 같게 바꿔 찾는다. "503 worker pool saturated"가 0건으로 세진 적이 있다
+    signals = {name: sum(p["count"] for key, p in patterns.items() if _LOG_NUMBERS.sub("#", pattern) in key)
                for name, pattern in LOG_SIGNALS.items()}
     return summary_text, {"tool": "grafana_query_loki_logs", "args": args, "status": result.status,
                           "summary": summary_text[:500], "signals": signals}
@@ -433,7 +434,20 @@ async def propose_action(state: State, runtime: Rt) -> dict:
         return {"proposed_action": None}
     # 진단에 몇 분이 걸리는 동안 HPA가 파드를 늘렸을 수 있다. 제안 직전의 서비스 목록으로 판단한다 (스펙 5.4.2)
     box, counts = runtime.context.toolbox, dict(state["tool_counts"])
+    signals = state.get("signals") or {}
+    fault_task = asyncio.create_task(jev.classify_fault(signals)) if signals.get("metrics") else None
     services = parse_json(await box.call("propose_action", "business_get_service_inventory", {}, counts))
+    fault = await fault_task if fault_task else None
+    fault_note = ""
+    if fault:
+        # Jev는 장애 형태만 정한다. 확신도가 낮으면 GPT가 지금처럼 판정표로 직접 고르고, 판정은 기록만 남긴다.
+        # Jev는 코드가 센 신호만 보고 GPT는 로그 원문까지 본다. Jev의 RB-STD-07은 "신호가 안 맞는다"일 뿐이라 넘기지 않는다
+        applied = fault["choice"] != "RB-STD-07" and fault["confidence"] >= jev.JEV_MIN_CONFIDENCE
+        await backend.emit(state["task_id"], "STEP", {"node": "propose_action", "fault": fault["choice"],
+                                                       "confidence": round(fault["confidence"], 2), "applied": applied})
+        if applied:
+            fault_note = (f"장애 형태(Jev 판정, 확신도 {fault['confidence']:.0%}): {fault['choice']}. "
+                          "1단계(장애 형태 정하기)는 이 판정을 따르고 2단계부터 진행한다.\n\n")
     context = {**state.get("context", {}), "services": services} if isinstance(services, list) \
         else state.get("context", {})
     state = {**state, "context": context, "tool_counts": counts}
@@ -443,7 +457,7 @@ async def propose_action(state: State, runtime: Rt) -> dict:
     model = harness.chat_model(tools, harness.PROPOSE_REASONING_EFFORT, tool_choice=None if scaling else "required")
     messages = [
         SystemMessage(harness.prompt("system") + "\n\n" + harness.prompt("propose")),
-        HumanMessage(f"진단 결과:\n{state['findings']}\n\n"
+        HumanMessage(f"{fault_note}진단 결과:\n{state['findings']}\n\n"
                      f"지표와 로그 신호(코드가 조회):\n{json.dumps(state.get('signals', {}), ensure_ascii=False)}\n\n런북·계약 조항:\n"
                      f"{json.dumps(state.get('runbook', []), ensure_ascii=False)}\n\n"
                      f"고객사 컨텍스트:\n{json.dumps(state.get('context', {}), ensure_ascii=False, default=str)}"),

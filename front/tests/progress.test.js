@@ -29,6 +29,15 @@ test('older successful events without call IDs are still readable', () => {
   assert.equal(rows[0].state, 'done')
 })
 
+test('Jev fault verdict is a finished row, not the report step', () => {
+  const rows = toTimeline([event('STEP', { node: 'propose_action', fault: 'RB-STD-02', confidence: 1, applied: true }),
+    event('STEP', { node: 'propose_action', fault: 'RB-STD-07', confidence: 0.99, applied: false })])
+  assert.equal(rows[0].label, '장애 형태 판정 (Jev): RB-STD-02')
+  assert.equal(rows[0].state, 'ok')
+  assert.match(rows[0].detail, /100% · 조치 판단에 사용/)
+  assert.match(rows[1].detail, /기록만/)
+})
+
 test('approval is not used as a substitute for execution outcome', () => {
   assert.equal(actionResultLabel(null), '실행 확인 안 됨')
   assert.equal(actionResultLabel({ status: 'FAILED' }), '실행 실패')

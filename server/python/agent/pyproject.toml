@@ -17,6 +17,8 @@ dependencies = [
     "aiokafka>=0.14,<0.15",
     # agent 스키마 마이그레이션. agent-migrate 컨테이너가 한 번 실행한다 (SPEC-kafka-scale 4.3(8))
     "alembic>=1.20,<1.21",
+    # 장애 형태 판정(Jev). 키가 없으면 호출하지 않고 GPT가 지금처럼 판정한다 (docs/jev.md)
+    "typesafe-sdk>=0.7.5,<0.8",
 ]
 
 [build-system]

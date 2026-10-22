@@ -1,4 +1,4 @@
-"""Jev(TypeSafe System One)로 장애 형태(공통 런북 조항)를 고른다. 1단계라 그래프에는 아직 연결하지 않는다."""
+"""Jev(TypeSafe System One)로 장애 형태(공통 런북 조항)를 고른다. 조치·인자·이유는 여전히 GPT가 정한다 (docs/jev.md)."""
 
 import asyncio
 import logging
@@ -9,6 +9,7 @@ log = logging.getLogger(__name__)
 
 JEV_MODEL = os.getenv("TYPESAFE_MODEL", "jev-latest")
 JEV_TIMEOUT_SECONDS = float(os.getenv("TYPESAFE_TIMEOUT_SECONDS", "5"))
+JEV_MIN_CONFIDENCE = float(os.getenv("TYPESAFE_MIN_CONFIDENCE", "0.9"))   # 이보다 낮으면 GPT에 넘기지 않고 기록만 한다
 
 # graph._signal_clause, graph.P95_THRESHOLD_SECONDS와 같은 기준이어야 판정을 서로 비교할 수 있다
 ERROR_RATE_HIGH = 0.05

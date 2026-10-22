@@ -1,12 +1,15 @@
-"""Jev 호출 없이 장애 형태 판정의 입력 변환과 실패 처리를 검증한다."""
+"""Jev 호출 없이 장애 형태 판정의 입력 변환, 실패 처리, 조치 제안 연결을 검증한다 (docs/기능별-변경사항.md T14)."""
 
 import asyncio
+import json
 import os
 import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from agent import jev
+from langchain_core.messages import AIMessage, ToolMessage
+
+from agent import graph, jev
 
 
 class BuildStateTests(unittest.TestCase):
@@ -59,6 +62,54 @@ class ClassifyFaultTests(unittest.IsolatedAsyncioTestCase):
         with patch.dict(os.environ, {}, clear=True), patch.object(jev, "_new_client") as new_client:
             self.assertIsNone(await jev.classify_fault(self.SIGNALS))
         new_client.assert_not_called()
+
+
+class ProposeWithJevTests(unittest.IsolatedAsyncioTestCase):
+    STATE = {"task_id": "t", "incident_id": 7, "turns": 1, "tool_counts": {}, "findings": "DB 지연",
+             "signals": {"metrics": {"error_rate": 0.01}, "logs": {"slow_query": 31}}, "runbook": [], "context": {}}
+
+    async def propose(self, fault):  # GPT는 도구 없이 답한다. GPT 입력과 STEP 이벤트만 본다
+        seen = []
+
+        class StubModel:
+            async def ainvoke(self, messages):
+                seen.append(messages[1].content)
+                return AIMessage(content="조치 없음")
+
+        inventory = ToolMessage(content=json.dumps([]), status="success", tool_call_id="i")
+        runtime = SimpleNamespace(context=SimpleNamespace(
+            toolbox=SimpleNamespace(call=AsyncMock(return_value=inventory), for_node=lambda node: []),
+            check_time=lambda: None))
+        with patch("agent.graph.harness.chat_model", return_value=StubModel()), \
+                patch("agent.graph.jev.classify_fault", new=AsyncMock(return_value=fault)), \
+                patch("agent.graph.backend.emit", new=AsyncMock()) as emit:
+            await graph.propose_action(self.STATE, runtime)
+        steps = [c.args[2] for c in emit.await_args_list if c.args[1] == "STEP"]
+        return seen[0], steps
+
+    async def test_confident_verdict_goes_to_gpt_otherwise_only_recorded(self):  # T14-3
+        prompt, steps = await self.propose({"choice": "RB-STD-05", "confidence": 0.99, "probabilities": {}})
+        self.assertIn("장애 형태(Jev 판정, 확신도 99%): RB-STD-05", prompt)
+        self.assertEqual(steps, [{"node": "propose_action", "fault": "RB-STD-05", "confidence": 0.99, "applied": True}])
+
+        for low in ({"choice": "RB-STD-02", "confidence": 0.6}, {"choice": "RB-STD-07", "confidence": 0.99}):
+            prompt, steps = await self.propose({**low, "probabilities": {}})
+            self.assertNotIn("Jev 판정", prompt)
+            self.assertFalse(steps[0]["applied"])
+
+        prompt, steps = await self.propose(None)
+        self.assertNotIn("Jev 판정", prompt)
+        self.assertEqual(steps, [])
+
+    async def test_log_signal_with_digits_is_counted(self):  # T14-4
+        line = ("order rejected: 503 worker pool saturated (active=200/200, queued=1000/1000), "
+                "oldest worker blocked 251s")
+        rows = [{"line": line, "labels": {"level": "ERROR"}}] * 3
+        box = SimpleNamespace(call=AsyncMock(return_value=ToolMessage(
+            content=json.dumps(rows), status="success", tool_call_id="l")))
+        _, logged = await graph._recent_log_patterns(box, {}, None)
+        self.assertEqual(logged["signals"]["worker_pool_saturated"], 3)
+        self.assertEqual(logged["signals"]["request_queue_backlog"], 0)
 
 
 if __name__ == "__main__":

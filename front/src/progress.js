@@ -201,6 +201,12 @@ export function toTimeline(events) {
         break
       }
       case 'STEP':
+        if (data.node === 'propose_action') {
+          add({ kind: 'decision', stage: STAGES.propose_action, label: `장애 형태 판정 (Jev): ${data.fault}`,
+                detail: `확신도 ${Math.round(data.confidence * 100)}% · ${data.applied ? '조치 판단에 사용' : '기록만 (GPT가 판단)'}`,
+                state: 'ok' }, createdAt)
+          break
+        }
         add(data.node === 'verify'
           ? { kind: 'step', stage: STAGES.verify, label: `조치가 메트릭에 반영되기를 기다림 (${data.waitSeconds}초)`, state: 'running' }
           : { kind: 'step', stage: STAGES[data.node], label: '보고서 작성', state: 'running' }, createdAt)
