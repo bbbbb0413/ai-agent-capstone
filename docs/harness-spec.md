@@ -8,7 +8,7 @@ PDF 표 6-3의 권장값을 기준으로 둔 값과, 팀이 바꾼 값과 이유
 |---|---|---|---|---|
 | Agent Loop | 모델 호출 최대 턴 | 8 | 8 | |
 | Agent Loop | 작업 실행 시간 | 120초 | 120초 | 승인·PR 반영 대기, 회복 확인 대기(20초, 재측정 20초)는 빼고 구간별로 잰다 (`agent.task_budget`) |
-| Agent Loop | 회복 확인 | 조치 20초 뒤 15초 창, 기준 안이면 20초 뒤 한 번 더 | — | 둘 다 알림 기준(에러율 0.2, p95 1초) 안이어야 회복 (`harness.VERIFY_*_SECONDS`, `graph._within_thresholds`) |
+| Agent Loop | 회복 확인 | 조치 20초 뒤 15초 창, 기준 안이면 20초 뒤 한 번 더 | — | 둘 다 알림 기준(에러율 0.2, p95 1초) 안이어야 회복 (`harness.VERIFY_*_SECONDS`, `signals.within_thresholds`) |
 | Agent Loop | 같은 도구 호출 | Node마다 3회 | 3회 | |
 | Tools | 도구 결과 길이 | 4,000자 | 길이 제한 | |
 | Context | 대화 예산 | 24,000자 | Token 예산 | 넘으면 오래된 도구 결과를 줄인다. 모델 요약은 TODO |

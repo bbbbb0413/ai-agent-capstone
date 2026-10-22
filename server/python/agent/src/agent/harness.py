@@ -20,7 +20,7 @@ from agent.config import settings
 MAX_TURNS = 8            # 작업 하나에서 모델을 부르는 최대 횟수
 TASK_SECONDS = 120       # 실행 시간 한도. 승인·반영 대기와 회복 확인 대기(VERIFY_*_SECONDS)는 빼고 잰다
 MAX_SAME_TOOL = 3        # 같은 Node 안에서 같은 도구 호출 한도
-# 조치가 메트릭에 반영될 때까지 기다리는 시간. graph.VERIFY_QUERIES의 rate 창(15s)보다 길어야 한다
+# 조치가 메트릭에 반영될 때까지 기다리는 시간. signals.VERIFY_QUERIES의 rate 창(15s)보다 길어야 한다
 VERIFY_SETTLE_SECONDS = 20
 VERIFY_RETRY_SECONDS = 10   # 조치 후 메트릭이 아직 없으면 한 번 더 기다리는 시간 (재시작한 파드의 첫 수집)
 VERIFY_CONFIRM_SECONDS = 20   # 첫 측정이 기준 안이면 이만큼 뒤에 한 번 더 잰다 (확장 직후 일시적 하락)
@@ -51,7 +51,7 @@ NODE_TOOLS: dict[str, set[str]] = {
                        "business_get_service_inventory",   # 제안 직전에 코드가 HPA 상태를 새로 읽는다
                        "business_escalate_incident"},   # 계약·구조상 할 수 없으면 조치 대신 에스컬레이션 (RB-STD-05~07)
     "escalate": {"business_escalate_incident"},
-    "verify": {"grafana_query_prometheus"},   # 코드가 정해진 쿼리로만 호출한다 (graph.VERIFY_QUERIES)
+    "verify": {"grafana_query_prometheus"},   # 코드가 정해진 쿼리로만 호출한다 (signals.VERIFY_QUERIES)
     "notice": {"business_send_customer_notice"},
 }
 

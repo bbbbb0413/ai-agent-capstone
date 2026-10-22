@@ -55,7 +55,7 @@ class NoEvidenceTests(unittest.IsolatedAsyncioTestCase):
     async def diagnose(self, model: SimpleNamespace, tool_status: str = "success") -> dict:
         logged = {"tool": "grafana_query_loki_logs", "args": {"startRfc3339": "2026-10-20T00:00:00Z"},
                   "status": "success", "summary": ""}
-        with models(model, model), patch("agent.graph._recent_log_patterns", AsyncMock(return_value=("", logged))):
+        with models(model, model), patch("agent.signals.recent_log_patterns", AsyncMock(return_value=("", logged))):
             update = await graph.diagnose(dict(STATE), runtime_with(tool_status))
         return {**STATE, **update}
 

@@ -11,7 +11,7 @@ JEV_MODEL = os.getenv("TYPESAFE_MODEL", "jev-latest")
 JEV_TIMEOUT_SECONDS = float(os.getenv("TYPESAFE_TIMEOUT_SECONDS", "5"))
 JEV_MIN_CONFIDENCE = float(os.getenv("TYPESAFE_MIN_CONFIDENCE", "0.9"))   # 이보다 낮으면 GPT에 넘기지 않고 기록만 한다
 
-# graph._signal_clause, graph.P95_THRESHOLD_SECONDS와 같은 기준이어야 판정을 서로 비교할 수 있다
+# action_guards.signal_clause, signals.P95_THRESHOLD_SECONDS와 같은 기준이어야 판정을 서로 비교할 수 있다
 ERROR_RATE_HIGH = 0.05
 P95_SLOW_SECONDS = 1.0
 

@@ -10,7 +10,7 @@ from langchain_core.messages import ToolMessage
 from langchain_mcp_adapters.tools import convert_mcp_tool_to_langchain_tool
 from mcp.types import CallToolResult, TextContent, Tool
 
-from agent import graph, summary
+from agent import action_guards, graph, signals, summary
 from agent.runner import Runner
 from agent.toolbox import ToolBox, parse_json
 
@@ -82,10 +82,10 @@ class ToolOutcomeTests(unittest.IsolatedAsyncioTestCase):
         from datetime import datetime, timedelta, timezone
         now = datetime(2026, 10, 20, 9, 0, tzinfo=timezone.utc)
         started = {"startedAt": "2026-10-20T08:58:00Z"}
-        self.assertEqual(graph._log_window_start(now, started), now - timedelta(minutes=4))
+        self.assertEqual(signals.log_window_start(now, started), now - timedelta(minutes=4))
         old = {"startedAt": "2026-10-20T07:00:00Z"}   # 오래된 인시던트는 최근 10분
-        self.assertEqual(graph._log_window_start(now, old), now - timedelta(minutes=10))
-        self.assertEqual(graph._log_window_start(now, None), now - timedelta(minutes=10))
+        self.assertEqual(signals.log_window_start(now, old), now - timedelta(minutes=10))
+        self.assertEqual(signals.log_window_start(now, None), now - timedelta(minutes=10))
 
     def test_only_an_autoscaler_still_scaling_up_allows_no_action(self):
         def ctx(desired, maximum):
@@ -102,20 +102,20 @@ class ToolOutcomeTests(unittest.IsolatedAsyncioTestCase):
         def ai(action, reason):
             return AIMessage(content="", tool_calls=[{"name": "business_execute_runbook_action", "id": "c1",
                                                       "args": {"action": action, "reason": reason}}])
-        self.assertIn("ACTION_BLOCKED", graph._clause_mismatch(ai("restart_pods", "RB-STD-03 트래픽 급증, 큐를 비운다")))
-        self.assertIsNone(graph._clause_mismatch(ai("adjust_autoscaler", "RB-STD-03에 따라 최대치를 올린다")))
-        self.assertIsNone(graph._clause_mismatch(ai("restart_pods", "RB-STD-02 작업 스레드 고갈")))
-        self.assertIsNone(graph._clause_mismatch(ai("restart_pods", "조항 인용 없음")))
+        self.assertIn("ACTION_BLOCKED", action_guards.clause_mismatch(ai("restart_pods", "RB-STD-03 트래픽 급증, 큐를 비운다")))
+        self.assertIsNone(action_guards.clause_mismatch(ai("adjust_autoscaler", "RB-STD-03에 따라 최대치를 올린다")))
+        self.assertIsNone(action_guards.clause_mismatch(ai("restart_pods", "RB-STD-02 작업 스레드 고갈")))
+        self.assertIsNone(action_guards.clause_mismatch(ai("restart_pods", "조항 인용 없음")))
         # RB-STD-01의 재시작은 직전 변경이 없을 때만. 직전 변경이 있으면 롤백, 불가하면 에스컬레이션
-        self.assertIsNone(graph._clause_mismatch(ai("restart_pods", "RB-STD-01 풀 고갈, 직전 변경 없음")))
-        self.assertIn("ACTION_BLOCKED", graph._clause_mismatch(ai("restart_pods", "RB-STD-01 풀 고갈"), recent_change=True))
-        self.assertIsNone(graph._clause_mismatch(ai("rollback_deployment", "RB-STD-01 풀 고갈"), recent_change=True))
+        self.assertIsNone(action_guards.clause_mismatch(ai("restart_pods", "RB-STD-01 풀 고갈, 직전 변경 없음")))
+        self.assertIn("ACTION_BLOCKED", action_guards.clause_mismatch(ai("restart_pods", "RB-STD-01 풀 고갈"), recent_change=True))
+        self.assertIsNone(action_guards.clause_mismatch(ai("rollback_deployment", "RB-STD-01 풀 고갈"), recent_change=True))
 
     def test_recovery_needs_error_metrics_and_both_thresholds(self):
-        self.assertTrue(graph._within_thresholds({"error_rate": 0.0, "p95_seconds": 0.6}))
-        self.assertTrue(graph._within_thresholds({"error_rate": 0.0, "p95_seconds": None}))
-        self.assertFalse(graph._within_thresholds({"error_rate": None, "p95_seconds": 0.1}))   # 요청 메트릭 미수집
-        self.assertFalse(graph._within_thresholds({"error_rate": 0.0, "p95_seconds": 3.0}))
+        self.assertTrue(signals.within_thresholds({"error_rate": 0.0, "p95_seconds": 0.6}))
+        self.assertTrue(signals.within_thresholds({"error_rate": 0.0, "p95_seconds": None}))
+        self.assertFalse(signals.within_thresholds({"error_rate": None, "p95_seconds": 0.1}))   # 요청 메트릭 미수집
+        self.assertFalse(signals.within_thresholds({"error_rate": 0.0, "p95_seconds": 3.0}))
 
     def test_action_outside_supported_actions_is_sent_back(self):
         from langchain_core.messages import AIMessage
@@ -123,11 +123,11 @@ class ToolOutcomeTests(unittest.IsolatedAsyncioTestCase):
             return AIMessage(content="", tool_calls=[{"name": "business_execute_runbook_action", "id": "c1",
                                                       "args": {"action": action, "service": "reservation-api"}}])
         context = {"services": [{"name": "reservation-api", "supportedActions": ["restart_pods"]}]}
-        problem = graph._unsupported_action(ai("rollback_deployment"), context)
+        problem = action_guards.unsupported_action(ai("rollback_deployment"), context)
         self.assertIn("ACTION_BLOCKED", problem)
         self.assertIn("rollback_deployment", problem)
-        self.assertIsNone(graph._unsupported_action(ai("restart_pods"), context))
-        self.assertIsNone(graph._unsupported_action(ai("restart_pods"), {}))   # 서비스 목록이 없으면 판단하지 않는다
+        self.assertIsNone(action_guards.unsupported_action(ai("restart_pods"), context))
+        self.assertIsNone(action_guards.unsupported_action(ai("restart_pods"), {}))   # 서비스 목록이 없으면 판단하지 않는다
 
     def test_blocked_escalation_must_name_the_action_of_the_signalled_fault(self):
         from langchain_core.messages import AIMessage
@@ -135,30 +135,51 @@ class ToolOutcomeTests(unittest.IsolatedAsyncioTestCase):
             return AIMessage(content="", tool_calls=[{"name": "business_escalate_incident", "id": "c1", "args": {
                 "category": "ACTION_BLOCKED", "required_action": action, "blocked_by": "CONTRACT", "reason": "x"}}])
         pool = {"metrics": {"error_rate": 0.51}, "logs": {"connection_pool_exhausted": 50}}
-        self.assertIn("RB-STD-01", graph._blocked_action_mismatch(esc("scale_deployment"), pool, True))
-        self.assertIsNone(graph._blocked_action_mismatch(esc("rollback_deployment"), pool, True))
+        self.assertIn("RB-STD-01", action_guards.blocked_action_mismatch(esc("scale_deployment"), pool, True))
+        self.assertIsNone(action_guards.blocked_action_mismatch(esc("rollback_deployment"), pool, True))
         surge = {"metrics": {"error_rate": 0.0}, "logs": {"request_queue_backlog": 120}}
-        self.assertIsNone(graph._blocked_action_mismatch(esc("scale_deployment"), surge, False))
-        self.assertIn("RB-STD-03", graph._blocked_action_mismatch(esc("rollback_deployment"), surge, False))
-        self.assertIsNone(graph._blocked_action_mismatch(esc("scale_deployment"), {"metrics": {}, "logs": {}}, False))
+        self.assertIsNone(action_guards.blocked_action_mismatch(esc("scale_deployment"), surge, False))
+        self.assertIn("RB-STD-03", action_guards.blocked_action_mismatch(esc("rollback_deployment"), surge, False))
+        self.assertIsNone(action_guards.blocked_action_mismatch(esc("scale_deployment"), {"metrics": {}, "logs": {}}, False))
 
     def test_signal_clause_is_decided_only_when_one_fault_shape_fits(self):
         both = {"metrics": {"error_rate": 0.4}, "logs": {"connection_pool_exhausted": 5, "worker_pool_saturated": 5}}
-        self.assertIsNone(graph._signal_clause(both))   # 풀 고갈과 스레드 고갈이 함께면 코드가 정하지 않는다
-        self.assertEqual(graph._signal_clause({"metrics": {"error_rate": 0.4},
+        self.assertIsNone(action_guards.signal_clause(both))   # 풀 고갈과 스레드 고갈이 함께면 코드가 정하지 않는다
+        self.assertEqual(action_guards.signal_clause({"metrics": {"error_rate": 0.4},
                                                "logs": {"worker_pool_saturated": 5}}), "RB-STD-02")
         # 대기열 경고가 있어도 외부 API 지연이나 느린 쿼리가 함께면 트래픽 급증(RB-STD-03)으로 보지 않는다
         for cause in ("external_api_timeout", "slow_query"):
-            self.assertIsNone(graph._signal_clause({"metrics": {"error_rate": 0.0},
+            self.assertIsNone(action_guards.signal_clause({"metrics": {"error_rate": 0.0},
                                                     "logs": {"request_queue_backlog": 50, cause: 3}}))
+
+    def test_propose_send_back_runs_every_guard(self):
+        from langchain_core.messages import AIMessage
+        def call(name, args, content=""):
+            return AIMessage(content=content, tool_calls=[{"name": name, "id": "c1", "args": args}])
+        context = {"services": [{"name": "reservation-api", "supportedActions": ["restart_pods"]}]}
+        pool = {"metrics": {"error_rate": 0.5}, "logs": {"connection_pool_exhausted": 9}}
+        cases = {
+            "clause": call("business_execute_runbook_action", {"action": "restart_pods", "service": "reservation-api",
+                                                               "reason": "RB-STD-03"}),
+            "supported": call("business_execute_runbook_action", {"action": "rollback_deployment",
+                                                                  "service": "reservation-api"}),
+            "blocked": call("business_escalate_incident", {"category": "ACTION_BLOCKED", "reason": "x",
+                                                           "required_action": "scale_deployment"}),
+        }
+        for name, ai in cases.items():
+            with self.subTest(name):
+                self.assertIsNotNone(action_guards.first_problem(ai, context, pool, True))
+        fine = call("business_execute_runbook_action", {"action": "restart_pods", "service": "reservation-api",
+                                                        "reason": "RB-STD-02"})
+        self.assertIsNone(action_guards.first_problem(fine, context, pool, False))
 
     def test_blocked_escalation_cannot_name_restart_after_a_recent_change(self):
         from langchain_core.messages import AIMessage
         esc = AIMessage(content="", tool_calls=[{"name": "business_escalate_incident", "id": "c1", "args": {
             "category": "ACTION_BLOCKED", "required_action": "restart_pods", "blocked_by": "CONTRACT", "reason": "x"}}])
         pool = {"metrics": {"error_rate": 0.51}, "logs": {"connection_pool_exhausted": 50}}
-        self.assertIn("RB-STD-01", graph._blocked_action_mismatch(esc, pool, True))
-        self.assertIsNone(graph._blocked_action_mismatch(esc, pool, False))
+        self.assertIn("RB-STD-01", action_guards.blocked_action_mismatch(esc, pool, True))
+        self.assertIsNone(action_guards.blocked_action_mismatch(esc, pool, False))
 
     async def test_confirm_sample_over_threshold_overrides_model_recovered(self):
         from langchain_core.messages import AIMessage
@@ -167,7 +188,7 @@ class ToolOutcomeTests(unittest.IsolatedAsyncioTestCase):
         state = {"task_id": "t", "tool_counts": {}, "turns": 0, "evidence": [], "findings": "급증",
                  "proposed_action": {"tool": "business_execute_runbook_action", "args": {}}}
         # 첫 측정은 기준 안, 20초 뒤 다시 잰 p95가 기준(1초)을 넘는다
-        with patch("agent.graph._metric", new=AsyncMock(side_effect=[0.0, 0.5, 0.0, 3.0])), \
+        with patch("agent.signals.metric", new=AsyncMock(side_effect=[0.0, 0.5, 0.0, 3.0])), \
                 patch("agent.graph.harness.chat_model", return_value=model), \
                 patch("agent.graph.backend.emit", new=AsyncMock()):
             result = await graph.verify(state, runtime)
@@ -176,14 +197,14 @@ class ToolOutcomeTests(unittest.IsolatedAsyncioTestCase):
 
     def test_recent_change_is_a_change_shortly_before_the_incident(self):
         b = {"revisions": [{"createdAt": "2026-10-20T04:13:12Z"}, {"createdAt": "2026-10-20T02:38:12Z"}]}
-        self.assertTrue(graph._recent_change(b, "2026-10-20T04:14:34Z"))
-        self.assertFalse(graph._recent_change(b, "2026-10-20T05:00:00Z"))
+        self.assertTrue(signals.recent_change(b, "2026-10-20T04:14:34Z"))
+        self.assertFalse(signals.recent_change(b, "2026-10-20T05:00:00Z"))
         # 예전 설정으로 다시 배포하면 ReplicaSet 생성 시각은 옛 값이고, 실제 배포 시각은 deployedAt에 있다
         reused = {"revisions": [{"createdAt": "2026-10-20T05:00:00Z", "deployedAt": "2026-10-20T06:28:25Z"}]}
-        self.assertTrue(graph._recent_change(reused, "2026-10-20T06:29:20Z"))
+        self.assertTrue(signals.recent_change(reused, "2026-10-20T06:29:20Z"))
         a = {"commits": [{"date": "2026-10-20T02:50:01Z"}]}
-        self.assertTrue(graph._recent_change(a, "2026-10-20T03:00:00+00:00"))
-        self.assertIsNone(graph._recent_change(None, "2026-10-20T03:00:00Z"))
+        self.assertTrue(signals.recent_change(a, "2026-10-20T03:00:00+00:00"))
+        self.assertIsNone(signals.recent_change(None, "2026-10-20T03:00:00Z"))
 
     def test_flow_escalation_category_follows_the_reason(self):
         base = {"incident_id": 1, "proposed_action": {"args": {"action": "restart_pods", "service": "order-api"}}}

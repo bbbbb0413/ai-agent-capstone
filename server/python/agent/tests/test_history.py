@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 from langchain_core.messages import ToolMessage
 
-from agent import graph
+from agent import graph, signals
 
 
 STATE = {"tenant_id": "tenant-a", "incident_id": 10, "question": "order-api 커넥션 풀 고갈",
@@ -50,8 +50,8 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
         logged = {"args": {"startRfc3339": "2026-10-20T00:00:00Z"}, "signals": {}}
         box = SimpleNamespace(call=AsyncMock(return_value=result([])))
         runtime = SimpleNamespace(context=SimpleNamespace(toolbox=box))
-        with patch.object(graph, "_recent_log_patterns", AsyncMock(return_value=("", logged))), \
-                patch.object(graph, "_metric", AsyncMock(return_value=0.1)), \
+        with patch.object(signals, "recent_log_patterns", AsyncMock(return_value=("", logged))), \
+                patch.object(signals, "metric", AsyncMock(return_value=0.1)), \
                 patch.object(graph, "retrieve_history", AsyncMock(return_value=past)) as retrieve, \
                 patch.object(graph, "_tool_loop", AsyncMock(return_value=([result([])], 1, {}, []))) as loop:
             update = await graph.diagnose({**STATE, "tool_counts": {}, "evidence": []}, runtime)

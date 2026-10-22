@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, patch
 
 from langchain_core.messages import AIMessage, ToolMessage
 
-from agent import graph, jev
+from agent import graph, jev, signals
 
 
 class BuildStateTests(unittest.TestCase):
@@ -107,7 +107,7 @@ class ProposeWithJevTests(unittest.IsolatedAsyncioTestCase):
         rows = [{"line": line, "labels": {"level": "ERROR"}}] * 3
         box = SimpleNamespace(call=AsyncMock(return_value=ToolMessage(
             content=json.dumps(rows), status="success", tool_call_id="l")))
-        _, logged = await graph._recent_log_patterns(box, {}, None)
+        _, logged = await signals.recent_log_patterns(box, {}, None)
         self.assertEqual(logged["signals"]["worker_pool_saturated"], 3)
         self.assertEqual(logged["signals"]["request_queue_backlog"], 0)
 
