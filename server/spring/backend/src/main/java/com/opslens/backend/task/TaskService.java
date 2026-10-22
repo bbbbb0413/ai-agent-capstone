@@ -153,6 +153,8 @@ public class TaskService {
     /**
      * 반영 대기(CHANGE_PENDING)를 끝내고 agent를 재개한다.
      * decision: SYNCED(병합·동기화 완료) | TIMEOUT(기한 안에 병합되지 않음)
+     * agent에 전달하지 못하면 반영 대기로 되돌린다. 다음 동기화 알림이나 기한 점검이 다시 재개한다.
+     * 되돌리지 않으면 RUNNING으로 남고, agent 쪽 복구도 interrupt를 기다리는 작업은 건너뛰어 아무도 다시 집지 않는다.
      */
     public boolean finishChange(TaskRecord task, String decision, String comment, String actor) {
         if (!tasks.claimChange(task.id())) {
@@ -162,7 +164,18 @@ public class TaskService {
                 Map.of("taskId", task.id(), "change", task.pendingAction(), "comment", comment), null);
         tasks.addEvent(task.id(), "CHANGE_FINISHED", Map.of("result", decision));
         events.publish(task.id(), "CHANGE_FINISHED", Map.of("result", decision));
-        agent.resume(task.id(), new AgentClient.ResumeRequest(decision, comment, actor));
+        try {
+            agent.resume(task.id(), new AgentClient.ResumeRequest(decision, comment, actor));
+        } catch (RuntimeException e) {
+            if (tasks.restoreChange(task.id(), task.pendingAction(), task.updatedAt())) {
+                tasks.addEvent(task.id(), "CHANGE_PENDING", task.pendingAction());
+                events.publish(task.id(), "CHANGE_PENDING", task.pendingAction());
+            }
+            audit.record(task.tenantId(), actor, "CHANGE_DELIVERY_FAILED", Map.of("taskId", task.id()), null);
+            log.warn("task {} change {} was not delivered, back to CHANGE_PENDING: {}", task.id(), decision,
+                    e.getMessage());
+            return false;
+        }
         return true;
     }
 
@@ -170,15 +183,22 @@ public class TaskService {
         if (!TaskEventHub.EVENT_TYPES.contains(type)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "unknown event type " + type);
         }
+        if ("TOKEN".equals(type)) {   // 보고서 스트리밍. 저장하지 않고 화면에만 중계한다 (작업은 앞선 이벤트로 이미 RUNNING)
+            events.publish(taskId, type, data);
+            return;
+        }
         tasks.markRunningIfQueued(taskId);
+        boolean waiting = false;
         if ("APPROVAL_REQUIRED".equals(type)) {
-            tasks.waitForApproval(taskId, data);
+            waiting = tasks.waitForApproval(taskId, data);
         } else if ("CHANGE_PENDING".equals(type)) {
-            tasks.waitForChange(taskId, data);
+            waiting = tasks.waitForChange(taskId, data);
         }
-        if (!"TOKEN".equals(type)) {
-            tasks.addEvent(taskId, type, data);
+        if (("APPROVAL_REQUIRED".equals(type) || "CHANGE_PENDING".equals(type)) && !waiting) {
+            log.warn("task {} already finished, ignoring late {}", taskId, type);
+            return;
         }
+        tasks.addEvent(taskId, type, data);
         events.publish(taskId, type, data);
         if ("APPROVAL_REQUIRED".equals(type) && settings.autoApprove()) {
             autoApprove(taskId, data);
@@ -192,11 +212,22 @@ public class TaskService {
             incidents.getForTenant(task.tenantId(), task.incidentId());
         }
         String status = TaskRecord.DONE.equals(result.status()) ? TaskRecord.DONE : TaskRecord.FAILED;
-        tasks.complete(taskId, status, result.answer(), result.sources(), result.summary(), result.traceUrl());
-        if (task.incidentId() != null && result.report() != null) {
-            incidents.saveReport(task.tenantId(), task.incidentId(), result.report());
+        // 작업 결과와 인시던트 보고서를 함께 저장한다. 하나만 남으면 화면의 작업과 보고서가 어긋난다
+        Boolean saved = transactions.execute(tx -> {
+            if (!tasks.complete(taskId, status, result.answer(), result.sources(), result.summary(),
+                    result.traceUrl())) {
+                return false;
+            }
+            if (task.incidentId() != null && result.report() != null) {
+                incidents.saveReport(task.tenantId(), task.incidentId(), result.report());
+            }
+            tasks.addEvent(taskId, status, Map.of());
+            return true;
+        });
+        if (!Boolean.TRUE.equals(saved)) {
+            log.warn("task {} already finished, ignoring late result {}", taskId, status);
+            return;
         }
-        tasks.addEvent(taskId, status, Map.of());
         events.publish(taskId, status, Map.of("taskId", taskId, "status", status));
     }
 }

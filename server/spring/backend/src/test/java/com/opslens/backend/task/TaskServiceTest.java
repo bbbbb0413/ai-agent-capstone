@@ -160,9 +160,59 @@ class TaskServiceTest {
     void testAutoApprovalAlsoUsesAtomicClaimAndIdentity() {
         when(settings.autoApprove()).thenReturn(true);
         when(tasks.claimApproval(taskId, pending)).thenReturn(true);
+        when(tasks.waitForApproval(taskId, pending)).thenReturn(true);
         service.onEvent(taskId, "APPROVAL_REQUIRED", pending);
         verify(tasks).claimApproval(taskId, pending);
         verify(agent).resume(taskId, new AgentClient.ResumeRequest("APPROVE", "자동 승인 설정으로 승인", "auto-approve", "current"));
         verify(tasks, never()).recordApproval(any(), any(), any(), any(), any(), anyLong());
+    }
+
+    @Test
+    void failedChangeResumeGoesBackToChangePendingWithOriginalWaitTime() {
+        TaskRecord waiting = task(pending);
+        when(tasks.claimChange(taskId)).thenReturn(true);
+        when(tasks.restoreChange(taskId, pending, waiting.updatedAt())).thenReturn(true);
+        doThrow(new IllegalStateException("offline")).when(agent).resume(any(), any());
+        assertEquals(false, service.finishChange(waiting, "SYNCED", "merged", "argocd"));
+        verify(tasks).restoreChange(taskId, pending, waiting.updatedAt());
+        verify(events).publish(taskId, "CHANGE_PENDING", pending);
+    }
+
+    @Test
+    void deliveredChangeResumeDoesNotRestore() {
+        when(tasks.claimChange(taskId)).thenReturn(true);
+        assertEquals(true, service.finishChange(task(pending), "SYNCED", "merged", "argocd"));
+        verify(agent).resume(taskId, new AgentClient.ResumeRequest("SYNCED", "merged", "argocd"));
+        verify(tasks, never()).restoreChange(any(), any(), any());
+    }
+
+    @Test
+    void lateResultForFinishedTaskSavesNothing() {
+        when(tasks.complete(eq(taskId), any(), any(), any(), any(), any())).thenReturn(false);
+        service.complete(taskId, new TaskService.TaskResult("DONE", "late", null, null, null, "report"));
+        verify(incidents, never()).saveReport(anyString(), anyLong(), anyString());
+        verify(tasks, never()).addEvent(any(), any(), any());
+        verifyNoInteractions(events);
+    }
+
+    @Test
+    void firstResultSavesReportInsideTheSameTransaction() {
+        when(tasks.complete(eq(taskId), any(), any(), any(), any(), any())).thenReturn(true);
+        service.complete(taskId, new TaskService.TaskResult("DONE", "ok", null, null, null, "report"));
+        var order = inOrder(transactions, tasks, incidents, events);
+        order.verify(transactions).getTransaction(any());
+        order.verify(tasks).complete(eq(taskId), eq(TaskRecord.DONE), eq("ok"), any(), any(), any());
+        order.verify(incidents).saveReport("tenant-a", 1L, "report");
+        order.verify(transactions).commit(any());
+        order.verify(events).publish(eq(taskId), eq(TaskRecord.DONE), any());
+    }
+
+    @Test
+    void lateApprovalRequestForFinishedTaskIsNotAutoApproved() {
+        when(settings.autoApprove()).thenReturn(true);
+        when(tasks.waitForApproval(taskId, pending)).thenReturn(false);
+        service.onEvent(taskId, "APPROVAL_REQUIRED", pending);
+        verify(tasks, never()).claimApproval(any(), any());
+        verifyNoInteractions(agent, events);
     }
 }

@@ -54,20 +54,21 @@ public class TaskRepository {
                 .param(id).update();
     }
 
-    public void waitForApproval(UUID id, JsonNode pendingAction) {
-        jdbc.sql("""
+    /** 끝난 작업(DONE·FAILED)은 바꾸지 않는다. 임대를 잃은 파드가 뒤늦게 보낸 이벤트가 끝난 작업을 되살리지 않게 한다. */
+    public boolean waitForApproval(UUID id, JsonNode pendingAction) {
+        return jdbc.sql("""
                         UPDATE ai_tasks SET status = 'WAITING_APPROVAL', pending_action = ?::jsonb, updated_at = now()
-                        WHERE id = ?
+                        WHERE id = ? AND status NOT IN ('DONE', 'FAILED')
                         """)
-                .params(toJson(pendingAction), id).update();
+                .params(toJson(pendingAction), id).update() == 1;
     }
 
-    public void waitForChange(UUID id, JsonNode change) {
-        jdbc.sql("""
+    public boolean waitForChange(UUID id, JsonNode change) {
+        return jdbc.sql("""
                         UPDATE ai_tasks SET status = 'CHANGE_PENDING', pending_action = ?::jsonb, updated_at = now()
-                        WHERE id = ?
+                        WHERE id = ? AND status NOT IN ('DONE', 'FAILED')
                         """)
-                .params(toJson(change), id).update();
+                .params(toJson(change), id).update() == 1;
     }
 
     public List<TaskRecord> listChangePending(String tenantId) {
@@ -87,6 +88,18 @@ public class TaskRepository {
                         WHERE id = ? AND status = 'CHANGE_PENDING'
                         """)
                 .param(id).update() == 1;
+    }
+
+    /**
+     * 재개 전달에 실패한 반영 대기를 되돌린다. updated_at은 처음 기다리기 시작한 시각으로 두어
+     * 병합 기한(merge-timeout) 계산이 늦춰지지 않게 한다.
+     */
+    public boolean restoreChange(UUID id, JsonNode change, OffsetDateTime waitingSince) {
+        return jdbc.sql("""
+                        UPDATE ai_tasks SET status = 'CHANGE_PENDING', pending_action = ?::jsonb, updated_at = ?
+                        WHERE id = ? AND status = 'RUNNING' AND pending_action IS NULL
+                        """)
+                .params(toJson(change), waitingSince, id).update() == 1;
     }
 
     /** 승인 대상을 비교해 동시에 온 승인 중 하나만 차지한다. 전달 실패 시 복원할 수 있게 인자를 남긴다. */
@@ -112,14 +125,15 @@ public class TaskRepository {
                         """).params(id, toJson(expected)).update() == 1;
     }
 
-    public void complete(UUID id, String status, String answer, JsonNode sources, JsonNode summary,
+    /** 처음 끝난 결과만 남긴다. 중복 결과나 늦게 온 결과(예: 전달 실패로 FAILED 처리한 뒤 도착한 DONE)는 무시한다. */
+    public boolean complete(UUID id, String status, String answer, JsonNode sources, JsonNode summary,
             String traceUrl) {
-        jdbc.sql("""
+        return jdbc.sql("""
                         UPDATE ai_tasks SET status = ?, answer = ?, sources = ?::jsonb, summary = ?::jsonb,
                                trace_url = ?, pending_action = NULL, updated_at = now()
-                        WHERE id = ?
+                        WHERE id = ? AND status NOT IN ('DONE', 'FAILED')
                         """)
-                .params(status, answer, toJson(sources), toJson(summary), traceUrl, id).update();
+                .params(status, answer, toJson(sources), toJson(summary), traceUrl, id).update() == 1;
     }
 
     public void addEvent(UUID taskId, String type, Object data) {

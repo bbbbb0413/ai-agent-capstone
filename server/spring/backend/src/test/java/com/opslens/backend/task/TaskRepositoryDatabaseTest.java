@@ -37,6 +37,7 @@ class TaskRepositoryDatabaseTest {
         connection.setSchema(schema);
         jdbc.sql("""
                 CREATE TABLE ai_tasks (id UUID PRIMARY KEY, status TEXT NOT NULL, pending_action JSONB,
+                                       answer TEXT, sources JSONB, summary JSONB, trace_url TEXT,
                                        updated_at TIMESTAMPTZ NOT NULL DEFAULT now())
                 """).update();
         jdbc.sql("CREATE TABLE incidents (id BIGINT PRIMARY KEY, tenant_id TEXT, report TEXT)").update();
@@ -94,6 +95,29 @@ class TaskRepositoryDatabaseTest {
         tasks.clearApproval(id, expected);
         assertEquals("two", jdbc.sql("SELECT pending_action->>'approvalId' FROM ai_tasks WHERE id=?")
                 .param(id).query(String.class).single());
+    }
+
+    @Test
+    void changeRestoreKeepsTheOriginalWaitStart() throws Exception {
+        var change = json.readTree("{\"prNumber\":7}");
+        var since = java.time.OffsetDateTime.parse("2026-10-23T01:00:00Z");
+        jdbc.sql("UPDATE ai_tasks SET status='CHANGE_PENDING', pending_action=?::jsonb, updated_at=? WHERE id=?")
+                .params(change.toString(), since, id).update();
+        assertTrue(tasks.claimChange(id));
+        assertTrue(tasks.restoreChange(id, change, since));
+        assertFalse(tasks.restoreChange(id, change, since));   // 이미 되돌렸다
+        assertEquals(1, jdbc.sql("SELECT count(*) FROM ai_tasks WHERE id=? AND status='CHANGE_PENDING' AND updated_at=?"
+                + " AND pending_action->>'prNumber'='7'").params(id, since).query(Integer.class).single());
+    }
+
+    @Test
+    void finishedTaskIsNotReopenedByLateEvents() throws Exception {
+        var action = json.readTree("{\"approvalId\":\"late\"}");
+        assertTrue(tasks.complete(id, "FAILED", "dispatch failed", null, null, null));
+        assertFalse(tasks.complete(id, "DONE", "late", null, null, null));
+        assertFalse(tasks.waitForApproval(id, action));
+        assertFalse(tasks.waitForChange(id, action));
+        assertEquals("FAILED", jdbc.sql("SELECT status FROM ai_tasks WHERE id=?").param(id).query(String.class).single());
     }
 
     @Test

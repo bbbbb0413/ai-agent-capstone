@@ -106,7 +106,7 @@ public class ChangeService {
                     result.put("status", EXECUTED);
                 }
             }
-            default -> {   // rollback_deployment
+            case "rollback_deployment" -> {
                 if (tenant.gitops()) {
                     putPullRequest(result, gitops.rollback(tenant, service, reason, incidentStartedAt));
                 } else {
@@ -114,6 +114,8 @@ public class ChangeService {
                     result.put("rolledBackTo", adapter.rollback(tenant, entry, incidentStartedAt));
                 }
             }
+            // ACTIONS에 조치를 더하고 여기를 빠뜨리면 다른 조치로 실행하지 않고 막는다
+            default -> throw new IllegalStateException("조치 '%s'의 반영 방법이 없다".formatted(action));
         }
         return result;
     }
