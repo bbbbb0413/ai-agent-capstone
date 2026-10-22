@@ -752,6 +752,9 @@ async def bump_attempt(state: State) -> dict:
     return {"attempts": state["attempts"] + 1}
 
 
+TOKEN_FLUSH_SECONDS = 0.1   # 보고서 스트리밍을 모아 보내는 간격
+
+
 async def report(state: State, runtime: Rt) -> dict:
     """보고서를 TOKEN 이벤트로 흘려보내며 작성한다. 마지막의 '고객 공지 문안' 절은 notice_approval에서 쓴다.
 
@@ -779,10 +782,17 @@ async def report(state: State, runtime: Rt) -> dict:
         messages = [SystemMessage(harness.prompt("system") + "\n\n" + instructions),
                     HumanMessage(payload)]
         chunks: list[str] = []
+        sent, flushed = 0, time.monotonic()
         async for chunk in harness.chat_model().astream(messages):
-            if chunk.content:
-                chunks.append(str(chunk.content))
-                await backend.emit(state["task_id"], "TOKEN", {"text": chunk.content})
+            if not chunk.content:
+                continue
+            chunks.append(str(chunk.content))
+            # 토큰마다 보내면 보고서 하나에 backend 요청이 수백 번 나간다. 짧은 간격으로 모아 보낸다
+            if time.monotonic() - flushed >= TOKEN_FLUSH_SECONDS:
+                await backend.emit(state["task_id"], "TOKEN", {"text": "".join(chunks[sent:])})
+                sent, flushed = len(chunks), time.monotonic()
+        if sent < len(chunks):
+            await backend.emit(state["task_id"], "TOKEN", {"text": "".join(chunks[sent:])})
         return "".join(chunks)
 
     await backend.emit(state["task_id"], "STEP", {"node": "report"})

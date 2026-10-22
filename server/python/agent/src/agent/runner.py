@@ -32,6 +32,7 @@ log = logging.getLogger(__name__)
 
 LEASE_SECONDS = 60       # 이 시간 동안 갱신이 없으면 실행하던 파드가 죽은 것으로 본다
 HEARTBEAT_SECONDS = 15   # 실행 중 임대 갱신 주기. LEASE_SECONDS보다 충분히 짧아야 한다
+RESUME_LEASE_POLL_SECONDS = 5   # 재개가 임대에 막혔을 때 다시 잡아 보는 간격
 # 파드(프로세스)마다 다르다. 컨테이너가 재시작되면 hostname과 PID 1이 같아서 둘만으로는 이전 프로세스와 구분되지 않는다
 OWNER = f"{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:8]}"
 
@@ -87,18 +88,33 @@ class Runner:
         return await self._drive(task_id, state, state, config, raise_errors)
 
     async def resume(self, task_id: str, decision: dict[str, Any]) -> str:
-        # 전달 응답 유실 후 재시도나 동시 승인에서도 같은 interrupt를 한 번만 소비한다.
+        """사람의 결정으로 interrupt를 재개한다. 전달 응답 유실 후 재시도나 동시 승인에서도 같은 interrupt를 한 번만 소비한다.
+
+        재개는 backend가 이미 승인 대기를 지운 뒤에 온다. 그래서 임대에 막혀 건너뛰면 결정이 사라지고 작업이 멈춘다.
+        실행하던 파드가 interrupt 직후 죽으면 임대가 LEASE_SECONDS 동안 남는다. 그동안 기다렸다가 다시 잡는다.
+        """
         lock = self._resume_locks.setdefault(task_id, asyncio.Lock())
         async with lock:
-            snapshot = await self.graph.aget_state({"configurable": {"thread_id": task_id}})
-            if not snapshot.interrupts:
-                return "DUPLICATE"
-            approval_id = decision.get("approvalId")
-            if approval_id and approval_id != snapshot.interrupts[0].value.get("approvalId"):
-                return "DUPLICATE"
-            values = snapshot.values
-            config = self._config(task_id, values["tenant_id"], values["trace_id"])
-            return await self._drive(task_id, Command(resume=decision), values, config, raise_errors=False)
+            deadline = time.monotonic() + LEASE_SECONDS + HEARTBEAT_SECONDS
+            while True:
+                snapshot = await self.graph.aget_state({"configurable": {"thread_id": task_id}})
+                if not snapshot.interrupts:
+                    return "DUPLICATE"   # 다른 파드가 이미 재개했다
+                approval_id = decision.get("approvalId")
+                if approval_id and approval_id != snapshot.interrupts[0].value.get("approvalId"):
+                    return "DUPLICATE"
+                values = snapshot.values
+                config = self._config(task_id, values["tenant_id"], values["trace_id"])
+                outcome = await self._drive(task_id, Command(resume=decision), values, config, raise_errors=False)
+                if outcome != "RUNNING_ELSEWHERE":
+                    return outcome
+                if time.monotonic() >= deadline:
+                    break
+                log.info("task %s resume waits for the execution lease", task_id)
+                await asyncio.sleep(RESUME_LEASE_POLL_SECONDS)
+        log.error("task %s resume gave up: the execution lease was never released", task_id)
+        await backend.result(task_id, status="FAILED", answer="승인 결정을 반영하지 못했다: 실행 임대가 풀리지 않았다")
+        return "FAILED"
 
     async def _drive(self, task_id: str, payload: Any, values: dict, config: dict, raise_errors: bool) -> str:
         if task_id in self._running or not await self._claim(task_id):
@@ -148,8 +164,8 @@ class Runner:
             await backend.result(task_id, status="FAILED", answer=f"실행 중 오류: {type(e).__name__}")
             return "FAILED"
         finally:
-            await self._add_elapsed(task_id, time.monotonic() - started - (context.waited if context else 0.0))
-            await (self._release(task_id) if finished else self._abandon(task_id))
+            await self._settle_lease(task_id, time.monotonic() - started - (context.waited if context else 0.0),
+                                     finished)
 
         if interrupts := result.get("__interrupt__"):
             value = interrupts[0].value
@@ -166,6 +182,17 @@ class Runner:
         await backend.result(task_id, status="DONE", answer=result.get("report"), sources=sources,
                              summary=summary.build(result), report=result.get("report"))
         return "DONE"
+
+    async def _settle_lease(self, task_id: str, seconds: float, finished: bool) -> None:
+        """실행 시간을 더하고 임대를 놓는다. 여기서 DB가 실패해도 실행 결과나 원래 예외를 가리지 않는다.
+
+        놓지 못한 임대는 하트비트가 멈춰 LEASE_SECONDS 뒤 stale()이 찾는다.
+        """
+        try:
+            await self._add_elapsed(task_id, seconds)
+            await (self._release(task_id) if finished else self._abandon(task_id))
+        except Exception:  # noqa: BLE001
+            log.warning("task %s lease bookkeeping failed", task_id, exc_info=True)
 
     @staticmethod
     def _config(task_id: str, tenant_id: str, trace_id: str) -> dict:

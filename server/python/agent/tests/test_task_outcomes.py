@@ -142,6 +142,38 @@ class ToolOutcomeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("RB-STD-03", graph._blocked_action_mismatch(esc("rollback_deployment"), surge, False))
         self.assertIsNone(graph._blocked_action_mismatch(esc("scale_deployment"), {"metrics": {}, "logs": {}}, False))
 
+    def test_signal_clause_is_decided_only_when_one_fault_shape_fits(self):
+        both = {"metrics": {"error_rate": 0.4}, "logs": {"connection_pool_exhausted": 5, "worker_pool_saturated": 5}}
+        self.assertIsNone(graph._signal_clause(both))   # 풀 고갈과 스레드 고갈이 함께면 코드가 정하지 않는다
+        self.assertEqual(graph._signal_clause({"metrics": {"error_rate": 0.4},
+                                               "logs": {"worker_pool_saturated": 5}}), "RB-STD-02")
+        # 대기열 경고가 있어도 외부 API 지연이나 느린 쿼리가 함께면 트래픽 급증(RB-STD-03)으로 보지 않는다
+        for cause in ("external_api_timeout", "slow_query"):
+            self.assertIsNone(graph._signal_clause({"metrics": {"error_rate": 0.0},
+                                                    "logs": {"request_queue_backlog": 50, cause: 3}}))
+
+    def test_blocked_escalation_cannot_name_restart_after_a_recent_change(self):
+        from langchain_core.messages import AIMessage
+        esc = AIMessage(content="", tool_calls=[{"name": "business_escalate_incident", "id": "c1", "args": {
+            "category": "ACTION_BLOCKED", "required_action": "restart_pods", "blocked_by": "CONTRACT", "reason": "x"}}])
+        pool = {"metrics": {"error_rate": 0.51}, "logs": {"connection_pool_exhausted": 50}}
+        self.assertIn("RB-STD-01", graph._blocked_action_mismatch(esc, pool, True))
+        self.assertIsNone(graph._blocked_action_mismatch(esc, pool, False))
+
+    async def test_confirm_sample_over_threshold_overrides_model_recovered(self):
+        from langchain_core.messages import AIMessage
+        model = SimpleNamespace(ainvoke=AsyncMock(return_value=AIMessage(content="RECOVERED")))
+        runtime = SimpleNamespace(context=SimpleNamespace(toolbox=None, settle=AsyncMock(), check_time=lambda: None))
+        state = {"task_id": "t", "tool_counts": {}, "turns": 0, "evidence": [], "findings": "급증",
+                 "proposed_action": {"tool": "business_execute_runbook_action", "args": {}}}
+        # 첫 측정은 기준 안, 20초 뒤 다시 잰 p95가 기준(1초)을 넘는다
+        with patch("agent.graph._metric", new=AsyncMock(side_effect=[0.0, 0.5, 0.0, 3.0])), \
+                patch("agent.graph.harness.chat_model", return_value=model), \
+                patch("agent.graph.backend.emit", new=AsyncMock()):
+            result = await graph.verify(state, runtime)
+        self.assertFalse(result["recovered"])
+        self.assertTrue(result["verification"].startswith("NOT_RECOVERED"))
+
     def test_recent_change_is_a_change_shortly_before_the_incident(self):
         b = {"revisions": [{"createdAt": "2026-10-20T04:13:12Z"}, {"createdAt": "2026-10-20T02:38:12Z"}]}
         self.assertTrue(graph._recent_change(b, "2026-10-20T04:14:34Z"))
@@ -239,6 +271,23 @@ class ReportTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(update["classification"])
         classify.assert_not_awaited()
 
+    async def test_report_tokens_are_sent_in_batches_with_the_full_text(self):
+        state = {"type": "QUESTION", "incident_id": None, "question": "SLA는?", "task_id": "test",
+                 "evidence": [], "runbook": [], "context": {}, "approvals": []}
+        parts = [f"조각{i} " for i in range(50)]
+
+        class StubModel:
+            async def astream(self, messages):
+                for part in parts:
+                    yield SimpleNamespace(content=part)
+
+        with patch("agent.graph.harness.chat_model", return_value=StubModel()), \
+                patch("agent.graph.backend.emit", new=AsyncMock()) as emit:
+            await graph.report(state, None)
+        tokens = [c.args[2]["text"] for c in emit.await_args_list if c.args[1] == "TOKEN"]
+        self.assertLess(len(tokens), 5)   # 50조각을 한 번에 몇 번으로 묶었다
+        self.assertEqual("".join(tokens), "".join(parts))
+
     async def test_notice_failure_is_not_reported_as_sent(self):
         state = {"task_id": "test", "incident_id": 1, "notice_draft": "test", "tool_counts": {}, "approvals": []}
         result = ToolMessage(content="403: denied", status="error", tool_call_id="test")
@@ -274,6 +323,22 @@ class ResumeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sorted(outcomes), ["DONE", "DUPLICATE"])
         self.assertEqual(runner._drive.await_count, 1)
 
+    async def test_resume_waits_for_a_dead_pods_lease_instead_of_dropping_the_decision(self):
+        runner, _ = self.runner()
+        runner._drive = AsyncMock(side_effect=["RUNNING_ELSEWHERE", "RUNNING_ELSEWHERE", "DONE"])
+        with patch("agent.runner.RESUME_LEASE_POLL_SECONDS", 0):
+            self.assertEqual(await runner.resume("test", {"approvalId": "current"}), "DONE")
+        self.assertEqual(runner._drive.await_count, 3)
+
+    async def test_resume_that_never_gets_the_lease_fails_the_task_visibly(self):
+        runner, _ = self.runner()
+        runner._drive = AsyncMock(return_value="RUNNING_ELSEWHERE")
+        with patch("agent.runner.RESUME_LEASE_POLL_SECONDS", 0), patch("agent.runner.LEASE_SECONDS", 0), \
+                patch("agent.runner.HEARTBEAT_SECONDS", 0), \
+                patch("agent.runner.backend.result", new=AsyncMock()) as result:
+            self.assertEqual(await runner.resume("test", {"approvalId": "current"}), "FAILED")
+        self.assertEqual(result.await_args.kwargs["status"], "FAILED")
+
     async def test_redelivered_unfinished_task_continues_from_checkpoint(self):
         snapshot = SimpleNamespace(values={"tenant_id": "tenant-a", "trace_id": "x"}, next=("diagnose",), interrupts=[])
         runner = Runner(SimpleNamespace(aget_state=AsyncMock(return_value=snapshot)), None)
@@ -296,6 +361,11 @@ class ResumeTests(unittest.IsolatedAsyncioTestCase):
         runner._drive_claimed = AsyncMock()
         self.assertEqual(await runner._drive("t1", None, {}, {}, False), "RUNNING_ELSEWHERE")
         runner._drive_claimed.assert_not_awaited()
+
+    async def test_lease_bookkeeping_failure_does_not_hide_the_result(self):
+        runner = Runner(None, None)
+        runner._add_elapsed = AsyncMock(side_effect=OSError("db down"))
+        await runner._settle_lease("t1", 1.0, True)   # 예외가 나가지 않는다
 
     async def test_same_process_duplicate_does_not_run_twice(self):
         runner = Runner(None, None)
