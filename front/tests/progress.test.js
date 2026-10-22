@@ -65,15 +65,15 @@ test('scale approval shows current, target, and calculated safe maximum', () => 
   assert.match(approvalImpact(request), /안전 상한은 4개/)
 })
 
-test('blocked-action escalation shows what is needed, why, and that delivery is not wired', () => {
+test('blocked-action escalation distinguishes a call record from reviewed Slack delivery', () => {
   const request = { tool: 'business_escalate_incident', args: {
     incident_id: 2, category: 'ACTION_BLOCKED', reason: '확장 계약상 불가', required_action: 'scale_deployment', blocked_by: 'CONTRACT' } }
   const fields = Object.fromEntries(approvalFields(request))
   assert.equal(fields['필요한 조치'], '레플리카 확장')
   assert.equal(fields['할 수 없는 이유'], '계약상 불가')
   assert.match(approvalImpact(request), /고객사 담당/)
-  assert.match(approvalImpact(request), /발송 대기열/)
-  assert.equal(actionResultLabel({ status: 'QUEUED' }), '호출 대기열에 등록 (발송 미연결)')
+  assert.match(approvalImpact(request), /Slack.*검토.*승인/)
+  assert.equal(actionResultLabel({ status: 'QUEUED' }), '호출 기록 등록 (Slack 발송 별도 검토)')
   assert.equal(recipientsLabel([
     { kind: 'MSP_ONCALL', name: 'admin' }, { kind: 'MSP_ONCALL', name: 'eng-b' }, { kind: 'CUSTOMER', name: 'B사 담당' },
   ]), 'MSP 담당 admin, eng-b · 고객사 담당 B사 담당')

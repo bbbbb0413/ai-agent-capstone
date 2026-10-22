@@ -4,6 +4,7 @@ import { marked } from 'marked'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { api } from '../api.js'
 import StatusBadge from '../components/StatusBadge.vue'
+import SlackEscalations from '../components/SlackEscalations.vue'
 import { ADMIN_ONLY_TOOLS, ESCALATION_CATEGORIES, actionDetail, actionResultLabel, approvalChangeMode, approvalFields, approvalImpact, approvalImpactFields, recipientsLabel, toolLabel, toTimeline } from '../progress.js'
 import { useSession } from '../session.js'
 
@@ -165,6 +166,8 @@ async function decide(decision) {
       </div>
     </template>
   </section>
+
+  <SlackEscalations v-if="task?.incidentId && session.isMspStaff" :incident-id="task.incidentId" />
 
   <section v-if="change && task?.status !== 'DONE'" class="card approval">
     <h2>반영 대기: {{ change.action }} · {{ change.service }}</h2>

@@ -135,6 +135,7 @@ async def escalate_incident(
     - CAUSE_UNKNOWN: 근거가 부족해 원인을 정하지 못했다 (RB-STD-07)
     - P1, NOT_RECOVERED, CHANGE_TIMEOUT: Agent 흐름이 정한다
     reason에는 필요한 조치와 할 수 없는 이유(계약 조항, 상한 값)를 한 문장으로 적는다.
+    Slack 실제 발송은 작업 상세에서 사람이 문안·채널을 검토한 뒤 별도로 승인한다.
     service를 비우면 인시던트의 서비스다. 결과 status QUEUED는 발송 대기열에 들어갔다는 뜻이다."""
     body = {"category": category, "reason": reason, "service": service, "requiredAction": required_action,
             "blockedBy": blocked_by, "dependency": dependency}

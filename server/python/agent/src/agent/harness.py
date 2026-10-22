@@ -44,6 +44,7 @@ NODE_TOOLS: dict[str, set[str]] = {
                  "grafana_query_loki_stats", "business_list_incidents", "business_get_service_inventory",
                  "business_list_recent_changes", "business_get_dependency_health"},
     "retrieve_runbook": {"rag_search_documents"},
+    "retrieve_history": {"rag_search_documents"},
     "propose_action": {"business_execute_runbook_action", "business_send_customer_notice",
                        "business_get_service_inventory",   # 제안 직전에 코드가 HPA 상태를 새로 읽는다
                        "business_escalate_incident"},   # 계약·구조상 할 수 없으면 조치 대신 에스컬레이션 (RB-STD-05~07)

@@ -123,3 +123,50 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build bac
 Admin/Engineer/Viewer 로그인과 조회, 로그아웃 후 401, 일반 질문 완료, 승인·거절, 도구 오류 표시를 확인한다. 실제 재시작·롤백·외부 공지 없이도 실패 응답과 승인 거절 경로는 검증할 수 있다.
 
 실제 고객사 장애 주입·조치·복구 검증에는 별도 kind 환경과 고객사 접속 정보가 필요하다. 단위/DB 테스트 통과만으로 해당 시나리오 전체 성공을 의미하지 않는다.
+
+## 자동 회고 색인과 검색
+
+- Backend: `PostmortemControllerTest`는 고객사 헤더 불일치 거부를 검사한다.
+  `PostmortemRepositoryDatabaseTest`는 종료·완료 보고서만 조회, 고객사 격리, 100건 페이지와 늦게 도착한 보고서를 검사한다.
+- Indexer: `tests/test_postmortems.py`는 API 소유권·상태 검증, 전체 페이지 순회, 출처·미검토 표시,
+  긴 보고서 분할과 버전 변경을 검사한다. `test_storage_database.py`는 중복 임베딩 방지,
+  수정 교체, 임베딩 실패 시 기존 색인 보존을 실제 DB에서 검사한다.
+- RAG: `tests/test_postmortem_database.py`는 색인기의 실제 저장 함수를 거쳐 검색·원문 조회를 실행한다.
+  다른 고객사·현재 장애 제외와 런북 검색 분리를 검사한다. 외부 임베딩 API만 대역이다.
+- Agent: `tests/test_history.py`는 첫 진단에 과거 사례 전달, 잘못된 검색 결과 제외,
+  검색 실패 시 계속 진행, 회고가 런북을 밀어내지 않는 동작을 검사한다.
+
+각 Python 서비스 디렉터리에서 `uv sync --frozen` 후 실행한다:
+
+```bash
+uv run python -m unittest discover -s tests -v
+```
+
+DB 테스트는 **별도 폐기 가능한 PostgreSQL + vector 확장**에 연결해야 한다. Python은
+`OPSLENS_TEST_DSN=postgresql://postgres@127.0.0.1:<테스트 포트>/postgres`, Java는
+`OPSLENS_TEST_DATABASE_URL=jdbc:postgresql://127.0.0.1:<테스트 포트>/postgres`를 설정한다.
+테스트마다 임시 스키마를 만들고 삭제한다. 설정하지 않으면 DB 테스트는 건너뛴다.
+
+2026-10-22 검증: Agent 59개, Indexer 8개(DB 포함), RAG 2개(DB 포함), frontend 10개 통과.
+Backend 단위·DB 테스트 41개 통과(총 120개). 실제 OpenAI 임베딩·LLM, 운영 compose, kind 장애 주입은 실행하지 않았다.
+
+
+## 관리자 설정과 검토 후 Slack 발송 (2026-10-22)
+
+`SlackSafetyTest`는 Webhook 호스트 제한, 암호화·고객사 바인딩, 관리자 쓰기 권한,
+설정 응답의 비밀 제외, 429·실패·결과 불명확 구분, plain_text 전송을 검사한다.
+`SlackDeliveryDatabaseTest`는 실제 V13 마이그레이션과 PostgreSQL을 사용한다.
+설정만 저장했을 때 미발송, 검토한 문안 발송, 중복 승인·동시 워커, 고객사·역할 격리,
+설정 변경 시 취소, 429 대기, 응답 유실 시 자동 재전송 금지를 검사한다. Slack HTTP 호출은 대역이다.
+기존과 같은 `OPSLENS_TEST_DATABASE_URL`을 설정하고 backend에서 `./gradlew test`를 실행한다.
+
+Frontend는 `npm test`와 `npm run build`로 검증한다. `slack.test.js`는 완료·결과 불명확 메시지의
+재발송 차단과 승인/발송 상태 구분을 검사한다. 실제 화면에서는 관리자에게 설정 탭이 보이고,
+자동 승인이 허용되지 않는 환경에서도 Slack 설정을 사용할 수 있는지 확인한다.
+실제 연결 정보를 넣지 않은 테스트 환경에서는 외부 Slack 발송을 누르지 않는다.
+
+검증 결과: backend 52개(DB 포함), frontend 12개 통과, frontend 배포 빌드 통과.
+임시 DB에 V1~V13 전체 마이그레이션 및 관리자 설정 저장 API, 엔지니어 설정 변경 403을 확인했다.
+실제 Slack Incoming Webhook을 등록한 뒤 웹 화면에서 테스트 문안을 수정·승인했다.
+Backend 발송 상태 `SENT`와 Slack 채널의 동일 메시지 수신을 모두 확인했다(테스트 1건).
+실제 연결 정보와 로컬 테스트 DB·스크린샷은 저장소에 포함하지 않는다.
