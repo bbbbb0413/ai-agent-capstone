@@ -20,6 +20,7 @@ from weakref import WeakValueDictionary
 from typing import Any
 
 from langgraph.types import Command
+from openai import AuthenticationError
 from psycopg_pool import AsyncConnectionPool
 
 from agent import harness, summary
@@ -117,7 +118,10 @@ class Runner:
         context: Context | None = None
         finished = True  # 종료 신호로 끊긴 경우만 False로 두고, 임대를 놓아 다른(또는 다시 뜬) 파드가 바로 이어 간다
         try:
-            tools = await load_tools(values["tenant_id"], task_id, values["trace_id"])
+            if values.get("type") == "ATTACHMENT":
+                tools = await load_tools(values["tenant_id"], task_id, values["trace_id"], allow_partial=True)
+            else:
+                tools = await load_tools(values["tenant_id"], task_id, values["trace_id"])
             context = Context(toolbox=ToolBox(tools, values["tenant_id"], task_id), elapsed_before=elapsed)
             # 회복 확인 대기(verify, 재진입 포함 최대 2번)는 한도에서 빠지므로 그만큼 여유를 둔다
             remaining = max(1.0, harness.TASK_SECONDS - elapsed) + 2 * (harness.VERIFY_SETTLE_SECONDS
@@ -129,6 +133,13 @@ class Runner:
             raise
         except (TimeoutError, harness.HarnessLimit) as e:
             await backend.result(task_id, status="FAILED", answer=f"Harness 한도로 중단했다: {str(e) or '시간 초과'}")
+            return "FAILED"
+        except AuthenticationError:
+            # 키 오류는 재전송으로 해결되지 않는다. 응답 본문/키를 로그에 남기지 않는다.
+            log.warning("task %s OpenAI authentication failed", task_id)
+            await backend.result(task_id, status="FAILED", answer=(
+                "OpenAI API 키 인증에 실패했습니다. Agent의 OPENAI_API_KEY를 유효한 OpenAI 키로 설정하고 "
+                "Agent를 다시 실행해 주세요. Jev 키는 이 설정에 사용할 수 없습니다."))
             return "FAILED"
         except Exception as e:
             log.exception("task %s failed", task_id)

@@ -3,6 +3,7 @@
 export const STAGES = {
   load_context: '컨텍스트 수집',
   diagnose: '진단',
+  analyze_attachments: '첨부 자료 분석',
   retrieve_runbook: '런북 검색',
   retrieve_history: '과거 장애 검색',
   register_incident: '제보 인시던트 등록',
@@ -218,7 +219,7 @@ export function toTimeline(events) {
         }
         add(data.node === 'verify'
           ? { kind: 'step', stage: STAGES.verify, label: `조치가 메트릭에 반영되기를 기다림 (${data.waitSeconds}초)`, state: 'running' }
-          : { kind: 'step', stage: STAGES[data.node], label: '보고서 작성', state: 'running' }, createdAt)
+          : { kind: 'step', stage: STAGES[data.node], label: data.node === 'analyze_attachments' ? '로그·에러 화면 분석' : '보고서 작성', state: 'running' }, createdAt)
         break
       case 'APPROVAL_REQUIRED':
         add({ kind: 'approval', stage: '승인', label: `승인 요청: ${toolLabel(data.tool)}`,

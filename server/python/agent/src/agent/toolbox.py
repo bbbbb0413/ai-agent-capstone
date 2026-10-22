@@ -17,7 +17,7 @@ from agent.backend import backend
 from agent.config import settings
 
 
-async def load_tools(tenant_id: str, task_id: str, trace_id: str) -> list[BaseTool]:
+async def load_tools(tenant_id: str, task_id: str, trace_id: str, *, allow_partial: bool = False) -> list[BaseTool]:
     """세 MCP Server의 도구를 LangChain 도구로 받는다. 고객사·추적 정보는 요청 헤더로 싣는다."""
     headers = {
         "Authorization": f"Bearer {settings.service_token}",
@@ -35,7 +35,14 @@ async def load_tools(tenant_id: str, task_id: str, trace_id: str) -> list[BaseTo
         },
         tool_name_prefix=True,
     )
-    return await client.get_tools()
+    if not allow_partial:
+        return await client.get_tools()
+    # 첨부 자체는 모니터링 장애 중에도 읽는다. 빠진 자료는 ToolBox error로 결과에 표시한다.
+    import asyncio
+    async def fetch(server):
+        return await asyncio.wait_for(client.get_tools(server_name=server), timeout=8)
+    results = await asyncio.gather(*(fetch(s) for s in ("business", "rag", "grafana")), return_exceptions=True)
+    return [tool for result in results if isinstance(result, list) for tool in result]
 
 
 class ToolBox:

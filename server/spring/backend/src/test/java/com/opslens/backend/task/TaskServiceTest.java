@@ -50,7 +50,7 @@ class TaskServiceTest {
                  "args":{"incident_id":1,"action":"restart_pods","service":"order-api"}}
                 """);
         when(tasks.get(taskId)).thenReturn(task(pending));
-        service = new TaskService(tasks, tenants, incidents, outbox, relay, agent, events, audit, settings, transactions);
+        service = new TaskService(tasks, tenants, incidents, outbox, relay, agent, events, audit, settings, transactions, mock(com.opslens.backend.attachment.TaskAttachments.class));
     }
 
     private TaskRecord task(JsonNode action) {

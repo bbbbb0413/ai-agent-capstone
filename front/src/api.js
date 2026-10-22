@@ -11,8 +11,8 @@ async function request(method, path, body) {
   const response = await fetch(path, {
     method,
     credentials: 'same-origin',
-    headers: body ? { 'Content-Type': 'application/json' } : {},
-    body: body ? JSON.stringify(body) : undefined,
+    headers: body && !(body instanceof FormData) ? { 'Content-Type': 'application/json' } : {},
+    body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined,
   })
   if (response.status === 401 && path !== '/api/auth/login') {
     onUnauthorized()
@@ -45,6 +45,13 @@ export const api = {
   saveSlackTrackingSettings: (tenant, body) => request('PUT', `/api/tenants/${encodeURIComponent(tenant)}/slack-tracking`, body),
   slackTracking: (incident) => request('GET', `/api/incidents/${incident}/slack-tracking`),
   updateSlackTracking: (incident, id, action) => request('POST', `/api/incidents/${incident}/slack-deliveries/${id}/tracking`, { action }),
+  createAttachmentTask: (tenantId, question, files) => {
+    const form = new FormData()
+    form.append('tenantId', tenantId); form.append('question', question)
+    files.forEach(file => form.append('attachments', file))
+    return request('POST', '/api/ai/tasks/with-attachments', form)
+  },
+  taskAttachments: id => request('GET', `/api/ai/tasks/${id}/attachments`),
   createTask: (tenantId, question, incidentId) => request('POST', '/api/ai/tasks', { tenantId, question, incidentId }),
   task: (id) => request('GET', `/api/ai/tasks/${id}`),
   taskEvents: (id) => request('GET', `/api/ai/tasks/${id}/events`),

@@ -27,6 +27,11 @@ class Backend:
             "traceUrl": trace_url,
         })
 
+    async def attachments(self, task_id: str, tenant_id: str) -> list[dict]:
+        response = await self.http.get(f"/internal/tasks/{task_id}/attachments", headers={"X-Tenant-Id": tenant_id})
+        response.raise_for_status()
+        return response.json()
+
     async def close(self) -> None:
         await self.http.aclose()
 

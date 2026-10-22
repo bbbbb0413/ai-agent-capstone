@@ -7,12 +7,13 @@ import TaskStats from '../components/TaskStats.vue'
 import TrendChart from '../components/TrendChart.vue'
 import SlackSettings from '../components/SlackSettings.vue'
 import ServiceImpact from '../components/ServiceImpact.vue'
+import AskAgent from '../components/AskAgent.vue'
 import { clockTime, shortDateTime } from '../format.js'
 import { useSession } from '../session.js'
 import { useSettings } from '../settings.js'
 
 const REFRESH_MS = 10_000   // 알림으로 생긴 인시던트와 작업 상태 변화를 새로고침 없이 보여 준다
-const TASK_TYPES = { DIAGNOSE: '장애 진단', QUESTION: '질문' }
+const TASK_TYPES = { DIAGNOSE: '장애 진단', QUESTION: '질문', ATTACHMENT: '첨부 자료 분석' }
 const INCIDENT_FILTERS = [
   { key: 'open', label: '처리 중', match: (i) => i.status !== 'RESOLVED' },
   { key: 'resolved', label: '해결됨', match: (i) => i.status === 'RESOLVED' },
@@ -26,8 +27,6 @@ const route = useRoute()
 const incidents = ref([])
 const tasks = ref([])
 const tenants = ref([])
-const tenantId = ref('')
-const question = ref('')
 const error = ref('')
 const updatedAt = ref(null)
 const incidentFilter = ref('all')
@@ -61,7 +60,6 @@ async function load() {
 onMounted(async () => {
   try {
     tenants.value = await api.tenants()
-    tenantId.value = tenants.value[0]?.id ?? ''
   } catch (e) {
     error.value = e.message
   }
@@ -72,11 +70,6 @@ onUnmounted(() => clearInterval(timer))
 
 function selectTab(key) {
   router.replace({ query: key === 'dashboard' ? {} : { tab: key } })
-}
-
-async function ask() {
-  const { taskId } = await api.createTask(tenantId.value, question.value)
-  router.push(`/tasks/${taskId}`)
 }
 
 async function resolveIncident(incident) {
@@ -122,16 +115,7 @@ function taskFor(incident) {
   <template v-if="tab === 'dashboard'">
     <TaskStats :incidents="incidents" :tasks="tasks" />
 
-    <form v-if="session.isMspStaff" class="card ask" @submit.prevent="ask">
-      <h2>Agent에게 묻기</h2>
-      <div class="row">
-        <select v-model="tenantId">
-          <option v-for="t in tenants" :key="t.id" :value="t.id">{{ t.name }} ({{ t.slaTier }})</option>
-        </select>
-        <input v-model="question" placeholder="예: A사 지금 왜 느려?" required />
-        <button type="submit">질문</button>
-      </div>
-    </form>
+    <AskAgent v-if="session.isMspStaff" :tenants="tenants" @created="id => router.push(`/tasks/${id}`)" />
 
     <section id="incidents" class="card flush">
       <div class="card-head">

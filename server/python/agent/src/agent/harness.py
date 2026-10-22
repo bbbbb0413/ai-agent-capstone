@@ -37,6 +37,7 @@ CONTEXT_CHARS = 24_000         # 대화가 이 길이를 넘으면 오래된 도
 # ── Tools: Node별 허용목록 ─────────────────────────────────────
 # 도구 이름 앞의 business_/rag_/grafana_ 는 MCP Client가 Server 이름으로 붙인다
 NODE_TOOLS: dict[str, set[str]] = {
+    "analyze_attachments": {"grafana_query_prometheus"},
     "load_context": {"business_get_tenant_profile", "business_get_sla_terms", "business_get_service_inventory",
                      "business_list_incidents"},
     "diagnose": {"grafana_query_prometheus", "grafana_query_prometheus_histogram",
