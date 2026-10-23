@@ -1,6 +1,6 @@
 # Spec: 알려진 한계 해소
 
-- 상태: **진행 중** (2026-10-23). 1·2·3단계 완료. 4단계는 승인 전
+- 상태: **진행 중** (2026-10-23). 1·2·3단계 완료. 4단계 구현, A사 E2E 남음
 - 근거: [기획안](../OpsLens-기획안.md) 14.1 알려진 한계, [SPEC-review-fixes](SPEC-review-fixes.md)
 - 원칙: 단계마다 테스트를 붙이고 따로 커밋한다. 작고 위험이 낮은 단계부터 한다. 각 단계가 끝나면 14.1의 해당 행을 지우거나 고친다.
 
@@ -211,6 +211,16 @@
 - 카탈로그 값으로 만든 쿼리가 지금 쿼리와 같은 결과를 낸다 (단위 테스트: 같은 입력 → 지금과 같은 PromQL·LogQL에 서비스 조건만 더해짐)
 - 한 고객사에 서비스를 둘 둔 테스트에서 회복 확인이 조치한 서비스만 본다
 - 전체 E2E 14개 통과
+
+**결과:**
+
+- backend: `V17__service_observability.sql`(`request_metric`, `error_selector`, `log_selector`, `log_signals`, `pool_size_env`). `log_selector`는 중괄호 없는 라벨 조건(`app="demo-app"`)이고 `service` 조건은 agent가 붙인다. 서비스 목록에 `observability`(없으면 null)를 싣고, `ChangeService`는 `pool_size_env`로 풀 크기를 읽는다.
+- agent: `signals.observability`·`metric_queries`·`log_query`가 관측 정의로 쿼리를 만든다. 진단은 인시던트의 서비스(질문이면 질문 속 서비스나 열린 인시던트가 한 서비스일 때 그 서비스), 회복 확인은 조치한 서비스로 거른다. 관측 정의가 없으면 진단은 원인 미확정, 회복 확인은 조회 없이 NOT_RECOVERED. 첨부 분석의 현재 지표도 같은 방식이다. 진단 프롬프트의 메트릭·로그 이름은 관측 정의를 가리키게 바꿨다.
+- 로그 신호 이름 5개는 `signals.LOG_SIGNALS`(이름 → 런북 조항)에 고정이고, 카탈로그에 문구가 없는 신호는 0건이 아니라 결과에서 빠진다.
+- demo-app 로그에 `service` 라벨(`SERVICE_NAME`). A사 GitOps 설정과 B사 초기 배포에 넣었다.
+- 테스트: backend 전체, agent 104건(`tests/test_signals.py`: 지금 쿼리 + 서비스 조건과 같음, 두 서비스 중 조치한 서비스만 측정, 관측 정의 없음).
+- E2E(2026-10-23): `isolation question no-issue b-hang b-latency b-pool b-surge` 통과.
+- 남는 것: 알림 규칙, 영향 범위(`ImpactMetrics`), 의존 대상 상태(`DependencyHealth`)는 아직 데모 메트릭 이름을 쓴다 (5번과 같은 이유로 범위 밖).
 
 ## 6. 하지 않는 것
 

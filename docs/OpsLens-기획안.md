@@ -519,12 +519,11 @@ backend가 JWT를 발급한다. SSE는 `EventSource`가 헤더를 못 싣기 때
 
 ### 14.1 알려진 한계 (2026-10-23 코드 리뷰)
 
-데모 범위에서는 동작하지만 운영으로 넓히려면 바꿔야 하는 부분이다. 리뷰와 수정 내역은 [SPEC-review-fixes](specs/SPEC-review-fixes.md), 해소 계획은 [SPEC-limitations-fixes](specs/SPEC-limitations-fixes.md)에 있다. CSRF 토큰 적용, 판정표 일치 테스트, 호출별 내부 토큰과 작업 토큰은 해소했다 (2026-10-23).
+데모 범위에서는 동작하지만 운영으로 넓히려면 바꿔야 하는 부분이다. 리뷰와 수정 내역은 [SPEC-review-fixes](specs/SPEC-review-fixes.md), 해소 계획은 [SPEC-limitations-fixes](specs/SPEC-limitations-fixes.md)에 있다. CSRF 토큰 적용, 판정표 일치 테스트, 호출별 내부 토큰과 작업 토큰, 서비스별 관측 정의(진단·회복 확인 쿼리를 서비스 카탈로그로)는 해소했다 (2026-10-23).
 
 | 한계 | 지금 | 넓힐 때 |
 |---|---|---|
-| 관측 쿼리가 데모 앱 전용이다 | 진단·회복 확인 쿼리와 로그 신호 문구가 데모 앱의 메트릭 이름(`demo_orders_seconds_*`)과 로그 문구로 코드(`agent/signals.py`)에 있다. 커넥션 풀 크기도 데모 앱 설정 이름(`DEMO_POOL_SIZE`)으로 읽는다 | 서비스 카탈로그에 서비스별 쿼리·로그 신호·풀 설정 이름을 두고 agent는 서비스 목록으로 받는다 |
-| 회복 확인이 서비스를 가리지 않는다 | 쿼리에 서비스 조건이 없다. 고객사마다 서비스가 하나라 지금은 맞다 | 서비스가 둘 이상이면 수치가 섞인다. 조치한 서비스로 거른다 |
+| 알림 규칙과 영향 범위 집계가 데모 메트릭 이름을 쓴다 | 진단·회복 확인·첨부 분석은 서비스 카탈로그의 관측 정의로 쿼리를 만든다. 알림 규칙(`alert-rules.yml`), 영향 범위(`ImpactMetrics`), 의존 대상 상태(`DependencyHealth`)는 아직 `demo_orders_seconds_*`·`demo_dependency_seconds_*`를 쓴다 | 서비스마다 메트릭 이름이 다르면 카탈로그로 알림 규칙을 생성하고, backend 집계도 관측 정의로 쿼리를 만든다 |
 
 ## 15. 리스크와 대응
 
