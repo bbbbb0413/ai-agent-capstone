@@ -33,8 +33,6 @@ public class ChangeService {
     public static final String EXECUTED = "EXECUTED";
     public static final String PR_CREATED = "PR_CREATED";
 
-    /** 데모 앱의 커넥션 풀 설정. 배포 설정의 실제 값을 먼저 쓰고, 없으면 카탈로그 기준값을 쓴다 */
-    private static final String POOL_SIZE_ENV = "DEMO_POOL_SIZE";
     /** 상태 저장 서비스에 하지 않는 조치 */
     private static final Set<String> STATEFUL_UNSAFE = Set.of("restart_pods", "scale_deployment");
 
@@ -150,6 +148,7 @@ public class ChangeService {
             item.put("stateful", entry.stateful());
             item.put("contractReplicas", Map.of("min", entry.minReplicas(), "max", entry.maxReplicas()));
             item.put("dependencies", entry.dependencies());
+            item.put("observability", entry.observability());
 
             Optional<RuntimeAdapter> adapter = Optional.ofNullable(adapters.get(entry.runtime()));
             RuntimeAdapter.Workload workload = null;
@@ -215,10 +214,12 @@ public class ChangeService {
                 .sorted().toList();
     }
 
+    /** 커넥션 풀 크기. 카탈로그가 정한 환경변수로 배포 설정의 실제 값을 먼저 읽고, 없으면 카탈로그 기준값을 쓴다 */
     private static Integer poolSize(ServiceCatalog.Entry entry, RuntimeAdapter.Workload workload) {
-        if (workload != null && workload.env().containsKey(POOL_SIZE_ENV)) {
+        String env = entry.poolSizeEnv();
+        if (env != null && workload != null && workload.env().containsKey(env)) {
             try {
-                return Integer.parseInt(workload.env().get(POOL_SIZE_ENV));
+                return Integer.parseInt(workload.env().get(env));
             } catch (NumberFormatException ignored) {
                 // 배포 설정이 숫자가 아니면 카탈로그 기준값을 쓴다
             }

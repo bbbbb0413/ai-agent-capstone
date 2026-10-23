@@ -21,7 +21,7 @@ class ImpactServiceTest {
         return new ServiceCatalog.Dependency(name, kind, "tenant", null, null, null);
     }
     static ServiceCatalog.Entry entry(String name, ServiceCatalog.Dependency... dependencies) {
-        return new ServiceCatalog.Entry("tenant-a", name, "kubernetes", null, null, false, 1, 3, null, List.of(dependencies));
+        return new ServiceCatalog.Entry("tenant-a", name, "kubernetes", null, null, false, 1, 3, null, List.of(dependencies), null, null);
     }
     static Map<ImpactMetrics.Key, Double> values(String... pairs) {
         var result = new HashMap<ImpactMetrics.Key, Double>();

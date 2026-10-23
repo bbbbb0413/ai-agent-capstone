@@ -32,10 +32,10 @@ class EscalationServiceTest {
             List.of("restart_pods", "notice"), "DIRECT", "tenant-b", null);
     private final ServiceCatalog.Entry orderApi = new ServiceCatalog.Entry("tenant-a", "order-api", "kubernetes",
             "kind", "tenant-a", false, 2, 6, 20, List.of(new ServiceCatalog.Dependency("postgres", "database",
-                    "tenant", "A사 DBA팀", 100, new BigDecimal("0.80"))));
+                    "tenant", "A사 DBA팀", 100, new BigDecimal("0.80"))), null, null);
     private final ServiceCatalog.Entry reservationApi = new ServiceCatalog.Entry("tenant-b", "reservation-api",
             "kubernetes", "kind", "tenant-b", false, 1, 1, 20, List.of(new ServiceCatalog.Dependency(
-                    "payment-gateway", "external_api", "third_party", "B사 결제 담당", null, new BigDecimal("0.80"))));
+                    "payment-gateway", "external_api", "third_party", "B사 결제 담당", null, new BigDecimal("0.80"))), null, null);
     private final Incident incidentA = incident(1, "tenant-a", "order-api");
     private final Incident incidentB = incident(2, "tenant-b", "reservation-api");
     private EscalationService service;

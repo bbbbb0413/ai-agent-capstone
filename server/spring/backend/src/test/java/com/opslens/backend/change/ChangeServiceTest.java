@@ -30,9 +30,9 @@ class ChangeServiceTest {
     private final ServiceCatalog.Dependency postgres = new ServiceCatalog.Dependency("postgres", "database", "tenant",
             "A사 DBA팀", 100, new BigDecimal("0.80"));
     private final ServiceCatalog.Entry orderApi = new ServiceCatalog.Entry("tenant-a", "order-api", "kubernetes",
-            "kind", "tenant-a", false, 2, 6, 20, List.of(postgres));
+            "kind", "tenant-a", false, 2, 6, 20, List.of(postgres), "DEMO_POOL_SIZE", observability());
     private final ServiceCatalog.Entry batch = new ServiceCatalog.Entry("tenant-b", "settlement-batch", "docker",
-            "b-batch-01", null, true, 1, 1, null, List.of());
+            "b-batch-01", null, true, 1, 1, null, List.of(), null, null);
     private ChangeService service;
 
     @BeforeEach
@@ -99,6 +99,40 @@ class ChangeServiceTest {
         assertEquals(4, item.get("safeMaxReplicas"));
         assertEquals(true, item.get("zeroDowntimeRestart"));
         assertEquals(List.of("restart_pods", "rollback_deployment", "scale_deployment"), item.get("supportedActions"));
+    }
+
+    private static ServiceCatalog.Observability observability() {
+        return new ServiceCatalog.Observability("demo_orders_seconds", "outcome=\"error\"", "app=\"demo-app\"",
+                Map.of("slow_query", "slow query"));
+    }
+
+    /** 서비스마다 다른 풀 크기 환경변수: 카탈로그가 정한 이름으로 배포 설정을 읽는다 */
+    @Test
+    void poolSizeIsReadFromTheEnvNamedByTheCatalog() {
+        ServiceCatalog.Entry hikari = new ServiceCatalog.Entry("tenant-a", "order-api", "kubernetes", "kind",
+                "tenant-a", false, 2, 6, 20, List.of(postgres), "HIKARI_MAX", observability());
+        when(kubernetes.status(any(), any())).thenReturn(new RuntimeAdapter.Workload("order-api", 2, 2, "demo:0.1.0",
+                Map.of("HIKARI_MAX", "40", "DEMO_POOL_SIZE", "10")));
+        when(catalog.list("tenant-a")).thenReturn(List.of(hikari));
+        Map<String, Object> item = service.inventory(tenantA).get(0);
+        assertEquals(40, item.get("poolSize"));
+        assertEquals(2, item.get("safeMaxReplicas"));   // ⌊100 × 0.8 ÷ 40⌋
+    }
+
+    @Test
+    void poolSizeFallsBackToTheCatalogWithoutAnEnvName() {
+        ServiceCatalog.Entry noEnv = new ServiceCatalog.Entry("tenant-a", "order-api", "kubernetes", "kind",
+                "tenant-a", false, 2, 6, 20, List.of(postgres), null, null);
+        when(catalog.list("tenant-a")).thenReturn(List.of(noEnv));
+        Map<String, Object> item = service.inventory(tenantA).get(0);
+        assertEquals(20, item.get("poolSize"));
+        assertEquals(null, item.get("observability"));
+    }
+
+    @Test
+    void inventoryCarriesTheObservabilityDefinition() {
+        when(catalog.list("tenant-a")).thenReturn(List.of(orderApi));
+        assertEquals(observability(), service.inventory(tenantA).get(0).get("observability"));
     }
 
     @Test
