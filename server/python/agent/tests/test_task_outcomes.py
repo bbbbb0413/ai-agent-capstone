@@ -152,6 +152,22 @@ class ToolOutcomeTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsNone(action_guards.signal_clause({"metrics": {"error_rate": 0.0},
                                                     "logs": {"request_queue_backlog": 50, cause: 3}}))
 
+    def test_blocked_scaling_must_fit_whether_the_service_has_an_autoscaler(self):
+        from langchain_core.messages import AIMessage
+        def esc(service, action):
+            return AIMessage(content="", tool_calls=[{"name": "business_escalate_incident", "id": "c1", "args": {
+                "category": "ACTION_BLOCKED", "service": service, "required_action": action, "reason": "x"}}])
+        context = {"services": [{"name": "reservation-api", "supportedActions": ["restart_pods"]},
+                                {"name": "order-api", "autoscaling": {"maxReplicas": 4}}]}
+        problem = action_guards.blocked_scaling_unfit(esc("reservation-api", "adjust_autoscaler"), context)
+        self.assertIn("scale_deployment", problem)   # b-surge: HPA가 없는 서비스
+        self.assertIn("CONTRACT", problem)
+        self.assertIsNone(action_guards.blocked_scaling_unfit(esc("reservation-api", "scale_deployment"), context))
+        self.assertIn("adjust_autoscaler", action_guards.blocked_scaling_unfit(esc("order-api", "scale_deployment"), context))
+        self.assertIsNone(action_guards.blocked_scaling_unfit(esc("order-api", "adjust_autoscaler"), context))
+        self.assertIsNone(action_guards.blocked_scaling_unfit(esc("unknown", "adjust_autoscaler"), context))
+        self.assertIsNone(action_guards.blocked_scaling_unfit(esc("reservation-api", "rollback_deployment"), context))
+
     def test_propose_send_back_runs_every_guard(self):
         from langchain_core.messages import AIMessage
         def call(name, args, content=""):
@@ -169,6 +185,11 @@ class ToolOutcomeTests(unittest.IsolatedAsyncioTestCase):
         for name, ai in cases.items():
             with self.subTest(name):
                 self.assertIsNotNone(action_guards.first_problem(ai, context, pool, True))
+        # 트래픽 급증 신호면 adjust_autoscaler도 그 장애 형태의 조치다. HPA가 없다는 구조 검사만 잡는다
+        surge = {"metrics": {"error_rate": 0.0}, "logs": {"request_queue_backlog": 40}}
+        unfit = call("business_escalate_incident", {"category": "ACTION_BLOCKED", "reason": "x",
+                                                    "service": "reservation-api", "required_action": "adjust_autoscaler"})
+        self.assertIsNotNone(action_guards.first_problem(unfit, context, surge, False))
         fine = call("business_execute_runbook_action", {"action": "restart_pods", "service": "reservation-api",
                                                         "reason": "RB-STD-02"})
         self.assertIsNone(action_guards.first_problem(fine, context, pool, False))

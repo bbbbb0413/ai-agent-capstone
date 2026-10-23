@@ -473,21 +473,27 @@ def scenario_isolation(args) -> Result:
                           "auth", "can-i", "delete", "pods", "-n", "tenant-a"], capture_output=True, text=True)
     answer = can.stdout.strip() or can.stderr.strip()[:80]
     r.check(answer == "no", f"B사 ServiceAccount로 A사 파드 삭제 권한 → {answer}")
-    # RAG: B사 작업 컨텍스트로 A사에만 있는 내용을 검색해도 A사 문서는 나오지 않고, 표준 런북은 나온다
+    # RAG: B사 작업 컨텍스트로 A사에만 있는 내용을 검색해도 A사 문서는 나오지 않고, 표준 런북은 나온다.
+    # 표준 런북은 범위를 좁혀 따로 찾는다. 전체 범위 상위 10건은 쌓인 B사 회고(postmortem)가 채울 수 있다
     probe = compose("exec", "-T", "agent", "/app/.venv/bin/python", "-c", """
 import asyncio, json
 from agent.toolbox import load_tools, _as_text
 async def main():
     # Harness의 결과 길이 제한(4000자)을 거치지 않게 MCP 도구를 직접 부른다. 고객사는 연결 헤더로만 정해진다
     tools = {t.name: t for t in await load_tools("tenant-b", "e2e", "e2e")}
-    out = await tools["rag_search_documents"].ainvoke({"query": "A사 DBA 연락, GitOps PR 병합, order-api", "top_k": 10})
-    print(json.dumps([d["uri"] for d in json.loads(_as_text(out))]))
+    query = "A사 DBA 연락, GitOps PR 병합, order-api"
+    found = {}
+    for scope in ("all", "common"):
+        out = await tools["rag_search_documents"].ainvoke({"query": query, "top_k": 10, "scope": scope})
+        found[scope] = [d["uri"] for d in json.loads(_as_text(out))]
+    print(json.dumps(found))
 asyncio.run(main())
 """)
-    uris = json.loads(probe.splitlines()[-1]) if probe else []
+    found = json.loads(probe.splitlines()[-1]) if probe else {}
+    uris = found.get("all", [])
     r.check(uris and not any("tenant-a" in u for u in uris),
             f"B사 작업의 문서 검색에 A사 문서가 없다 ({len(uris)}건 중 A사 {sum('tenant-a' in u for u in uris)}건)")
-    r.check(any("_common" in u for u in uris), "B사 작업에서도 MSP 표준 런북은 검색된다")
+    r.check(any("_common" in u for u in found.get("common", [])), "B사 작업에서도 MSP 표준 런북은 검색된다")
     blocked = sql("select count(*) from app.audit_logs where action = 'TENANT_ISOLATION_BLOCKED' "
                   "and created_at > now() - interval '2 minutes'")
     r.check(blocked != "0", f"격리 차단이 감사 로그에 남았다 ({blocked}건)")

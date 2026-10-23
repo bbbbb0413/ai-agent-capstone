@@ -56,6 +56,7 @@ PDF 표 6-3의 권장값을 기준으로 둔 값과, 팀이 바꾼 값과 이유
 | 2026-10-20 | 조치 돌려보내기 | 조항 검사 1번 → 조항 검사와 `supportedActions` 검사를 함께, 최대 2번 돌려보내고 거부 이유를 쌓아 넘긴다 (`graph._unsupported_action`, `PROPOSE_SEND_BACKS`) | 위 수정 뒤 `b-pool`에서 재시작이 거부되자 계약상 불가한 `rollback_deployment`를 골랐고, 두 번째 선택은 검사하지 않아 승인 요청으로 올라감(backend가 422로 막으므로 실행은 안 됨) | `scripts/e2e.py b-pool`: P1 → `ACTION_BLOCKED rollback_deployment CONTRACT` → 공지 |
 | 2026-10-20 | 장애 주입·해제 대상 | Service(NodePort)로 한 번 → 모든 파드에서 자기 관리 API를 부른다 (`scripts/inject.py set_fault`, `kubectl exec`) | 처음부터 구성한 전체 E2E에서 `a-latency` 해제가 장애를 넣지 않은 다른 파드(A사는 2개)로 가 지연이 남았다. p95 1.9초가 7분 이상 이어져 인시던트가 닫히지 않았고, 다음 `a-dbslow`의 알림이 그 인시던트로 합쳐져 새 작업이 생기지 않음 | 주입 후 두 파드 모두 `PAYMENT_LATENCY`, 해제 후 두 파드 모두 `NONE` |
 | 2026-10-20 | 막힌 조치 에스컬레이션 검사 | 없음 → `ACTION_BLOCKED`의 `required_action`이 코드가 신호로 정한 장애 형태(RB-STD-01~03)의 조치와 다르면 돌려보낸다 (`graph._signal_clause`, `_blocked_action_mismatch`) | 같은 실행의 `b-pool`에서 진단은 RB-STD-01(풀 고갈)로 맞히고 에스컬레이션의 필요한 조치를 `scale_deployment`로 적음. B사 승인 담당에게 엉뚱한 조치의 승인을 요청하게 된다 | 단위 테스트. 전체 E2E 재실행 |
+| 2026-10-23 | 막힌 확장 조치의 구조 검사 | 없음 → `ACTION_BLOCKED`의 `required_action`이 확장 조치면 서비스 구조와 맞는지 본다. HPA가 없으면 `scale_deployment`, 있으면 `adjust_autoscaler`만 받고 나머지는 돌려보낸다 (`action_guards.blocked_scaling_unfit`) | E2E `b-surge`에서 HPA가 없는 B사 `reservation-api`를 "safeMaxReplicas=1이라 adjust_autoscaler 불가"로 `ACTION_BLOCKED adjust_autoscaler STRUCTURE` 에스컬레이션. B사 운영 승인 담당이 받는 사람에서 빠짐. 신호 기반 검사는 RB-STD-03의 조치로 보고 통과시켰다 | `scripts/e2e.py b-surge` |
 
 
 ## 과거 장애 검색 (2026-10-22)

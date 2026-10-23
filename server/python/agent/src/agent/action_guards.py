@@ -31,7 +31,7 @@ def fixes(clause: str, recent_change: bool) -> set[str]:
 def first_problem(ai: AIMessage, context: dict, signals: dict, recent_change: bool) -> str | None:
     """돌려보낼 이유. 맞지 않는 점이 없으면 None."""
     return (clause_mismatch(ai, recent_change) or unsupported_action(ai, context)
-            or blocked_action_mismatch(ai, signals, recent_change))
+            or blocked_action_mismatch(ai, signals, recent_change) or blocked_scaling_unfit(ai, context))
 
 
 def unsupported_action(ai: AIMessage, context: dict) -> str | None:
@@ -84,6 +84,33 @@ def blocked_action_mismatch(ai: AIMessage, signals: dict, recent_change: bool) -
         return None
     return (f"거부: 지표와 로그 신호로는 {clause}다. 그 장애 형태를 고치는 조치는 {sorted(fits)}이고, "
             f"'{args['required_action']}'는 아니다. required_action에는 그중 할 수 없어 막힌 조치를 적는다.")
+
+
+def blocked_scaling_unfit(ai: AIMessage, context: dict) -> str | None:
+    """ACTION_BLOCKED 에스컬레이션의 확장 방식이 서비스 구조와 맞지 않으면 그 이유.
+
+    HPA가 없으면 막힌 조치는 레플리카 확장(scale_deployment)이고, HPA가 있으면 최대치 조정(adjust_autoscaler)이다.
+    B사(HPA 없음, 확장 계약상 불가) 급증에서 adjust_autoscaler·STRUCTURE로 적어 고객사 승인 담당 대신 엉뚱한 곳에
+    에스컬레이션한 적이 있다 (b-surge E2E, 2026-10-23).
+    """
+    if not ai.tool_calls or ai.tool_calls[0]["name"] != "business_escalate_incident":
+        return None
+    args = ai.tool_calls[0]["args"]
+    required = args.get("required_action")
+    if args.get("category") != "ACTION_BLOCKED" or required not in ("scale_deployment", "adjust_autoscaler"):
+        return None
+    services = context.get("services") if isinstance(context.get("services"), list) else []
+    item = next((s for s in services if isinstance(s, dict) and s.get("name") == args.get("service")), None)
+    if item is None:
+        return None
+    autoscaled = isinstance(item.get("autoscaling"), dict)
+    fits = "adjust_autoscaler" if autoscaled else "scale_deployment"
+    if required == fits:
+        return None
+    structure = "HPA가 레플리카를 관리한다" if autoscaled else "HPA가 없다"
+    return (f"거부: {args.get('service')}에는 {structure}. 막힌 확장 조치는 '{fits}'이고 '{required}'가 아니다. "
+            f"required_action=\"{fits}\"로 다시 적는다. 그 조치가 supportedActions({item.get('supportedActions')})에 "
+            "없으면 blocked_by=\"CONTRACT\", 안전 상한에 막히면 \"STRUCTURE\"다.")
 
 
 def clause_mismatch(ai: AIMessage, recent_change: bool = False) -> str | None:
