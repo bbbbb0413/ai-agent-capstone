@@ -314,6 +314,12 @@ class Expect:
     allow: set[str] = field(default_factory=lambda: {"business_escalate_incident"})
 
 
+@dataclass
+class Steps:
+    """겹친 장애에서 기대하는 조치들 (SPEC-compound-faults 7.1). 승인은 이 중 하나면 하고, 순서는 끝난 뒤 판정한다."""
+    steps: list[Expect]
+
+
 def wait_for_incident_task(admin: Session, tenant: str, since: datetime, timeout: float) -> tuple[dict, dict]:
     say(f"{tenant} 알림 → 인시던트·작업 생성을 기다린다 (알림 규칙 for 30s + 평가 주기)")
     deadline = time.time() + timeout
@@ -353,7 +359,9 @@ def drive(task_id: str, expect: Expect, result: Result, timeout: float, merge: b
     raise TimeoutError(f"{timeout:.0f}초 안에 작업이 끝나지 않았다 (마지막 상태 {last})")
 
 
-def expected(pending: dict, expect: Expect) -> bool:
+def expected(pending: dict, expect) -> bool:
+    if isinstance(expect, Steps):   # 겹친 장애: 기대한 조치 중 하나면 승인한다. 순서는 끝난 뒤 check_steps가 본다
+        return any(expected(pending, step) for step in expect.steps)
     tool, args = pending.get("tool"), pending.get("args") or {}
     if tool == "business_send_customer_notice" or not chosen(pending):   # 공지, 흐름이 낸 에스컬레이션(P1 등)
         return True
@@ -970,6 +978,144 @@ def scenario_b_surge(args) -> Result:
                           Expect("business_escalate_incident", args={"category": "ACTION_BLOCKED"}), checks)
 
 
+# 겹친 장애 (SPEC-compound-faults 7장). 원인 후보와 순위는 Agent가 정한다. E2E가 그 판단이 기준대로였는지 본다
+
+def cause_steps(task_id: str) -> list[dict]:
+    """진단이 적은 원인 후보와 처리할 원인 (propose_action이 남긴 STEP). 진단마다 하나씩 있다."""
+    events = Session("engineer").get(f"/api/ai/tasks/{task_id}/events")
+    return [e["data"] for e in events if e["type"] == "STEP" and (e.get("data") or {}).get("causes") is not None]
+
+
+def chosen_proposals(task_id: str) -> list[dict]:
+    """Agent가 조치로 고른 승인 요청, 나온 순서대로 (같은 제안의 재요청은 한 번)."""
+    events = Session("engineer").get(f"/api/ai/tasks/{task_id}/events")
+    seen, out = set(), []
+    for e in events:
+        data = e.get("data") or {}
+        key = str(data.get("tool")) + json.dumps(data.get("args"), sort_keys=True)
+        if e["type"] == "APPROVAL_REQUIRED" and data and chosen(data) and key not in seen:
+            seen.add(key)
+            out.append(data)
+    return out
+
+
+def check_steps(r: Result, task_id: str, order: list[Expect], targets: list[str], causes: set[str]) -> None:
+    """조치 순서, 진단마다의 처리할 원인, 원인 후보에 기대한 조항이 모두 있는지. 같은 원인에 앱 조치를 두 번 하지 않았는지."""
+    steps = cause_steps(task_id)
+    got = [s.get("target") for s in steps]
+    r.check(got == targets, f"진단마다 처리할 원인이 기대와 같다 (기대 {' → '.join(targets)}, 실제 {' → '.join(map(str, got)) or '없음'})")
+    named = {c for s in steps for c in s.get("causes") or []}
+    r.check(causes <= named, f"원인 후보에 {', '.join(sorted(causes))}가 있다 (적힌 후보: {', '.join(sorted(named)) or '없음'})")
+    proposals = chosen_proposals(task_id)
+    ok = len(proposals) == len(order) and all(expected(p, e) for p, e in zip(proposals, order))
+    r.check(ok, f"조치를 기대한 순서로 제안했다 ({' → '.join(describe(p) for p in proposals) or '제안 없음'})")
+    actions = [(p.get("args") or {}).get("action") for p in proposals if p.get("tool") == "business_execute_runbook_action"]
+    r.check(len(actions) == len(set(actions)), f"같은 앱 조치를 두 번 하지 않았다 ({', '.join(map(str, actions)) or '앱 조치 없음'})")
+
+
+def check_one_incident(r: Result, tenant: str, since: datetime, incident: dict, task_id: str) -> None:
+    """같은 서비스의 알림이 인시던트 하나로 묶였다 (5장). 덧붙은 알림은 작업 이벤트로 남는다."""
+    opened = sql(f"select string_agg('#' || id, ', ') from app.incidents where tenant_id = '{tenant}' "
+                 f"and started_at >= '{since.isoformat()}'")
+    r.check(opened == f"#{incident['id']}", f"인시던트가 하나만 열렸다 ({opened or '없음'})")
+    alerts = sql(f"select count(*) from app.incident_alerts where incident_id = {incident['id']}")
+    added = sum(1 for e in Session("engineer").get(f"/api/ai/tasks/{task_id}/events") if e["type"] == "ALERT_ADDED")
+    r.notes.append(f"인시던트 #{incident['id']}에 묶인 알림 {alerts}개, 작업에 남은 알림 추가 {added}건")
+
+
+def reject_stray_tasks(tenant: str, since: datetime, task_id: str) -> None:
+    """작업이 끝난 뒤 울린 알림은 새 인시던트·작업이 된다. 승인 대기로 남지 않게 거절해 끝낸다."""
+    engineer = Session("engineer")
+    for task in engineer.get("/api/ai/tasks"):
+        if task["id"] == task_id or task.get("tenantId") != tenant or task.get("status") != "WAITING_APPROVAL":
+            continue
+        if datetime.fromisoformat(task["createdAt"]) < since:
+            continue
+        pending = task.get("pendingAction") or engineer.get(f"/api/ai/tasks/{task['id']}").get("pendingAction") or {}
+        who = Session("admin") if pending.get("tool") in ADMIN_ONLY else engineer
+        who.call("POST", f"/api/ai/tasks/{task['id']}/approval",
+                 {"decision": "REJECT", "comment": "e2e: 겹친 장애 시나리오가 끝난 뒤 생긴 작업", "approvalId": pending.get("approvalId")})
+        say(f"작업이 끝난 뒤 생긴 작업 {task['id'][:8]}의 승인 요청을 거절했다")
+
+
+def compound_scenario(args, title: str, tenant: str, kind: str, steps: Steps, checks, merge: bool = False,
+                      **inject_args) -> Result:
+    """겹친 장애를 넣고 작업을 끝까지 진행한 뒤 checks(r, task, summary, incident, since)로 판정한다."""
+    r = Result(title)
+    started, since = time.time(), datetime.now(timezone.utc)
+    task_id = None
+    try:
+        inject(tenant, kind, **inject_args)
+        incident, task = wait_for_incident_task(Session("admin"), tenant, since, args.timeout)
+        task_id = task["id"]
+        task = drive(task_id, steps, r, args.timeout, merge=merge)
+        summary = summarize(task, r)
+        checks(r, task, summary, incident, since)
+        check_one_incident(r, tenant, since, incident, task_id)
+    finally:
+        if task_id:
+            reject_stray_tasks(tenant, since, task_id)
+        reset(tenant)
+    r.seconds = time.time() - started
+    return r
+
+
+RESTART_A = Expect("business_execute_runbook_action", "restart_pods", "order-api")
+NOTICE = Expect("business_send_customer_notice")
+
+
+def scenario_a_hang_latency(args) -> Result:
+    def checks(r, task, summary, incident, since):
+        # 파드 멈춤이 결제 지연을 가린다. 재시작한 뒤 남은 결제 지연을 다시 진단해 공지한다 (외부 장애는 재시작해도 남는다)
+        check_steps(r, task["id"], [RESTART_A, NOTICE], ["RB-STD-02", "RB-STD-04"], {"RB-STD-02", "RB-STD-04"})
+        check_notice(r, summary)
+        r.check(summary.get("recovered") is False, "재시작 뒤 결제 지연이 남아 회복되지 않았다고 판정했다")
+        left = faults.dependency_faults("tenant-a")
+        r.check("PAYMENT_LATENCY" in left, f"재시작한 새 파드도 결제 지연을 이어받았다 (ConfigMap {sorted(left)})")
+
+    return compound_scenario(args, "A-hang+latency. 파드 멈춤 + 결제 지연 → 재시작 후 공지 (A사)", "tenant-a",
+                             "hang+latency", Steps([RESTART_A, NOTICE]), checks)
+
+
+def scenario_b_pool_dbslow(args) -> Result:
+    blocked = Expect("business_escalate_incident",
+                     args={"category": "ACTION_BLOCKED", "required_action": "rollback_deployment"})
+
+    def checks(r, task, summary, incident, since):
+        # 직전 변경이 있으니 풀 고갈은 DB 지연의 증상이 아니다. 앱 원인(롤백, 계약상 불가)을 먼저 처리한다
+        check_steps(r, task["id"], [blocked], ["RB-STD-01"], {"RB-STD-01", "RB-STD-05"})
+        check_escalation(r, incident, "ACTION_BLOCKED", "B사 운영 승인 담당",
+                         required_action="rollback_deployment", blocked_by="CONTRACT")
+        check_no_app_action(r, "tenant-b", since, "롤백이 계약상 불가라")
+
+    # DB 지연을 먼저 넣는다. 잘못된 배포로 뜨는 새 파드가 ConfigMap에서 DB 지연을 이어받는다
+    return compound_scenario(args, "B-pool+dbslow. 잘못된 배포 + DB 지연 → 롤백 불가 에스컬레이션 (B사)", "tenant-b",
+                             "dbslow+pool", Steps([blocked]), checks, size=5)
+
+
+def scenario_a_dbslow_backlog(args) -> Result:
+    raise_max = Expect("business_execute_runbook_action", "adjust_autoscaler", "order-api", args={"max_replicas": 4})
+    dba = Expect("business_escalate_incident", args={"category": "DEPENDENCY"})
+
+    def checks(r, task, summary, incident, since):
+        # 대기열 경고를 DB 지연의 증상으로 볼지는 DB p95가 요청 p95에서 차지하는 비율(0.5)로 정한다 (3.2).
+        # 데모 앱은 의존 호출을 처리 슬롯 밖에서 해서 비율이 그때그때 다르다. 진단이 받은 사실로 기대값을 정한다
+        steps = cause_steps(task["id"])
+        facts = {f.get("clause"): f for f in (steps[0].get("facts") if steps else None) or []}
+        share = (facts.get("RB-STD-05") or {}).get("dependency_share")
+        absorbed = isinstance(share, (int, float)) and share >= 0.5
+        r.notes.append(f"DB p95 / 요청 p95 = {share} → {'대기열은 DB 지연의 증상' if absorbed else '두 원인 모두 독립'}")
+        if absorbed:
+            check_steps(r, task["id"], [dba], ["RB-STD-05"], {"RB-STD-05"})
+        else:
+            check_steps(r, task["id"], [raise_max, dba], ["RB-STD-03", "RB-STD-05"], {"RB-STD-03", "RB-STD-05"})
+            check_max_replicas(r, task["id"], 4)
+        check_escalation(r, incident, "DEPENDENCY", "A사 DBA팀", dependency="postgres")
+
+    return compound_scenario(args, "A-dbslow+surge. DB 지연 + 트래픽 급증 → 판단 기준대로 처리 (A사)", "tenant-a",
+                             "dbslow+surge", Steps([raise_max, dba]), checks, merge=not args.no_merge)
+
+
 def wait_for_a_normal(timeout: float = 300) -> None:
     """A사가 평소 크기로 돌아오기를 기다린다: 최대치 복원 커밋이 동기화되고(HPA 최대 3), 부하가 빠져 HPA가
     스스로 레플리카 2로 줄인다 (축소 안정화 60초). 확장 원복 PR은 없다 (결정 8)."""
@@ -1011,6 +1157,9 @@ SCENARIOS = {
     "b-latency": ("B사 외부 결제 지연 → 고객 공지", scenario_b_latency),
     "b-pool": ("B사 잘못된 배포 → 롤백 계약상 불가 → 에스컬레이션", scenario_b_pool),
     "b-surge": ("B사 트래픽 급증 → 확장 계약상 불가 → 에스컬레이션", scenario_b_surge),
+    "a-hang-latency": ("A사 파드 멈춤 + 결제 지연 → 재시작 후 고객 공지 (겹친 장애)", scenario_a_hang_latency),
+    "a-dbslow-backlog": ("A사 DB 지연 + 트래픽 급증 → 판단 기준대로 처리 (겹친 장애)", scenario_a_dbslow_backlog),
+    "b-pool-dbslow": ("B사 잘못된 배포 + DB 지연 → 롤백 불가 에스컬레이션 (겹친 장애)", scenario_b_pool_dbslow),
 }
 ALIASES = {"a": "a-pool", "b": "b-hang", "b2": "b-latency"}   # 매트릭스 전 키
 QUICK = ["guard", "a-hang", "a-dbslow", "b-surge"]              # PR이 없는 빠른 확인 (6.3)
@@ -1022,8 +1171,9 @@ GITHUB_SCENARIOS = {"a-pool", "a-surge", "a-surge-max"}         # PR을 만들�
 # A사 장애를 정리하고 레플리카 2로 돌아온 뒤라 거부 전후 레플리카 비교도 흔들리지 않는다
 LANES = {
     "공통": ["isolation", "question", "no-issue", "documents"],
-    "tenant-a": ["a-hang", "a-latency", "a-dbslow", "a-pool", "a-surge", "a-surge-max", "guard"],
-    "tenant-b": ["b-hang", "b-latency", "b-pool", "b-surge"],
+    "tenant-a": ["a-hang", "a-latency", "a-dbslow", "a-pool", "a-surge", "a-surge-max", "a-hang-latency",
+                 "a-dbslow-backlog", "guard"],
+    "tenant-b": ["b-hang", "b-latency", "b-pool", "b-surge", "b-pool-dbslow"],
 }
 LANE_OF = {key: lane for lane, keys in LANES.items() for key in keys}
 
