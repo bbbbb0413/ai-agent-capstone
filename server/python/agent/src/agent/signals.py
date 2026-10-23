@@ -109,6 +109,107 @@ async def recent_log_patterns(box: ToolBox, counts: dict[str, int], incident_id:
                           "summary": summary_text[:500], "signals": signals}
 
 
+SIGNAL_STEP_SECONDS = 5
+
+
+def signal_count_query(obs: dict[str, Any], service: str, phrase: str) -> str:
+    """그 신호 문구가 든 ERROR·WARN 로그를 5초 구간마다 센다. 구간 합이 건수, 처음 0이 아닌 구간이 처음 나온 시각이다."""
+    return (f"sum(count_over_time({log_query(obs, service)} |= {json.dumps(phrase, ensure_ascii=False)} "
+            f"[{SIGNAL_STEP_SECONDS}s]))")
+
+
+def _iso(seconds: float) -> str:
+    return datetime.fromtimestamp(seconds, timezone.utc).isoformat(timespec="seconds")
+
+
+async def log_signal_details(box: ToolBox, obs: dict[str, Any], service: str, start: datetime,
+                             end: datetime) -> dict[str, dict[str, Any]]:
+    """알려진 로그 신호마다 구간 안의 건수와 처음 나온 시각 {신호: {"count", "first_seen"}}.
+
+    반복 메시지 요약(recent_log_patterns)은 최근 200줄만 본다. 파드 멈춤처럼 초당 수십 줄 나오는 신호가 있으면 200줄이
+    몇 초 분량이라 함께 난 다른 신호가 0건으로 세지고 처음 시각도 알 수 없다. 그래서 신호마다 Loki가 센 값을 받는다
+    (SPEC-compound-faults 3장). 조회에 실패한 신호와 카탈로그에 문구가 없는 신호는 넣지 않는다(0건과 구별한다).
+    정해진 조회라 모델의 탐색 한도에 넣지 않는다.
+    """
+    phrases = obs.get("logSignals") if isinstance(obs.get("logSignals"), dict) else {}
+    details: dict[str, dict[str, Any]] = {}
+    for name in LOG_SIGNALS:
+        if not phrases.get(name):
+            continue
+        args = {"logql": signal_count_query(obs, service, str(phrases[name])), "queryType": "range",
+                "stepSeconds": SIGNAL_STEP_SECONDS, "startRfc3339": start.isoformat(timespec="seconds"),
+                "endRfc3339": end.isoformat(timespec="seconds")}
+        # 10분이면 120구간이라 결과 길이 제한(4000자)을 넘는다. 모델에 바로 가지 않으므로 넉넉히 둔다
+        result = await box.call("diagnose", "grafana_query_loki_logs", args, {}, max_chars=200_000)
+        if result.status == "error":
+            continue
+        rows = parse_json(result)
+        series = rows.get("data") if isinstance(rows, dict) else None
+        if not isinstance(series, list):
+            continue
+        try:
+            points = sorted((float(p["timestamp"]), float(p["value"]))
+                            for s in series if isinstance(s, dict) for p in s.get("values") or [])
+        except (KeyError, TypeError, ValueError):
+            continue
+        hits = [(t, v) for t, v in points if v > 0]
+        details[name] = {"count": int(sum(v for _, v in hits)),
+                         # 구간 끝 시각에 그 앞 5초를 센 값이 찍힌다. 처음 나온 시각은 구간 시작으로 적는다
+                         "first_seen": _iso(hits[0][0] - SIGNAL_STEP_SECONDS) if hits else None}
+    return details
+
+
+async def dependency_health(box: ToolBox, context: dict[str, Any], service: str) -> list[dict[str, Any]]:
+    """서비스 목록에 적힌 그 서비스의 의존 대상마다 상태를 코드가 미리 본다. 모델이 의존 대상 상태를 보지 않고
+    병목을 정하지 않게 한다. 조회에 실패한 대상은 status UNKNOWN으로 남긴다."""
+    services = context.get("services") if isinstance(context.get("services"), list) else []
+    item = next((s for s in services if isinstance(s, dict) and s.get("name") == service), None) or {}
+    found = []
+    for dep in item.get("dependencies") or []:
+        if not isinstance(dep, dict) or not dep.get("name"):
+            continue
+        result = await box.call("diagnose", "business_get_dependency_health", {"dependency": dep["name"]}, {})
+        health = parse_json(result) if result.status != "error" else None
+        health = health if isinstance(health, dict) else {}
+        found.append({"name": dep["name"], "kind": dep.get("kind"), "owner": dep.get("owner"),
+                      "status": health.get("status") or "UNKNOWN", "p95Seconds": health.get("p95Seconds")})
+    return found
+
+
+# 근거 조건 (SPEC-compound-faults 3.1). 순위가 아니라 "근거 없는 원인"을 가려내는 최소 기준이다
+MIN_SIGNAL_COUNT = 3   # 이보다 적은 신호는 잡음으로 본다
+DEPENDENCY_CLAUSES = {"database": "RB-STD-05", "external_api": "RB-STD-04"}
+UNHEALTHY = {"DEGRADED", "DOWN"}
+
+
+def cause_facts(log_signals: dict[str, dict[str, Any]], dependencies: list[dict[str, Any]],
+                metrics: dict[str, Any]) -> list[dict[str, Any]]:
+    """원인 후보(공통 런북 RB-STD-01~05)별 사실 표. 코드가 조회한 값을 조항별로 모을 뿐 순위·흡수는 정하지 않는다.
+    판단은 모델이 한다 (prompts/diagnose.md). evidence는 조치 검사(action_guards)의 "근거 없는 원인" 기준이다.
+
+    dependency_share는 의존 대상 p95를 요청 p95로 나눈 값이다. 의존 호출이 처리 시간을 얼마나 차지하는지 본다.
+    """
+    p95 = metrics.get("p95_seconds")
+    facts = []
+    for name, clause in LOG_SIGNALS.items():
+        signal = log_signals.get(name)
+        deps = [d for d in dependencies if DEPENDENCY_CLAUSES.get(str(d.get("kind"))) == clause]
+        if signal is None and not deps:
+            continue   # 셀 수 없는 신호이고 해당 의존 대상도 없으면 사실이 없다
+        count = (signal or {}).get("count")
+        dep = max(deps, key=lambda d: d.get("p95Seconds") or 0, default=None)
+        dep_p95 = (dep or {}).get("p95Seconds")
+        share = (round(dep_p95 / p95, 2) if isinstance(dep_p95, (int, float)) and isinstance(p95, (int, float))
+                 and p95 > 0 else None)
+        facts.append({
+            "clause": clause, "signal": name, "signal_count": count, "first_seen": (signal or {}).get("first_seen"),
+            "dependency": (dep or {}).get("name"), "dependency_status": (dep or {}).get("status"),
+            "dependency_share": share,
+            "evidence": (count or 0) >= MIN_SIGNAL_COUNT or any(d.get("status") in UNHEALTHY for d in deps),
+        })
+    return facts
+
+
 def diagnose_queries(obs: dict[str, Any], service: str) -> dict[str, str]:
     """진단 시작 때 코드가 조회하는 기본 지표 (최근 1분). 에러율은 RB-STD-02(5xx 급증)와 RB-STD-03(에러 없이 지연)을
     가르는 기준인데, 모델이 에러율을 조회하지 않고 대기열 경고만 보고 RB-STD-02(재시작)로 판단한 적이 있다 (docs/harness-spec.md)
