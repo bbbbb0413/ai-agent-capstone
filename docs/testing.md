@@ -2,7 +2,7 @@
 
 | 종류 | 무엇을 확인하나 | 실행 | 걸리는 시간 |
 |---|---|---|---|
-| 전체 시나리오 E2E | 장애 주입부터 승인·조치·회복 확인·보고서까지 실제 스택에서 | `python3 scripts/e2e.py` | 전체 약 40~50분 |
+| 전체 시나리오 E2E | 장애 주입부터 승인·조치·회복 확인·보고서까지 실제 스택에서 | `python3 scripts/e2e.py` | 전체 약 10~15분 |
 | 단위·DB 테스트 | 프론트 타임라인, Agent 도구 결과·분기, backend 소유권·승인·SLA | 아래 2장 | 1분 안팎 |
 
 ## 1. 전체 시나리오 E2E (`scripts/e2e.py`)
@@ -27,30 +27,44 @@ python3 scripts/e2e.py --cleanup       # 중단된 실행이 남긴 임시 브�
 | 공통 | `question` | 문서 질문 | RAG로 계약 조항을 찾아 답하고 출처를 단다 |
 | 공통 | `documents` | 근거 문서 | 담당 엔지니어가 B사 SLA 계약서 새 버전(docx)을 올리면 30초 안에 색인되고 B사 작업의 문서 검색 1위에 제목 경로와 함께 나온다. 되돌리면 빠진다. 엔지니어의 공통 문서 업로드와 고객사 담당자의 문서 API는 403. 조항 번호를 뺀 공통 표준 런북 PDF는 VALIDATE 실패이고 검색은 이전 버전 그대로 |
 | 공통 | `no-issue` | 이상 없음 | 열린 인시던트가 없는 고객사의 일반 질문은 진단·조치 없이 30초 안에 "이상 없음". 서비스명이 있는 증상 제보는 승인 후 P2 인시던트를 등록해 진단으로 연결 |
-| A사(끝) | `guard` | backend 방어선 | 내부 API로 직접 요청: A사 HPA 서비스 직접 확장, HPA 최대치 5(안전 상한 4), B사 Docker 서비스 재시작, B사 롤백이 모두 422. 레플리카 불변 |
-| A사 | `a-hang` | 파드 멈춤 | 승인 카드에 순차 재시작·무중단 표시, `restart_pods`를 API로 실행(`ROLLING`) → 회복 |
-| A사 | `a-latency` | 외부 결제 지연 | 앱 조치 없이 고객 공지 |
-| A사 | `a-dbslow` | DB 자체 지연 | `DEPENDENCY`(postgres) 에스컬레이션, 받는 사람 A사 DBA팀, 공지, 앱 조치 없음 |
-| A사 | `a-pool` (예전 `a`) | 잘못된 설정 배포 | 롤백 PR → 병합 → ArgoCD 동기화 → 회복, 풀 크기 20 |
-| A사 | `a-surge` | 트래픽 급증 +250건/초 | `adjust_autoscaler` 최대 4 PR → 병합 → HPA 최대 4 → 회복. 직접 확장·4 초과 제안 없음 |
-| A사 | `a-surge-max` | 트래픽 급증 +400건/초 | 최대 4로 올린 뒤에도 미회복 → `ACTION_BLOCKED`/`STRUCTURE` 에스컬레이션(A사 운영 담당), 공지 |
-| B사 | `b-hang` (예전 `b`) | 파드 멈춤 | 승인 카드에 전체 중단 표시, `restart_pods`를 API로 실행 → 회복 |
-| B사 | `b-latency` (예전 `b2`) | 외부 결제 지연 | 재시작하지 않고 고객 공지 |
-| B사 | `b-pool` | 잘못된 배포 | 롤백이 계약상 불가 → `ACTION_BLOCKED`/`CONTRACT` 에스컬레이션(B사 운영 승인 담당), 공지, 재시작 제안 없음 |
-| B사 | `b-surge` | 트래픽 급증 | 확장이 계약상 불가 → `ACTION_BLOCKED`/`CONTRACT` 에스컬레이션, 공지 |
-| A사 | `a-hang-latency` | 파드 멈춤 + 결제 지연 (겹친 장애) | 처리할 원인 RB-STD-02 → 재시작 → 미회복(가려져 있던 결제 지연) → 다시 진단해 RB-STD-04 → 고객 공지. 재시작한 새 파드도 결제 지연을 이어받는다. 인시던트 하나 |
-| A사 | `a-dbslow-backlog` | DB 지연 + 트래픽 급증 (겹친 장애) | 진단이 받은 DB p95 비율이 0.5 이상이면 대기열을 DB 지연의 증상으로 보고 DBA 에스컬레이션만, 미만이면 HPA 최대치 4 PR → 다시 진단 → DBA 에스컬레이션 |
-| B사 | `b-pool-dbslow` | 잘못된 배포 + DB 지연 (겹친 장애) | 직전 변경이 있어 풀 고갈은 독립 원인. 처리할 원인 RB-STD-01 → 롤백 계약상 불가 `ACTION_BLOCKED` 에스컬레이션. 원인 후보에 RB-STD-05도 있다 |
+| A1 order-api | `guard` | backend 방어선 | 내부 API로 직접 요청: A사 HPA 서비스 직접 확장, HPA 최대치 5(안전 상한 4), B사 Docker 서비스 재시작, B사 롤백이 모두 422. 레플리카 불변 |
+| A1 order-api | `a-surge` | 트래픽 급증 +250건/초 | `adjust_autoscaler` 최대 4 PR → 병합 → HPA 최대 4 → 회복. 직접 확장·4 초과 제안 없음 |
+| A1 order-api | `a-surge-max` | 트래픽 급증 +400건/초 | 최대 4로 올린 뒤에도 미회복 → `ACTION_BLOCKED`/`STRUCTURE` 에스컬레이션(A사 운영 담당), 공지 |
+| A2 cart-api | `a-pool` (예전 `a`) | 잘못된 설정 배포 | 롤백 PR → 병합 → ArgoCD 동기화 → 회복, 풀 크기 20 |
+| A2 cart-api | `a-dbslow-backlog` | DB 지연 + 트래픽 급증 (겹친 장애) | 진단이 받은 DB p95 비율이 0.5 이상이면 대기열을 DB 지연의 증상으로 보고 DBA 에스컬레이션만, 미만이면 HPA 최대치 4 PR → 다시 진단 → DBA 에스컬레이션 |
+| A3 inventory-api | `a-hang` | 파드 멈춤 | 승인 카드에 순차 재시작·무중단 표시, `restart_pods`를 API로 실행(`ROLLING`) → 회복 |
+| A3 inventory-api | `a-latency` | 외부 결제 지연 | 앱 조치 없이 고객 공지 |
+| A3 inventory-api | `a-dbslow` | DB 자체 지연 | `DEPENDENCY`(postgres) 에스컬레이션, 받는 사람 A사 DBA팀, 공지, 앱 조치 없음 |
+| B1 reservation-api | `b-hang` (예전 `b`) | 파드 멈춤 | 승인 카드에 전체 중단 표시, `restart_pods`를 API로 실행 → 회복 |
+| B1 reservation-api | `b-pool` | 잘못된 배포 | 롤백이 계약상 불가 → `ACTION_BLOCKED`/`CONTRACT` 에스컬레이션(B사 운영 승인 담당), 공지, 재시작 제안 없음 |
+| B1 reservation-api | `b-surge` | 트래픽 급증 | 확장이 계약상 불가 → `ACTION_BLOCKED`/`CONTRACT` 에스컬레이션, 공지 |
+| B1 reservation-api | `b-pool-dbslow` | 잘못된 배포 + DB 지연 (겹친 장애) | 직전 변경이 있어 풀 고갈은 독립 원인. 처리할 원인 RB-STD-01 → 롤백 계약상 불가 `ACTION_BLOCKED` 에스컬레이션. 원인 후보에 RB-STD-05도 있다 |
+| B2 checkin-api | `b-latency` (예전 `b2`) | 외부 결제 지연 | 재시작하지 않고 고객 공지 |
+| B2 checkin-api | `b-hang-latency` | 파드 멈춤 + 결제 지연 (겹친 장애) | 처리할 원인 RB-STD-02 → 재시작(레플리카 1, 전체 중단 표시) → 미회복(가려져 있던 결제 지연) → 다시 진단해 RB-STD-04 → 고객 공지. 재시작한 새 파드도 결제 지연을 이어받는다. 인시던트 하나 | B사는 결제 API가 의존 대상이라 의존 대상 상태도 근거다
 
-- **실행 순서:** 공통 묶음(장애가 없을 때 돌린다)을 먼저 돌리고, A사 묶음과 B사 묶음을 동시에 돌린다. 한 고객사 안에서는 순서대로 돈다(서비스가 하나라 장애가 섞이고 같은 알림은 인시던트 하나로 합쳐진다). A사 묶음이 가장 길다(확장 시나리오의 PR 병합과 원복 대기).
-- **정리:** 시나리오마다 장애를 모두 뺀다(관리 API 장애, 부하 발생기 0·기본 건수, 풀 20, A사 HPA 최대 3 복원 커밋). A사는 HPA가 레플리카 2로 줄고 최대 3이 동기화될 때까지 기다린다.
+- **실행 순서:** 공통 묶음(장애가 없을 때 돌린다)을 먼저 돌리고, 서비스 묶음 5개(A1 `order-api`, A2 `cart-api`, A3 `inventory-api`, B1 `reservation-api`, B2 `checkin-api`)를 동시에 돌린다. 한 서비스 안에서는 순서대로 돈다(장애가 섞이고 같은 서비스의 알림은 인시던트 하나로 묶인다). 서비스가 다르면 인시던트·관측·회복 확인·설정 이력이 따로다([SPEC-e2e-speed](specs/SPEC-e2e-speed.md)). `--lane B1`로 한 묶음만 돌린다.
+- **정리:** 시나리오마다 그 서비스의 장애를 모두 뺀다(관리 API 장애, 의존 장애 ConfigMap, 부하 발생기 0·기본 건수, 풀 20, HPA 최대 3 복원 커밋). HPA 축소는 평소 크기가 필요한 다음 시나리오(`a-surge*`, `a-dbslow-backlog`, `guard`)만 시작 전에 기다린다.
 - **승인:** 스크립트가 제안을 검사해 기대한 조치만 승인하고, 나머지는 거절한다. 잘못된 조치가 실행되지 않게 하기 위해서다. 실행하는 동안 backend 자동 승인을 끄고, 끝나면 되돌린다.
 - **판정:** 기대한 조치를 한 번만 제안했는지, 반영 방식, 회복 확인, 보고서·공지, 정리 상태를 본다. 승인 요청은 저장된 이벤트로 판정하므로 자동 승인으로 진행돼도 기준이 같다.
 - **겹친 장애 판정** ([SPEC-compound-faults](specs/SPEC-compound-faults.md) 7장): 원인 순위는 Agent가 정하므로 E2E가 그 판단을 본다. 진단마다의 처리할 원인(작업 이벤트 STEP), 원인 후보에 기대한 조항이 있는지, 조치를 기대한 순서로 제안했는지, 같은 앱 조치를 두 번 하지 않았는지, 인시던트가 하나만 열렸는지. 작업이 끝난 뒤 울린 알림이 만든 작업은 승인 대기로 남지 않게 거절해 끝낸다.
-- **장애 사이 간격:** 같은 고객사에서 앞 장애의 인시던트가 닫히고(알림 해제 반영), 정리한 지 75초가 지나야 다음 장애를 주입한다. 인시던트가 열린 채로 같은 알림(예: p95 1초 초과)이 다시 울리면 그 인시던트로 합쳐져 새 작업이 생기지 않는다. Agent는 인시던트 시작 2분 전부터 로그를 보므로, 간격이 짧으면 앞 장애의 로그가 다음 진단 근거에 섞인다.
+- **장애 사이 간격:** 같은 서비스에서 앞 장애의 인시던트가 닫혀야(알림 해제 반영) 다음 장애를 주입한다. 열린 인시던트가 있으면 새 알림이 거기에 묶여 새 작업이 생기지 않는다. 따로 쉬지 않는다. Agent가 같은 서비스의 직전 인시던트가 닫힌 시각부터 로그를 보므로 앞 장애의 로그가 다음 진단 근거에 섞이지 않는다.
 - **결과:** `.local/e2e/<시각>/` 폴더(git에 올리지 않음): `summary.md`(실행 중에도 갱신), 시나리오별 `<키>.log`·`<키>.md`(판정, 작업 링크, 보고서).
 - **임시 브랜치:** 실행 동안 A사 설정 저장소 기준을 `e2e/<시각>` 브랜치로 바꾼다(backend `tenants.gitops_branch`, ArgoCD `targetRevision`). 장애 주입 커밋·롤백 PR·병합이 그 브랜치에서 일어나 `main`에 남지 않고, 실행 중 다른 사람이 `main`에 푸시해도 A사가 다시 동기화되지 않는다. 끝나면(실패·중단 포함) `main`으로 되돌리고 브랜치를 지운다. 남았으면 사전 점검이 잡고 `--cleanup`으로 정리한다. PR 기록은 GitHub에 닫힌 PR로 남는다([SPEC 5.8](specs/SPEC-fault-based-actions.md)).
 - 실행이 겹치면 두 번째 실행은 시작하지 않는다.
+
+### 고친 곳에 맞는 시나리오
+
+개발 중에는 고친 곳에 맞는 시나리오만 돌리고, 전체 18개는 커밋 전에 한 번 돌린다.
+
+| 고친 곳 | 돌릴 시나리오 |
+|---|---|
+| `prompts/diagnose.md`, `signals.py`, `action_guards.py` | `--quick` + `a-dbslow-backlog` `b-pool-dbslow` `b-hang-latency` |
+| `prompts/propose.md` | `--quick` + `a-surge-max` `b-pool` |
+| backend 조치·계약 (`ChangeService`, `RuntimeAdapter`, `GitOpsRepository`) | `guard` `a-pool` `b-pool` `b-surge` |
+| backend 알림·인시던트 | `b-hang-latency` `b-hang` |
+| 문서 저장소·색인 | `documents` `question` |
+| 권한·토큰 | `isolation` `guard` |
+| 데모 앱·`inject.py` | 고친 장애 종류의 A사·B사 시나리오 |
 
 ### 장애 주입 (`scripts/inject.sh`)
 
@@ -61,8 +75,9 @@ scripts/inject.sh tenant-b hang            # 작업 스레드 고갈
 scripts/inject.sh tenant-a dbslow          # DB 자체 지연
 scripts/inject.sh tenant-b surge           # 트래픽 급증 (부하 발생기 켬)
 scripts/inject.sh tenant-a pool            # 잘못된 설정 배포. ArgoCD가 main을 따라가면 --allow-main이 필요하다
-scripts/inject.sh tenant-a hang+latency    # 겹친 장애. 결제·DB 지연은 ConfigMap dependency-faults에도 적어 재시작해도 남는다
-scripts/inject.sh tenant-a clear           # 모두 원래대로
+scripts/inject.sh tenant-a hang+latency    # 겹친 장애. 결제·DB 지연은 ConfigMap dependency-faults-<서비스>에도 적어 재시작해도 남는다
+scripts/inject.sh tenant-a hang --service cart-api   # 서비스를 고른다 (없으면 order-api·reservation-api)
+scripts/inject.sh tenant-a clear           # 그 고객사의 모든 서비스를 원래대로
 ```
 
 | 키 | A사 (GITOPS) | B사 (DIRECT) |

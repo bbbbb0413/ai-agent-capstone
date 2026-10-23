@@ -185,7 +185,7 @@ class CauseFacts:   # 사전의 키
 
 | 키 | 고객사 | 주입 | 기대 |
 |---|---|---|---|
-| `a-hang-latency` | A사 | 파드 멈춤 + 외부 결제 지연 | 처리할 원인 RB-STD-02 → 재시작 → 미회복(결제 지연이 드러남), 재시작한 원인의 신호는 사라짐 → 다시 진단 → RB-STD-04 고객 공지 → 보고서(공지는 회복 확인을 하지 않는다). 조치 순서 `restart_pods` → `business_send_customer_notice` |
+| `a-hang-latency` (지금 `b-hang-latency`, B사 `checkin-api`. SPEC-e2e-speed ③) | A사 | 파드 멈춤 + 외부 결제 지연 | 처리할 원인 RB-STD-02 → 재시작 → 미회복(결제 지연이 드러남), 재시작한 원인의 신호는 사라짐 → 다시 진단 → RB-STD-04 고객 공지 → 보고서(공지는 회복 확인을 하지 않는다). 조치 순서 `restart_pods` → `business_send_customer_notice` |
 | `b-pool-dbslow` | B사 | 풀 축소 배포 + DB 지연 | 직전 변경이 있으니 풀 고갈을 증상으로 보지 않음. 처리할 원인 RB-STD-01 → 롤백이 계약상 불가 → `ACTION_BLOCKED` 에스컬레이션 → 보고서. 후보에 RB-STD-05가 함께 있고 보고서에 남는다 |
 | `a-dbslow-backlog` | A사 | DB 지연 + 트래픽 급증(부하 발생기) | 데모 앱은 의존 호출을 처리 슬롯 밖에서 해서 DB p95가 요청 p95에서 차지하는 비율이 그때그때 다르다. 그래서 진단이 받은 사실 표의 비율로 기대값을 정한다: 0.5 이상이면 대기열은 DB 지연의 증상 → 처리할 원인 RB-STD-05 → DBA 에스컬레이션. 미만이면 두 원인 모두 독립 → RB-STD-03 HPA 최대치 4 PR → 다시 진단 → RB-STD-05 DBA 에스컬레이션 |
 
