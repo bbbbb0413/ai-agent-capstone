@@ -12,8 +12,10 @@ import com.opslens.backend.tenant.TenantRepository;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -73,6 +75,41 @@ public class TaskService {
 
     public UUID create(String tenantId, Long incidentId, String type, String question, Long requestedBy,
             List<TaskAttachments.Prepared> files) {
+        return enqueue(tenantId, incidentId, type, question, requestedBy, null, taskId -> attachments.save(taskId, files));
+    }
+
+    /**
+     * 실패한 작업을 같은 내용의 새 작업으로 다시 실행한다 (MSP 관리자, SPEC-limitations-fixes 3단계 4.2의 6).
+     * 원래 작업의 checkpoint와 실행 시간 예산은 이미 한도를 넘었거나 실패 지점에 있어 이어 가지 않는다.
+     * 원래 작업은 FAILED로 남고, 새 작업에 원래 작업을 남긴다. 첨부 분석이면 첨부도 새 작업에 복사한다.
+     */
+    public UUID retry(UUID taskId, CurrentUser user) {
+        TaskRecord task = tasks.get(taskId);
+        user.requireAccess(task.tenantId());
+        if (!user.isAdmin()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "다시 실행은 MSP 관리자만 한다");
+        }
+        if (!TaskRecord.FAILED.equals(task.status())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "실패한 작업만 다시 실행한다 (상태 " + task.status() + ")");
+        }
+        if (task.retriedBy() != null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 다시 실행한 작업이다: " + task.retriedBy());
+        }
+        UUID retried;
+        try {
+            retried = enqueue(task.tenantId(), task.incidentId(), task.type(), task.question(), user.id(), taskId,
+                    newId -> attachments.copy(taskId, newId));
+        } catch (DuplicateKeyException e) {   // 두 관리자가 동시에 눌렀다
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 다시 실행한 작업이다");
+        }
+        audit.record(task.tenantId(), user.username(), "TASK_RETRIED", Map.of("taskId", taskId, "retryTaskId", retried),
+                null);
+        return retried;
+    }
+
+    /** 작업과 전달 대기열을 한 트랜잭션에 쓰고, 커밋 뒤에 바로 발행을 시도한다 */
+    private UUID enqueue(String tenantId, Long incidentId, String type, String question, Long requestedBy,
+            UUID retryOf, Consumer<UUID> attach) {
         Tenant tenant = tenants.get(tenantId);
         if (incidentId != null) {
             incidents.getForTenant(tenantId, incidentId);
@@ -81,8 +118,8 @@ public class TaskService {
         String traceId = UUID.randomUUID().toString().replace("-", "");
         TaskMessage message = new TaskMessage(taskId, tenantId, tenant.slaTier(), incidentId, type, question, traceId);
         transactions.executeWithoutResult(tx -> {
-            tasks.create(taskId, tenantId, incidentId, type, question, requestedBy);
-            attachments.save(taskId, files);
+            tasks.create(taskId, tenantId, incidentId, type, question, requestedBy, retryOf);
+            attach.accept(taskId);
             outbox.enqueue(message);
         });
         relay.kick(taskId);

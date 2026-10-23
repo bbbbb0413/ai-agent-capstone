@@ -7,6 +7,7 @@ import java.util.UUID;
 /**
  * AI 작업 한 건. status: QUEUED → RUNNING → (WAITING_APPROVAL | CHANGE_PENDING ↔ RUNNING) → DONE | FAILED
  * CHANGE_PENDING: GitOps PR의 병합과 ArgoCD 동기화를 기다린다. pendingAction에 PR 정보가 있다.
+ * retryOf: 이 작업이 다시 실행한 원래 작업. retriedBy: 이 작업을 다시 실행한 새 작업 (없으면 null)
  */
 public record TaskRecord(
         UUID id,
@@ -22,7 +23,9 @@ public record TaskRecord(
         JsonNode summary,
         String traceUrl,
         OffsetDateTime createdAt,
-        OffsetDateTime updatedAt) {
+        OffsetDateTime updatedAt,
+        UUID retryOf,
+        UUID retriedBy) {
 
     public static final String QUEUED = "QUEUED";
     public static final String RUNNING = "RUNNING";

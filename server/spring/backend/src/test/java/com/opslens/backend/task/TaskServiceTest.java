@@ -7,6 +7,7 @@ import static org.mockito.Mockito.*;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.opslens.backend.attachment.TaskAttachments;
 import com.opslens.backend.audit.AuditLog;
 import com.opslens.backend.auth.CurrentUser;
 import com.opslens.backend.incident.IncidentRepository;
@@ -35,6 +36,7 @@ class TaskServiceTest {
     private final AuditLog audit = mock(AuditLog.class);
     private final SettingsService settings = mock(SettingsService.class);
     private final PlatformTransactionManager transactions = mock(PlatformTransactionManager.class);
+    private final TaskAttachments attachments = mock(TaskAttachments.class);
     private final UUID taskId = UUID.randomUUID();
     private final CurrentUser engineer = new CurrentUser(2L, "engineer", CurrentUser.MSP_ENGINEER, List.of("tenant-a"));
     private final CurrentUser admin = new CurrentUser(1L, "admin", CurrentUser.MSP_ADMIN, List.of("tenant-a"));
@@ -50,12 +52,16 @@ class TaskServiceTest {
                  "args":{"incident_id":1,"action":"restart_pods","service":"order-api"}}
                 """);
         when(tasks.get(taskId)).thenReturn(task(pending));
-        service = new TaskService(tasks, tenants, incidents, outbox, relay, agent, events, audit, settings, transactions, mock(com.opslens.backend.attachment.TaskAttachments.class));
+        service = new TaskService(tasks, tenants, incidents, outbox, relay, agent, events, audit, settings, transactions, attachments);
     }
 
     private TaskRecord task(JsonNode action) {
-        return new TaskRecord(taskId, "tenant-a", 1L, "DIAGNOSE", "test", TaskRecord.WAITING_APPROVAL,
-                null, action, null, null, null, null, OffsetDateTime.now(), OffsetDateTime.now());
+        return task(action, TaskRecord.WAITING_APPROVAL, null);
+    }
+
+    private TaskRecord task(JsonNode action, String status, UUID retriedBy) {
+        return new TaskRecord(taskId, "tenant-a", 1L, "DIAGNOSE", "test", status,
+                null, action, null, null, null, null, OffsetDateTime.now(), OffsetDateTime.now(), null, retriedBy);
     }
 
     @Test
@@ -64,7 +70,7 @@ class TaskServiceTest {
                 15, List.of(), "DIRECT", "tenant-a", null));
         when(incidents.getForTenant("tenant-a", 99L)).thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND));
         assertThrows(ResponseStatusException.class, () -> service.create("tenant-a", 99L, "QUESTION", "test", 2L));
-        verify(tasks, never()).create(any(), anyString(), any(), anyString(), anyString(), any());
+        verify(tasks, never()).create(any(), anyString(), any(), anyString(), anyString(), any(), any());
         verifyNoInteractions(outbox, relay);
     }
 
@@ -75,7 +81,7 @@ class TaskServiceTest {
         UUID created = service.create("tenant-a", null, "QUESTION", "test", 2L);
         var order = inOrder(transactions, tasks, outbox, relay);
         order.verify(transactions).getTransaction(any());
-        order.verify(tasks).create(eq(created), eq("tenant-a"), isNull(), eq("QUESTION"), eq("test"), eq(2L));
+        order.verify(tasks).create(eq(created), eq("tenant-a"), isNull(), eq("QUESTION"), eq("test"), eq(2L), isNull());
         order.verify(outbox).enqueue(argThat(m -> m.taskId().equals(created) && m.slaTier().equals("GOLD")));
         order.verify(transactions).commit(any());
         order.verify(relay).kick(created);
@@ -214,5 +220,31 @@ class TaskServiceTest {
         service.onEvent(taskId, "APPROVAL_REQUIRED", pending);
         verify(tasks, never()).claimApproval(any(), any());
         verifyNoInteractions(agent, events);
+    }
+
+    @Test
+    void adminRetriesFailedTaskAsANewLinkedTask() {
+        when(tasks.get(taskId)).thenReturn(task(null, TaskRecord.FAILED, null));
+        when(tenants.get("tenant-a")).thenReturn(new Tenant("tenant-a", "A", "GOLD", BigDecimal.TEN,
+                15, List.of(), "DIRECT", "tenant-a", null));
+        UUID retried = service.retry(taskId, admin);
+        verify(tasks).create(eq(retried), eq("tenant-a"), eq(1L), eq("DIAGNOSE"), eq("test"), eq(1L), eq(taskId));
+        verify(attachments).copy(taskId, retried);
+        verify(outbox).enqueue(argThat(m -> m.taskId().equals(retried)));
+        verify(audit).record(eq("tenant-a"), eq("admin"), eq("TASK_RETRIED"), any(), isNull());
+    }
+
+    @Test
+    void retryIsRefusedForEngineersUnfinishedOrAlreadyRetriedTasks() {
+        when(tasks.get(taskId)).thenReturn(task(null, TaskRecord.FAILED, null));
+        assertEquals(HttpStatus.FORBIDDEN, assertThrows(ResponseStatusException.class,
+                () -> service.retry(taskId, engineer)).getStatusCode());
+        when(tasks.get(taskId)).thenReturn(task(null, TaskRecord.DONE, null));
+        assertEquals(HttpStatus.CONFLICT, assertThrows(ResponseStatusException.class,
+                () -> service.retry(taskId, admin)).getStatusCode());
+        when(tasks.get(taskId)).thenReturn(task(null, TaskRecord.FAILED, UUID.randomUUID()));
+        assertEquals(HttpStatus.CONFLICT, assertThrows(ResponseStatusException.class,
+                () -> service.retry(taskId, admin)).getStatusCode());
+        verifyNoInteractions(outbox);
     }
 }

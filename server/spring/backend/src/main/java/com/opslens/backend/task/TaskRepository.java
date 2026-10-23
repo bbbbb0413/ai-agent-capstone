@@ -16,6 +16,10 @@ import org.springframework.web.server.ResponseStatusException;
 @Repository
 public class TaskRepository {
 
+    /** 작업 행과, 그 작업을 다시 실행한 새 작업 ID */
+    private static final String SELECT_TASK =
+            "SELECT *, (SELECT r.id FROM ai_tasks r WHERE r.retry_of = ai_tasks.id) AS retried_by FROM ai_tasks ";
+
     private final JdbcClient jdbc;
     private final ObjectMapper json;
 
@@ -25,26 +29,32 @@ public class TaskRepository {
     }
 
     public void create(UUID id, String tenantId, Long incidentId, String type, String question, Long requestedBy) {
+        create(id, tenantId, incidentId, type, question, requestedBy, null);
+    }
+
+    /** retryOf: 다시 실행한 원래 작업. 같은 작업을 두 번 다시 실행하면 유일 인덱스(ai_tasks_retry_of)에 걸린다 */
+    public void create(UUID id, String tenantId, Long incidentId, String type, String question, Long requestedBy,
+            UUID retryOf) {
         jdbc.sql("""
-                        INSERT INTO ai_tasks (id, tenant_id, incident_id, type, question, status, requested_by)
-                        VALUES (?, ?, ?, ?, ?, 'QUEUED', ?)
+                        INSERT INTO ai_tasks (id, tenant_id, incident_id, type, question, status, requested_by, retry_of)
+                        VALUES (?, ?, ?, ?, ?, 'QUEUED', ?, ?)
                         """)
-                .params(id, tenantId, incidentId, type, question, requestedBy)
+                .params(id, tenantId, incidentId, type, question, requestedBy, retryOf)
                 .update();
     }
 
     public TaskRecord get(UUID id) {
-        return jdbc.sql("SELECT * FROM ai_tasks WHERE id = ?").param(id).query(this::toTask).optional()
+        return jdbc.sql(SELECT_TASK + "WHERE id = ?").param(id).query(this::toTask).optional()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "unknown task " + id));
     }
 
     public List<TaskRecord> listByRequester(long userId) {
-        return jdbc.sql("SELECT * FROM ai_tasks WHERE requested_by = ? ORDER BY created_at DESC LIMIT 50")
+        return jdbc.sql(SELECT_TASK + "WHERE requested_by = ? ORDER BY created_at DESC LIMIT 50")
                 .param(userId).query(this::toTask).list();
     }
 
     public List<TaskRecord> listByTenants(List<String> tenantIds) {
-        return jdbc.sql("SELECT * FROM ai_tasks WHERE tenant_id = ANY(?) ORDER BY created_at DESC LIMIT 50")
+        return jdbc.sql(SELECT_TASK + "WHERE tenant_id = ANY(?) ORDER BY created_at DESC LIMIT 50")
                 .param(tenantIds.toArray(String[]::new)).query(this::toTask).list();
     }
 
@@ -72,12 +82,12 @@ public class TaskRepository {
     }
 
     public List<TaskRecord> listChangePending(String tenantId) {
-        return jdbc.sql("SELECT * FROM ai_tasks WHERE status = 'CHANGE_PENDING' AND tenant_id = ?")
+        return jdbc.sql(SELECT_TASK + "WHERE status = 'CHANGE_PENDING' AND tenant_id = ?")
                 .param(tenantId).query(this::toTask).list();
     }
 
     public List<TaskRecord> listChangePendingSince(OffsetDateTime before) {
-        return jdbc.sql("SELECT * FROM ai_tasks WHERE status = 'CHANGE_PENDING' AND updated_at < ?")
+        return jdbc.sql(SELECT_TASK + "WHERE status = 'CHANGE_PENDING' AND updated_at < ?")
                 .param(before).query(this::toTask).list();
     }
 
@@ -164,7 +174,8 @@ public class TaskRepository {
                 rs.getString("status"), rs.getObject("requested_by", Long.class),
                 readJson(rs.getString("pending_action")), rs.getString("answer"),
                 readJson(rs.getString("sources")), readJson(rs.getString("summary")), rs.getString("trace_url"),
-                rs.getObject("created_at", OffsetDateTime.class), rs.getObject("updated_at", OffsetDateTime.class));
+                rs.getObject("created_at", OffsetDateTime.class), rs.getObject("updated_at", OffsetDateTime.class),
+                rs.getObject("retry_of", UUID.class), rs.getObject("retried_by", UUID.class));
     }
 
     private JsonNode readJson(String value) {

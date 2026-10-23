@@ -67,6 +67,13 @@ public class TaskAttachments {
         for (Prepared file : files) jdbc.sql("INSERT INTO task_attachments(id,task_id,filename,media_type,content) VALUES(?,?,?,?,?)")
             .params(UUID.randomUUID(),task,file.filename(),file.mediaType(),file.content()).update();
     }
+    /** 다시 실행한 작업에 원래 작업의 첨부를 복사한다. 같은 트랜잭션 안에서 부른다 */
+    public void copy(UUID from, UUID to) {
+        jdbc.sql("INSERT INTO task_attachments(id,task_id,filename,media_type,content,created_at) "
+                + "SELECT gen_random_uuid(),?,filename,media_type,content,created_at FROM task_attachments WHERE task_id=?")
+                .params(to, from).update();
+    }
+
     public List<Info> list(UUID task) {
         return jdbc.sql("SELECT id,filename,media_type,octet_length(content) FROM task_attachments WHERE task_id=? ORDER BY created_at,id")
             .param(task).query((r,n)->new Info(r.getObject(1,UUID.class),r.getString(2),r.getString(3),r.getInt(4))).list();
