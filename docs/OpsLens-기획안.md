@@ -246,15 +246,17 @@ sequenceDiagram
 
 `CHANGE_PENDING`은 v3에서 추가한 이벤트다(PDF 표 5-9에는 없음).
 
-### 5.4 내부 API (docker network 안에서만, 서비스 토큰 필요)
+### 5.4 내부 API (docker network 안에서만, 호출별 서비스 토큰 필요)
 
 | 호출하는 쪽 → 받는 쪽 | Path | 용도 |
 |---|---|---|
-| alertmanager → backend | `/internal/alerts` | 알림 수신, 인시던트·작업 생성 |
-| business-mcp → backend | `/internal/tenants/{tenant}` 아래 `/sla`, `/services`, `/incidents`, `/oncall`, `/incidents/{id}/escalate`, `/actions`, `/notices`, `/sla-credits` | 조회·변경 도구의 실제 처리. 경로의 고객사와 `X-Tenant-Id`가 다르면 거부 |
-| agent → backend | `/internal/tasks/{id}/events`, `/internal/tasks/{id}/result` | 진행 이벤트, 최종 결과 |
-| backend → agent | `/agent/tasks/{id}/run`, `/agent/tasks/{id}/resume` | 큐 없는 경로(MVP)의 작업 실행, 승인·반영 완료 후 재개 |
-| ArgoCD → backend | `/internal/gitops/sync-events` | 동기화 완료 알림 (ArgoCD Notifications webhook) |
+| alertmanager → backend | `/internal/alerts` | 알림 수신, 인시던트·작업 생성 (`ALERT_WEBHOOK_TOKEN`) |
+| business-mcp → backend | `/internal/tenants/{tenant}` 아래 `/sla`, `/services`, `/incidents`, `/oncall`, `/incidents/{id}/escalate`, `/actions`, `/notices`, `/sla-credits` | 조회·변경 도구의 실제 처리 (`MCP_BACKEND_TOKEN` + 작업 토큰). 경로의 고객사가 작업 토큰의 고객사와 다르면 거부 |
+| rag-mcp → backend | `/internal/.well-known/jwks.json` | 작업 토큰 검증용 공개키 (`MCP_BACKEND_TOKEN`) |
+| postmortem-indexer → backend | `/internal/tenants/{tenant}/postmortems` | 종료된 장애 보고서 읽기 (`INDEXER_BACKEND_TOKEN`, 이 경로만) |
+| agent → backend | `/internal/tasks/{id}/events`, `/internal/tasks/{id}/result`, `/internal/tasks/{id}/token` | 진행 이벤트, 최종 결과, 작업 토큰 발급 (`AGENT_BACKEND_TOKEN`) |
+| backend → agent | `/agent/tasks/{id}/run`, `/agent/tasks/{id}/resume` | 큐 없는 경로(MVP)의 작업 실행, 승인·반영 완료 후 재개 (`BACKEND_AGENT_TOKEN`) |
+| ArgoCD → backend | `/internal/gitops/sync-events` | 동기화 완료 알림 (ArgoCD Notifications webhook, `GITOPS_WEBHOOK_TOKEN`) |
 | backend → Kubernetes API | 고객사 ServiceAccount로 호출 | 파드 재시작, Deployment 확장·롤백 (DIRECT 고객사, 일회성 조치) |
 | backend → 설정 저장소 API | 고객사 저장소 토큰으로 호출 | 브랜치·커밋·PR 생성, 병합 상태 조회 (GITOPS 고객사) |
 
@@ -368,7 +370,7 @@ Grafana Labs가 공개한 기존 MCP Server([grafana/mcp-grafana](https://github
 | 이미지 | `grafana/mcp-grafana` (기본 실행 모드가 SSE이므로 전송 방식을 직접 지정한다) |
 | 실행 인자 | `-t streamable-http --address 0.0.0.0:9103 --allowed-hosts mcp-grafana:9103 --disable-write` + 필요 없는 카테고리 비활성화 |
 | 엔드포인트 | `http://mcp-grafana:9103/mcp` (기본 경로 `/mcp`) |
-| 호출자 인증 | `MCP_GRAFANA_SERVER_TOKEN`(= 서비스 토큰). agent가 Bearer 토큰을 실어야 한다 |
+| 호출자 인증 | `MCP_GRAFANA_SERVER_TOKEN`(= `AGENT_MCP_TOKEN`). agent가 Bearer 토큰을 실어야 한다 |
 | Grafana 인증 | `GRAFANA_URL`과 Grafana 계정 (TODO: Viewer 권한 서비스 계정 토큰으로 교체) |
 | 허용 도구 | `query_prometheus`, `query_prometheus_histogram`, `list_prometheus_label_values`, `query_loki_logs`, `query_loki_patterns`, `query_loki_stats` |
 
@@ -425,9 +427,11 @@ backend가 JWT를 발급한다. SSE는 `EventSource`가 헤더를 못 싣기 때
 
 ### 9.2 서비스 간 인증과 테넌트 전달
 
-- `/internal/**`와 `/agent/**`는 docker network 안에서만 열리고, **서비스 토큰**이 없으면 거부한다.
-- 테넌트 정보 경로: backend(작업 생성) → Kafka 헤더 또는 내부 HTTP → agent State → MCP 요청 헤더 → backend `/internal/**`
-- backend는 `/internal/**` 요청마다 tenant 소유권을 **다시 검증**한다. 중간 단계를 믿지 않는다.
+- `/internal/**`와 `/agent/**`는 docker network 안에서만 열리고, **호출별 서비스 토큰**이 없으면 거부한다. 경로마다 받는 토큰이 하나라 토큰 하나가 새도 다른 호출은 막힌다 (5.4 표, `ServiceTokenFilter`). 토큰은 모두 필수이고 값이 같으면 backend가 기동하지 않는다.
+- **고객사는 작업 토큰이 정한다.** agent는 작업을 실행할 때마다(첫 실행, 재시도, 복구, 재개) backend에서 작업 토큰을 받는다. backend가 그 작업의 고객사로 서명한 JWT(RS256, 15분)이고, QUEUED·RUNNING 작업에만 준다. 끝난 작업에는 주지 않으므로 중복·늦게 온 메시지와 DLT에서 다시 꺼낸 메시지는 실행되지 않는다.
+- 테넌트 정보 경로: backend(작업 생성, DB) → 작업 토큰 → MCP 요청 헤더(`X-Task-Token`) → backend `/internal/**`·rag-mcp. 헤더의 `X-Tenant-Id`는 믿지 않는다.
+- 작업 토큰은 Kafka 메시지에 싣지 않는다. 서명 키는 backend가 기동할 때 만들고, rag-mcp는 공개키로 검증만 한다(토큰을 만들 수 없다).
+- 실패한 작업은 DLT 메시지를 다시 넣지 않고, MSP 관리자가 작업 화면의 "다시 실행"으로 같은 내용의 새 작업을 만든다 (`POST /api/admin/tasks/{id}/retry`).
 
 ### 9.3 고객사 자격증명
 
@@ -486,7 +490,7 @@ backend가 JWT를 발급한다. SSE는 `EventSource`가 헤더를 못 싣기 때
 
 | 품질 특성 | 설계 결정 |
 |---|---|
-| 보안성 (기밀성, 책임 추적성, 인증성) | 테넌트 격리, 역할 기반 접근 제어, 서비스 토큰, **고객사별 최소 권한 자격증명(backend만 보관)**, 감사 trace, 공개 포트 2개 |
+| 보안성 (기밀성, 책임 추적성, 인증성) | 테넌트 격리, 역할 기반 접근 제어, 호출별 서비스 토큰과 작업 토큰, **고객사별 최소 권한 자격증명(backend만 보관)**, 감사 trace, 공개 포트 2개 |
 | **안전성 (Safety)** | 승인 없는 변경 금지, 조치 허용목록, 고객사 계약상 금지된 조치 차단, **GitOps 고객사는 PR 리뷰를 거쳐서만 반영**, 되돌릴 수 있는 조치(재시작·확장·롤백)만 허용 |
 | 신뢰성 | Transactional Outbox(발행 유실 방지), Kafka 등급별 retry·DLT, 레코드 단위 오프셋 커밋, 실행 임대(중복 실행 방지·죽은 파드의 작업 이어받기), 대체 모델, checkpointer 재개 |
 | 성능 효율성 | 202 접수 + SSE, Kafka로 동시 알림 흡수, worker pool 병렬 처리 |
@@ -515,13 +519,12 @@ backend가 JWT를 발급한다. SSE는 `EventSource`가 헤더를 못 싣기 때
 
 ### 14.1 알려진 한계 (2026-10-23 코드 리뷰)
 
-데모 범위에서는 동작하지만 운영으로 넓히려면 바꿔야 하는 부분이다. 리뷰와 수정 내역은 [SPEC-review-fixes](specs/SPEC-review-fixes.md), 해소 계획은 [SPEC-limitations-fixes](specs/SPEC-limitations-fixes.md)에 있다. CSRF 토큰 적용과 판정표 일치 테스트는 해소했다 (2026-10-23).
+데모 범위에서는 동작하지만 운영으로 넓히려면 바꿔야 하는 부분이다. 리뷰와 수정 내역은 [SPEC-review-fixes](specs/SPEC-review-fixes.md), 해소 계획은 [SPEC-limitations-fixes](specs/SPEC-limitations-fixes.md)에 있다. CSRF 토큰 적용, 판정표 일치 테스트, 호출별 내부 토큰과 작업 토큰은 해소했다 (2026-10-23).
 
 | 한계 | 지금 | 넓힐 때 |
 |---|---|---|
 | 관측 쿼리가 데모 앱 전용이다 | 진단·회복 확인 쿼리와 로그 신호 문구가 데모 앱의 메트릭 이름(`demo_orders_seconds_*`)과 로그 문구로 코드(`agent/signals.py`)에 있다. 커넥션 풀 크기도 데모 앱 설정 이름(`DEMO_POOL_SIZE`)으로 읽는다 | 서비스 카탈로그에 서비스별 쿼리·로그 신호·풀 설정 이름을 두고 agent는 서비스 목록으로 받는다 |
 | 회복 확인이 서비스를 가리지 않는다 | 쿼리에 서비스 조건이 없다. 고객사마다 서비스가 하나라 지금은 맞다 | 서비스가 둘 이상이면 수치가 섞인다. 조치한 서비스로 거른다 |
-| 내부 API 토큰이 하나다 | agent·business-mcp·rag-mcp가 같은 `SERVICE_TOKEN`을 쓰고, backend는 `X-Tenant-Id` 헤더를 믿는다. 모델은 헤더를 바꿀 수 없다 | 내부 서비스 하나만 뚫려도 모든 고객사에 닿는다. 서비스별 토큰이나 작업별 서명 토큰으로 바꾼다 |
 
 ## 15. 리스크와 대응
 

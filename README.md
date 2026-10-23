@@ -68,6 +68,22 @@ cp .env.example .env
 
 `.env`는 git에 올리지 않는다. 작업 전달 방식 기본값은 `DISPATCH_MODE=kafka`이고, `http`로 바꾸면 Kafka 없이 agent를 바로 호출한다.
 
+**내부 호출 토큰.** 서비스끼리 부를 때 호출마다 다른 토큰을 쓴다. 모두 필수이고, 비어 있으면 compose가 기동하지 않으며 두 값이 같으면 backend가 기동하지 않는다.
+
+| 변수 | 호출 |
+|---|---|
+| `BACKEND_AGENT_TOKEN` | backend → agent (작업 실행·재개) |
+| `AGENT_BACKEND_TOKEN` | agent → backend (진행 이벤트, 결과, 작업 토큰 발급) |
+| `AGENT_MCP_TOKEN` | agent → MCP Server |
+| `MCP_BACKEND_TOKEN` | MCP Server → backend |
+| `INDEXER_BACKEND_TOKEN` | postmortem-indexer → backend (회고 읽기만) |
+| `GITOPS_WEBHOOK_TOKEN` | ArgoCD 알림 → backend (`cluster-up.sh`가 클러스터에 넣는다) |
+| `DEMO_ADMIN_TOKEN` | 장애 주입 → 데모 앱 관리 API (`cluster-up.sh`가 클러스터에 넣는다) |
+
+고객사는 이 토큰이 아니라 **작업 토큰**이 정한다. agent가 작업을 실행할 때마다 backend에서 받는 서명 토큰이고, backend와 rag-mcp는 그 안의 고객사만 믿는다. 서명 키는 backend가 기동할 때 만들므로 환경변수가 없다.
+
+토큰을 바꾼 뒤에는 `docker compose up -d --build`로 다시 띄우고 `scripts/cluster-up.sh`를 다시 실행해 클러스터 시크릿도 새 값으로 바꾼다(이미 떠 있는 클러스터에서 다시 실행해도 된다).
+
 ### 2. OpsLens 플랫폼 기동
 
 ```bash
@@ -173,7 +189,7 @@ MSP 관리자·엔지니어는 **운영 개요 → 장애 영향 분석**에서 
 - 결과는 파일에서 확인한 사실·파일명/줄 번호·원인 후보·현재 지표 비교·추가 확인 방법과 검색된 런북 근거를 구분한다.
   연결되지 않은 모니터링·문서는 확인 불가/미대조로 다룬다. 첨부 분석은 장애 등록·복구 조치·공지 발송을 실행하지 않는다.
 - 파일은 V15의 작업별 DB 저장소에 보관하며 MSP 권한과 작업 고객사 권한을 모두 검사한다.
-  작업·첨부·전달 대기열을 같은 트랜잭션으로 저장한다. Kafka에는 본문을 넣지 않고 Agent가 서비스 토큰과 고객사 헤더로 읽는다.
+  작업·첨부·전달 대기열을 같은 트랜잭션으로 저장한다. Kafka에는 본문을 넣지 않고 Agent가 agent 전용 토큰으로 읽는다.
   이미지 본문은 Graph checkpoint와 해당 이미지 모델 호출의 LangSmith tracing에 복제하지 않는다.
 - 보관 기간 자동 삭제는 없으며 작업 삭제 시 DB 외래 키의 cascade로 첨부가 함께 삭제된다.
   원본은 DB에 저장되므로 운영에서는 접근 권한과 DB 백업·보관 정책을 적용한다.
