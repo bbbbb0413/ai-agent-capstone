@@ -44,7 +44,7 @@ OpsLens 플랫폼 (docker compose)                       고객사 환경 (Kuber
 | `server/python/agent/` | Agent Graph, Harness, Kafka 소비자, 마이그레이션 |
 | `server/python/business-mcp/`, `rag-mcp/`, `indexer/` | MCP 서버와 문서 색인 |
 | `gitops/` | 고객사 환경: kind 설정, A사 원하는 상태, B사 초기 배포 |
-| `data/documents/` | RAG가 색인하는 공통 런북·고객사 계약서·서비스 런북 |
+| `data/documents/` | 근거 문서의 처음 데이터(시드). 기동할 때 문서 저장소에 없는 문서만 올라간다 |
 | `scripts/` | 클러스터 생성·삭제, 장애 주입, E2E |
 
 ## 환경 세팅
@@ -76,11 +76,13 @@ cp .env.example .env
 | `AGENT_BACKEND_TOKEN` | agent → backend (진행 이벤트, 결과, 작업 토큰 발급) |
 | `AGENT_MCP_TOKEN` | agent → MCP Server |
 | `MCP_BACKEND_TOKEN` | MCP Server → backend |
-| `INDEXER_BACKEND_TOKEN` | postmortem-indexer → backend (회고 읽기만) |
+| `INDEXER_BACKEND_TOKEN` | postmortem-indexer·document-indexer → backend (회고 읽기, 문서 색인 API만) |
 | `GITOPS_WEBHOOK_TOKEN` | ArgoCD 알림 → backend (`cluster-up.sh`가 클러스터에 넣는다) |
 | `DEMO_ADMIN_TOKEN` | 장애 주입 → 데모 앱 관리 API (`cluster-up.sh`가 클러스터에 넣는다) |
 
 고객사는 이 토큰이 아니라 **작업 토큰**이 정한다. agent가 작업을 실행할 때마다 backend에서 받는 서명 토큰이고, backend와 rag-mcp는 그 안의 고객사만 믿는다. 서명 키는 backend가 기동할 때 만들므로 환경변수가 없다.
+
+**근거 문서 저장소(S3 호환, SeaweedFS).** `DOCUMENTS_S3_ACCESS_KEY`·`DOCUMENTS_S3_SECRET_KEY`(backend 전용, 문서 버킷만 읽기·쓰기)가 필수다. `.env.example` 맨 아래의 샘플 값을 `.env`에 넣는다. 저장소 계정은 backend만 갖고, indexer와 rag-mcp는 backend 내부 API로 원본을 받는다. MinIO는 2025년 10월 커뮤니티 이미지 배포를 멈춰 쓰지 않는다.
 
 토큰을 바꾼 뒤에는 `docker compose up -d --build`로 다시 띄우고 `scripts/cluster-up.sh`를 다시 실행해 클러스터 시크릿도 새 값으로 바꾼다(이미 떠 있는 클러스터에서 다시 실행해도 된다).
 
@@ -91,7 +93,8 @@ docker compose up -d --build
 ```
 
 - `agent-migrate`가 agent 스키마 마이그레이션을 한 번 실행하고 끝난 뒤 agent가 뜬다(`Exited (0)`이 정상).
-- backend는 기동할 때 Flyway 마이그레이션(V1~V13)을 실행한다.
+- backend는 기동할 때 Flyway 마이그레이션(V1~V18)을 실행하고, `data/documents/`의 문서 중 문서 저장소에 없는 것만 버전 1로 올린다(시드).
+- `seaweedfs-init`이 문서 버킷을 만들고 끝난다(`Exited (0)`이 정상). backend 계정은 `seaweedfs`가 기동할 때 환경변수로 만든다.
 - Grafana·PostgreSQL·Prometheus 포트를 열어 보려면 `docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d`를 쓴다.
 
 ### 3. 고객사 환경 (kind + ArgoCD)
@@ -102,13 +105,17 @@ scripts/cluster-up.sh
 
 kind 클러스터를 만들어 compose 네트워크에 붙이고, metrics-server·ArgoCD를 설치한 뒤 A사·B사 서비스와 부하 발생기를 배포한다. HPA가 첫 CPU 지표를 받고 ArgoCD가 `Synced/Healthy`가 될 때까지 기다린 뒤 끝난다(약 2분). 고객사별 접속 토큰은 `.local/tenants/`에 만들어진다(git에 올리지 않는다).
 
-### 4. 문서 색인
+### 4. 근거 문서 (런북·SLA 계약서)
 
-```bash
-docker compose --profile tools run --rm indexer
-```
+문서는 화면의 **근거 문서** 메뉴에서 올리고 버전을 관리한다(`docs/specs/SPEC-document-store.md`).
 
-`data/documents/`를 Embedding해 RAG DB에 넣는다. 문서가 바뀐 커밋을 받은 뒤에도 다시 실행한다.
+- 형식: Markdown, 텍스트, PDF(텍스트 PDF, 스캔 문서 제외), Word(docx). 공통 표준 런북도 같다.
+- 권한: 공통 문서는 MSP 관리자만, 고객사 문서는 관리자와 그 고객사를 담당하는 엔지니어만 올리기·새 버전·되돌리기·삭제를 한다.
+- 원본은 S3 저장소(SeaweedFS)에 버전별로 남는다. 되돌리기는 고른 버전을 복사한 새 버전을 만든다. 삭제하면 검색에서 빠지고 버전 파일은 남는다.
+- 올리면 backend가 원본을 저장하고 Kafka `documents.index`로 색인을 요청한다. `document-indexer`가 형식별로 파싱해(Markdown `#`, Word 제목 스타일, PDF 글자 크기·조항 번호) 제목 경로 단위로 조각을 만들고 임베딩한다. 몇 초 안에 화면의 상태가 "색인 완료"가 된다.
+- 색인에 실패하면 단계와 사유가 화면에 남고, 검색은 마지막으로 성공한 버전으로 계속된다. 임베딩 API 오류처럼 다시 시도할 수 있는 실패는 5분 뒤 다시 시도한다.
+- 공통 표준 런북은 조항 번호(`RB-STD-01`~`07`)가 지금 검색 버전과 같아야 색인된다. agent의 조치 검사가 조항 번호에 묶여 있기 때문이다.
+- Kafka 없이(`DISPATCH_MODE=http`) 띄우면 `document-indexer`가 5초마다 대기 목록을 본다.
 
 `postmortem-indexer`는 기본 compose 기동 시 함께 실행되며, **매 순회 후 60초 간격**으로 종료된 장애의
 완료 보고서를 backend에서 읽어 RAG에 반영한다. 처음 실행할 때 기존 보고서도 전체 페이지를 순회한다.
@@ -125,12 +132,12 @@ docker compose --profile tools run --rm indexer
 기존 환경에 이 변경을 반영하거나 한 번만 동기화하려면:
 
 ```bash
-docker compose up -d --build backend agent rag-mcp frontend postmortem-indexer
+docker compose up -d --build backend agent rag-mcp frontend postmortem-indexer document-indexer
 docker compose run --rm --no-deps postmortem-indexer /app/.venv/bin/python -m indexer.postmortems
 docker compose logs --tail=30 postmortem-indexer
 ```
 
-실제 임베딩 API 호출에는 설정된 OpenAI API 키를 사용한다. 문서 색인과 회고 색인의 모델·차원은 같아야 한다.
+실제 임베딩 API 호출에는 설정된 OpenAI API 키를 사용한다. 문서 색인(`document-indexer`)과 회고 색인(`postmortem-indexer`)의 모델·차원은 같아야 한다.
 
 ### 5. 접속
 
@@ -276,7 +283,7 @@ docker compose --profile tools down -v --remove-orphans   # 컨테이너와 볼�
 장애 주입부터 알림, Agent 진단, 승인, 조치 반영, 회복 확인, 보고서·공지까지 실제로 돌리고 판정한다. 환경 세팅 2~4단계가 끝난 상태에서 실행한다.
 
 ```bash
-python3 scripts/e2e.py                    # 전체 14개 (약 30~40분)
+python3 scripts/e2e.py                    # 전체 15개 (약 30~40분)
 python3 scripts/e2e.py --quick            # PR이 없는 빠른 확인: guard a-hang a-dbslow b-surge
 python3 scripts/e2e.py b-hang a-dbslow    # 고른 시나리오만
 python3 scripts/e2e.py --list             # 시나리오 목록
@@ -284,7 +291,7 @@ python3 scripts/e2e.py --list             # 시나리오 목록
 
 | 묶음 | 시나리오 | 기대 결과 |
 |---|---|---|
-| 공통 | `isolation` `question` `no-issue` | 고객사 격리, 계약 문서 질문(RAG), 장애가 없을 때 "이상 없음" |
+| 공통 | `isolation` `question` `no-issue` `documents` | 고객사 격리, 계약 문서 질문(RAG), 장애가 없을 때 "이상 없음", 근거 문서 업로드·색인·되돌리기 |
 | A사 | `a-hang` | 파드 순차 재시작(무중단) → 회복 |
 | A사 | `a-latency` | 외부 결제 지연 → 앱 조치 없이 고객 공지 |
 | A사 | `a-dbslow` | DB 자체 지연 → A사 DBA 에스컬레이션 + 공지 |

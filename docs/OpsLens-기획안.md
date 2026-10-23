@@ -74,16 +74,18 @@ flowchart LR
 
 | 서비스 | 기술 | 역할 | 포트 | 공개 |
 |---|---|---|---|---|
-| frontend | Vue 3 + nginx | 인시던트 목록, 진행 상황(SSE), 근거 패널, 승인 카드, 고객사 포털 | 80 | O |
+| frontend | Vue 3 + nginx | 인시던트 목록, 진행 상황(SSE), 근거 패널, 승인 카드, 고객사 포털, 근거 문서 관리 | 80 | O |
 | backend | Spring Boot 3 | 인증(JWT), 업무 API, 작업 API(202), SSE 중계, `/internal/**`, SLA 계산 등 **업무 규칙 전부**, **고객사별 조치 반영(GitOps PR 또는 직접 API)** | 8080 | O |
 | agent | FastAPI + LangGraph | Harness, 장애 대응 Graph, Kafka consumer(등급별), 승인·반영 대기와 재개, 실행 임대 | 8000 | X |
 | agent-migrate | Alembic (1회성) | agent 스키마 마이그레이션과 checkpointer 표 생성. agent보다 먼저 한 번 돌고 끝난다(ADR 0002) | — | X |
 | business-mcp | FastMCP (직접 구현) | 고객사·SLA·인시던트 조회 도구와 변경 도구. `/internal/**` 호출 | 9101 | X |
 | rag-mcp | FastMCP (직접 구현) | 고객사별 계약서·런북·포스트모템 검색, 원문 Resource | 9102 | X |
 | mcp-grafana | 기존 이미지 | Prometheus·Loki 조회 (조회 도구만 허용) | 9103 | X |
-| indexer | Python 작업 | 문서 Chunking → Embedding → Indexing (오프라인, 재색인은 비동기 작업) | — | X |
+| document-indexer | Python (Kafka consumer) | 근거 문서 형식별 Parsing → Chunking → Embedding → Indexing. `documents.index`를 받아 비동기로 색인한다(SPEC-document-store) | — | X |
+| postmortem-indexer | Python (주기 작업) | 종료된 장애 보고서를 회고 문서로 색인 | — | X |
+| seaweedfs, seaweedfs-init | 기존 이미지 | 근거 문서 원본을 버전별로 보관하는 S3 호환 저장소. 계정은 backend만 갖는다 | — | X |
 | postgres | PostgreSQL 16 + pgvector | 업무 데이터, 작업 이력, checkpointer·store, 문서 벡터 (스키마·계정 분리) | 5432 | X |
-| kafka | Apache Kafka (KRaft 모드) | **기본 작업 전달 경로**(ADR 0002). 작업 토픽(`tasks.gold`·`tasks.silver`), 등급별 재시도(`tasks.retry.gold`·`tasks.retry.silver`), DLT | 9092 | X |
+| kafka | Apache Kafka (KRaft 모드) | **기본 작업 전달 경로**(ADR 0002). 작업 토픽(`tasks.gold`·`tasks.silver`), 등급별 재시도(`tasks.retry.gold`·`tasks.retry.silver`), DLT, 문서 색인 요청(`documents.index`) | 9092 | X |
 | prometheus, prom-label-proxy, loki, alertmanager | 기존 이미지 | 고객사 환경의 메트릭·로그 수집, 알림 발생, 고객사별 조회 범위 강제 | — | X |
 | grafana | 기존 이미지 | mcp-grafana의 데이터 창구. UI는 개발 프로필에서만 연다 | 3000 | X |
 
@@ -137,9 +139,9 @@ LLM API 키는 `.env`에만 두고, 외부 LLM은 agent만 HTTPS로 호출한다
 
 | 스키마 | 내용 | 쓰기 계정 | 읽기 계정 |
 |---|---|---|---|
-| `app` | 고객사(변경 방식 포함), 계약, 서비스 카탈로그, 인시던트, 작업 이력, 작업 전달 대기열(`task_outbox`), 에스컬레이션 대기열, 감사 로그 | backend | backend |
+| `app` | 고객사(변경 방식 포함), 계약, 서비스 카탈로그, 인시던트, 작업 이력, 작업 전달 대기열(`task_outbox`), 에스컬레이션 대기열, 감사 로그, 근거 문서 메타데이터·버전·색인 요청 대기열(`documents`, `document_versions`, `document_outbox`) | backend | backend |
 | `agent` | LangGraph checkpointer, store(장기 기억), 작업별 실행 시간과 실행 임대(`task_budget`) | agent | agent |
-| `docs` | 문서 chunk, Embedding, 출처 메타데이터 | indexer | rag-mcp |
+| `docs` | 문서 chunk, Embedding, 출처 메타데이터(절 경로, 원본 형식, 문서 버전) | indexer | rag-mcp |
 
 agent와 rag-mcp는 `app` 스키마에 접근할 수 없다. "Agent는 DB 직접 쓰기 금지"와 "업무 데이터는 Spring Boot만"을 계정 권한으로 강제한다.
 스키마 변경은 `app`은 backend의 Flyway, `agent`는 `agent-migrate`의 Alembic, `docs`는 indexer가 한다. agent 서버는 기동할 때 DDL을 하지 않는다.
@@ -253,7 +255,9 @@ sequenceDiagram
 | alertmanager → backend | `/internal/alerts` | 알림 수신, 인시던트·작업 생성 (`ALERT_WEBHOOK_TOKEN`) |
 | business-mcp → backend | `/internal/tenants/{tenant}` 아래 `/sla`, `/services`, `/incidents`, `/oncall`, `/incidents/{id}/escalate`, `/actions`, `/notices`, `/sla-credits` | 조회·변경 도구의 실제 처리 (`MCP_BACKEND_TOKEN` + 작업 토큰). 경로의 고객사가 작업 토큰의 고객사와 다르면 거부 |
 | rag-mcp → backend | `/internal/.well-known/jwks.json` | 작업 토큰 검증용 공개키 (`MCP_BACKEND_TOKEN`) |
-| postmortem-indexer → backend | `/internal/tenants/{tenant}/postmortems` | 종료된 장애 보고서 읽기 (`INDEXER_BACKEND_TOKEN`, 이 경로만) |
+| postmortem-indexer → backend | `/internal/tenants/{tenant}/postmortems` | 종료된 장애 보고서 읽기 (`INDEXER_BACKEND_TOKEN`) |
+| document-indexer → backend | `/internal/documents/**` | 색인할 버전 정보·원본 받기, 결과 보고, 삭제 문서 조각 정리 (`INDEXER_BACKEND_TOKEN`) |
+| rag-mcp → backend | `/internal/tenants/{tenant}/documents/{docId}` | 원문 참조: 검색 버전의 원문·추출 본문 (`MCP_BACKEND_TOKEN` + 작업 토큰, `_common`은 어느 고객사든) |
 | agent → backend | `/internal/tasks/{id}/events`, `/internal/tasks/{id}/result`, `/internal/tasks/{id}/token` | 진행 이벤트, 최종 결과, 작업 토큰 발급 (`AGENT_BACKEND_TOKEN`) |
 | backend → agent | `/agent/tasks/{id}/run`, `/agent/tasks/{id}/resume` | 큐 없는 경로(MVP)의 작업 실행, 승인·반영 완료 후 재개 (`BACKEND_AGENT_TOKEN`) |
 | ArgoCD → backend | `/internal/gitops/sync-events` | 동기화 완료 알림 (ArgoCD Notifications webhook, `GITOPS_WEBHOOK_TOKEN`) |
@@ -350,16 +354,22 @@ Spring Boot `/internal/**`만 호출하고 DB에는 접근하지 않는다. **�
 - Resource `docs://{tenant}/{doc_id}`: 근거 패널이 원문을 읽는다. 요청 tenant와 다르면 거부한다.
 - Prompt(선택): `postmortem_draft(incident_id)`. 사용자가 고르는 포스트모템 초안 템플릿이다.
 
-### 7.4 색인 파이프라인 (indexer)
+### 7.4 근거 문서 저장소와 색인 파이프라인
+
+설계와 결정은 [SPEC-document-store](specs/SPEC-document-store.md)에 있다.
 
 | 단계 | 처리 |
 |---|---|
-| Documents | 고객사별 SLA 계약서, 런북, 포스트모템 (가상 작성, Markdown) |
-| Chunking | 조항 단위로 자른다 |
-| Embedding | 질문 검색과 같은 모델로 벡터화하고, 모델 이름과 차원을 메타데이터에 남긴다 |
-| Indexing | `docs` 스키마에 tenant, 문서 버전, 출처와 함께 저장한다 |
+| 업로드 | 화면의 근거 문서 메뉴. 공통 문서는 MSP 관리자만, 고객사 문서는 관리자와 담당 엔지니어만 올린다. 형식은 md·txt·pdf·docx. backend가 원본을 S3 저장소(SeaweedFS)에 버전별로 저장하고 색인 대기로 기록한다 |
+| 요청 전달 | 버전과 outbox를 한 트랜잭션에 쓰고 Kafka `documents.index`(키 = 문서 ID)로 보낸다. 상태의 기준은 DB라 중복·늦은 메시지는 건너뛴다 |
+| Parsing | 형식별 파서가 본문과 제목 구조를 뽑는다: Markdown `#`, Word 제목 스타일과 표, PDF 글자 크기와 조항 번호(`제N조`, `RB-STD-0N`) |
+| Chunking | 공통 청커가 제목 경로(`계약서 > 제5조`) 단위로 자르고, 700토큰을 넘는 절만 겹치게 나눈다. 표와 코드 블록은 끊지 않는다 |
+| 검사 | 공통 표준 런북은 조항 번호 집합이 검색 버전과 같아야 한다(agent의 조치 검사가 번호에 묶여 있다) |
+| Embedding | 질문 검색과 같은 모델로 벡터화한다 |
+| Indexing | `docs.chunks`에 고객사, 문서 버전, 절 경로, 원본 형식과 함께 저장한다. 성공한 버전이 검색 버전이 되고, 실패하면 이전 버전으로 검색이 계속된다 |
 
-재색인은 `POST /api/ai/tasks`(type=reindex)로 접수하는 비동기 작업이다. v3에서는 런북에 인프라 조치(재시작·확장·롤백)와 GitOps 절차 조항을 추가한다.
+처음 데이터는 저장소의 `data/documents/`다. backend가 기동할 때 문서 저장소에 없는 문서만 버전 1로 올린다.
+회고(postmortem)는 종료된 인시던트 보고서에서 `postmortem-indexer`가 만든다.
 
 ### 7.5 mcp-grafana (관측 데이터 조회)
 
