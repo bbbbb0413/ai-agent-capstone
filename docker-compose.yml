@@ -4,7 +4,6 @@
 #
 #   docker compose up -d --build                         # 기본 (작업 전달: Kafka 대기열)
 #   DISPATCH_MODE=http docker compose up -d --build      # Kafka 없이 HTTP로 바로 전달 (원인을 좁힐 때)
-#   docker compose --profile tools run --rm indexer      # 문서 색인
 
 name: opslens
 
@@ -45,12 +44,21 @@ services:
       # 고객사 조치 반영 (ADR 0001). 고객사 자격증명은 backend만 가진다
       TENANT_CREDENTIALS_DIR: /run/opslens/tenants
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      # 근거 문서 저장소 (SPEC-document-store). S3 계정은 backend만 갖는다
+      DOCUMENTS_S3_ENDPOINT: http://seaweedfs:8333
+      DOCUMENTS_S3_ACCESS_KEY: ${DOCUMENTS_S3_ACCESS_KEY:?}
+      DOCUMENTS_S3_SECRET_KEY: ${DOCUMENTS_S3_SECRET_KEY:?}
+      DOCUMENTS_SEED_DIR: /seed/documents
     volumes:
       # scripts/cluster-up.sh가 만든 고객사별 ServiceAccount 토큰과 클러스터 CA
       - ./.local/tenants:/run/opslens/tenants:ro
+      # 처음 데이터. DB에 없는 문서만 올리고 화면에서 올린 버전은 덮어쓰지 않는다
+      - ./data/documents:/seed/documents:ro
     depends_on:
       postgres:
         condition: service_healthy
+      seaweedfs-init:
+        condition: service_completed_successfully
       kafka:
         condition: service_healthy
         required: false
@@ -157,20 +165,29 @@ services:
     depends_on:
       - grafana
 
-  indexer:
+  # 근거 문서 색인 (SPEC-document-store 5장). Kafka documents.index를 받아 형식별로 파싱·청킹·임베딩한다.
+  # 원본은 backend 내부 API로 받는다(저장소 계정이 없다). Kafka 없이 돌면 5초마다 대기 목록을 본다
+  document-indexer:
     build: ./server/python/indexer
-    profiles: ["tools"]
+    command: ["/app/.venv/bin/python", "-m", "indexer.documents"]
+    restart: unless-stopped
     environment:
+      INDEXER_BACKEND_TOKEN: ${INDEXER_BACKEND_TOKEN:?}   # /internal/documents/**와 회고 경로에만 통한다
+      BACKEND_URL: http://backend:8080
       DATABASE_URL: postgresql://opslens_indexer:${INDEXER_DB_PASSWORD:?}@postgres:5432/opslens
       OPENAI_API_KEY: ${OPENAI_API_KEY:?}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
       EMBEDDING_DIM: ${EMBEDDING_DIM:-1536}
-      DOCUMENTS_DIR: /data/documents
-    volumes:
-      - ./data/documents:/data/documents:ro
+      DISPATCH_MODE: ${DISPATCH_MODE:-kafka}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     depends_on:
       postgres:
         condition: service_healthy
+      backend:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+        required: false
 
   # 장애 보고서 → RAG. 정적 문서 색인과 같은 이미지·DB 쓰기 계정을 사용한다.
   postmortem-indexer:
@@ -213,6 +230,38 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+
+  # 근거 문서 원본 (SPEC-document-store 3.1). S3 호환 저장소. 포트는 열지 않는다. 업로드는 backend를 거친다
+  # MinIO는 2025년 10월 커뮤니티 이미지 배포를 멈춰 SeaweedFS를 쓴다
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.48
+    entrypoint: ["/bin/sh", "/init/entrypoint.sh"]
+    environment:
+      DOCUMENTS_S3_ACCESS_KEY: ${DOCUMENTS_S3_ACCESS_KEY:?}
+      DOCUMENTS_S3_SECRET_KEY: ${DOCUMENTS_S3_SECRET_KEY:?}
+      DOCUMENTS_S3_BUCKET: opslens-documents
+    volumes:
+      - ./infra/seaweedfs:/init:ro
+      - seaweedfs-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:9333/cluster/status && wget -q -O /dev/null http://localhost:8888/"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  # 문서 버킷을 만든다. 다시 돌려도 된다
+  seaweedfs-init:
+    image: chrislusf/seaweedfs:4.48
+    entrypoint: ["/bin/sh", "/init/init.sh"]
+    environment:
+      DOCUMENTS_S3_BUCKET: opslens-documents
+    volumes:
+      - ./infra/seaweedfs:/init:ro
+    depends_on:
+      seaweedfs:
+        condition: service_healthy
+    restart: "no"
 
   kafka:
     image: apache/kafka:4.2.2
@@ -296,3 +345,4 @@ secrets:
 volumes:
   postgres-data:
   loki-data:
+  seaweedfs-data:

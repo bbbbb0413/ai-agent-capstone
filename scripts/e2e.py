@@ -14,7 +14,7 @@
     --cleanup        지난 실행이 남긴 임시 브랜치와 설정을 정리하고 끝낸다
     --serial         고객사 묶음을 동시에 돌리지 않고 하나씩 돌린다 (원인을 좁힐 때)
 
-실행 순서: 공통 묶음(격리·문서 질문·이상 없음, 장애가 없을 때 돌린다) → A사 묶음과 B사 묶음을 동시에.
+실행 순서: 공통 묶음(격리·문서 질문·이상 없음·근거 문서, 장애가 없을 때 돌린다) → A사 묶음과 B사 묶음을 동시에.
 한 고객사 안에서는 순서대로 돈다. 서비스가 고객사마다 하나라 같은 서비스에 장애를 겹쳐 넣으면 증상이 섞이고,
 같은 알림은 인시던트 하나로 합쳐지기 때문이다. 시나리오가 끝나면 장애를 모두 빼고(부하 발생기 0, 풀 20, HPA 최대 3)
 A사는 HPA가 레플리카 2로 줄 때까지 기다린다.
@@ -36,7 +36,7 @@ import argparse
 import contextlib
 import contextvars
 import threading
-import hashlib
+import base64
 import os
 import http.cookiejar
 import json
@@ -164,6 +164,30 @@ class Session:
         if method not in ("GET", "HEAD") and token:
             headers["X-XSRF-TOKEN"] = token
         req = urllib.request.Request(API + path, data=data, method=method, headers=headers)
+        try:
+            with self.opener.open(req, timeout=30) as res:
+                raw = res.read()
+                return res.status, json.loads(raw) if raw else None
+        except urllib.error.HTTPError as e:
+            raw = e.read()
+            try:
+                return e.code, json.loads(raw)
+            except ValueError:
+                return e.code, raw.decode(errors="replace")
+
+    def upload(self, path: str, fields: dict[str, str], filename: str, content: bytes) -> tuple[int, object]:
+        """화면의 파일 올리기와 같은 multipart 요청"""
+        boundary = uuid.uuid4().hex
+        parts = [f'--{boundary}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n'.encode()
+                 for k, v in fields.items()]
+        parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="{filename}"\r\n'
+                     f'Content-Type: application/octet-stream\r\n\r\n'.encode() + content + b"\r\n")
+        parts.append(f"--{boundary}--\r\n".encode())
+        headers = {"Content-Type": f"multipart/form-data; boundary={boundary}"}
+        token = next((c.value for c in self.cookies if c.name == "XSRF-TOKEN"), None)
+        if token:
+            headers["X-XSRF-TOKEN"] = token
+        req = urllib.request.Request(API + path, data=b"".join(parts), method="POST", headers=headers)
         try:
             with self.opener.open(req, timeout=30) as res:
                 raw = res.read()
@@ -415,7 +439,7 @@ def preflight(args) -> Result:
     r = Result("사전 점검")
     services = compose("ps", "--format", "{{.Service}} {{.State}}", check=False)
     need = {"backend", "agent", "business-mcp", "rag-mcp", "mcp-grafana", "postgres", "prometheus",
-            "alertmanager", "loki", "frontend"}
+            "alertmanager", "loki", "frontend", "seaweedfs", "document-indexer"}
     running = {line.split()[0] for line in services.splitlines() if line.endswith("running")}
     stack_ready = need <= running
     r.check(stack_ready, f"compose 서비스 실행 중 ({len(need & running)}/{len(need)})"
@@ -434,13 +458,16 @@ def preflight(args) -> Result:
         time.sleep(5)
     r.check(sync == "Synced/Healthy", f"ArgoCD tenant-a {sync or '없음'}")
     if "postgres" in running:
-        common = ROOT / "data/documents/_common/runbook-standard.md"
-        version = hashlib.sha256(common.read_bytes()).hexdigest()[:12]
-        indexed = sql("select count(*) from docs.chunks where tenant_id = '_common' "
-                      f"and doc_id = 'runbook-standard' and version = '{version}'")
-        r.check(indexed not in ("", "0"), "현재 버전의 공통 표준 런북이 색인됐다 (RAG)")
+        # 공통 표준 런북은 근거 문서 저장소에 있다(SPEC-document-store). 검색 버전이 색인됐고 조각이 있어야 한다
+        indexed = sql("select count(*) from app.documents d join app.document_versions v "
+                      "on v.document_id = d.id and v.version = d.active_version "
+                      "join docs.chunks c on c.tenant_id = d.tenant_id and c.doc_id = d.doc_id "
+                      "and c.document_version = d.active_version "
+                      "where d.tenant_id = '_common' and d.doc_id = 'runbook-standard' and d.deleted_at is null "
+                      "and v.index_status = 'INDEXED'")
+        r.check(indexed not in ("", "0"), "공통 표준 런북의 검색 버전이 색인됐다 (RAG)")
     else:
-        r.check(False, "현재 버전의 공통 표준 런북이 색인됐다 (PostgreSQL 미실행)")
+        r.check(False, "공통 표준 런북의 검색 버전이 색인됐다 (PostgreSQL 미실행)")
     if "postgres" in running:
         backend_branch, argocd_branch = gitops_state()
         left = leftover_branches() if "backend" in running else []
@@ -495,6 +522,138 @@ async def main():
 asyncio.run(main())
 """ % task_id)
     return json.loads(probe.splitlines()[-1]) if probe else {}
+
+
+def rag_search(task_id: str, tenant: str, query: str, scope: str = "tenant") -> list[dict]:
+    """그 고객사 작업 토큰으로 rag-mcp를 직접 검색한다. 결과 (uri, section_path, document_version, content 앞부분)"""
+    out = compose("exec", "-T", "agent", "/app/.venv/bin/python", "-c", """
+import asyncio, json, sys
+from agent.backend import backend
+from agent.toolbox import load_tools, _as_text
+async def main(task, tenant, query, scope):
+    tools = {t.name: t for t in await load_tools(tenant, task, "e2e", await backend.task_token(task))}
+    out = await tools["rag_search_documents"].ainvoke({"query": query, "top_k": 5, "scope": scope})
+    print(json.dumps([{k: d.get(k) for k in ("uri", "section_path", "document_version")} | {"content": d["content"][:400]}
+                      for d in json.loads(_as_text(out))], ensure_ascii=False))
+asyncio.run(main(*sys.argv[1:]))
+""", task_id, tenant, query, scope)
+    return json.loads(out.splitlines()[-1]) if out else []
+
+
+def ascii_pdf(lines: list[str]) -> bytes:
+    """글꼴을 넣지 않은 최소 PDF (ASCII 줄만). 공통 표준 런북 검사용 샘플이다"""
+    ops = "BT\n" + "\n".join(f"/F1 11 Tf 1 0 0 1 50 {800 - 20 * i} Tm ({t}) Tj" for i, t in enumerate(lines)) + "\nET"
+    objects = [b"<< /Type /Catalog /Pages 2 0 R >>", b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+               b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 842] /Contents 4 0 R "
+               b"/Resources << /Font << /F1 5 0 R >> >> >>",
+               b"<< /Length %d >>\nstream\n" % len(ops) + ops.encode() + b"\nendstream",
+               b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"]
+    out, offsets = bytearray(b"%PDF-1.4\n"), []
+    for number, body in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += f"{number} 0 obj\n".encode() + body + b"\nendobj\n"
+    xref = len(out)
+    out += f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode()
+    out += b"".join(f"{o:010d} 00000 n \n".encode() for o in offsets)
+    out += f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode()
+    return bytes(out)
+
+
+def contract_docx(marker: str) -> bytes:
+    """B사 SLA 계약서 Word 샘플. python-docx가 있는 document-indexer 컨테이너에서 만든다"""
+    out = compose("exec", "-T", "document-indexer", "/app/.venv/bin/python", "-c", """
+import base64, io, sys, docx
+d = docx.Document()
+d.add_heading("B사 운영 대행 SLA 계약서 (E2E)", level=1)
+d.add_paragraph("E2E 문서 반영 확인용 버전이다.")
+d.add_heading("제1조 서비스 등급", level=2)
+d.add_paragraph("등급: Silver")
+d.add_heading("제9조 E2E 확인 조항", level=2)
+d.add_paragraph("E2E 확인 문구 " + sys.argv[1] + " 는 이 버전에만 있다.")
+t = d.add_table(rows=2, cols=2)
+t.cell(0, 0).text, t.cell(0, 1).text, t.cell(1, 0).text, t.cell(1, 1).text = "항목", "값", "확인 문구", sys.argv[1]
+buf = io.BytesIO(); d.save(buf); print(base64.b64encode(buf.getvalue()).decode())
+""", marker)
+    return base64.b64decode(out.splitlines()[-1])
+
+
+def wait_for_index(who: Session, doc_id: str, version: int, timeout: float = 60) -> dict:
+    """그 버전의 색인이 끝날 때까지(PENDING이 아닐 때까지) 기다린다. 버전 정보"""
+    deadline = time.time() + timeout
+    while True:
+        detail = who.get(f"/api/documents/{doc_id}")
+        found = next((v for v in detail["versions"] if v["version"] == version), {})
+        if found.get("indexStatus") not in (None, "PENDING") or time.time() > deadline:
+            return {**found, "activeVersion": detail["document"]["activeVersion"]}
+        time.sleep(2)
+
+
+def scenario_documents(args) -> Result:
+    """근거 문서 저장소 (SPEC-document-store): 업로드 → 30초 안에 색인 → 검색 반영 → 되돌리기, 권한, 표준 런북 검사."""
+    r = Result("근거 문서 업로드·색인·되돌리기")
+    started = time.time()
+    engineer, admin = Session("engineer"), Session("admin")
+    docs = {d["document"]["docId"]: d for d in engineer.get("/api/documents?tenant=tenant-b")}
+    if not r.check("sla-contract" in docs, "B사 SLA 계약서가 문서 저장소에 있다 (시드)"):
+        return r
+    sla = docs["sla-contract"]["document"]
+    before = sla["activeVersion"]
+    marker = f"OPSLENS-E2E-{uuid.uuid4().hex[:8].upper()}"
+
+    # 1) 담당 엔지니어가 Word로 새 버전을 올리면 30초 안에 색인되고 그 고객사 작업의 검색에 나온다
+    upload_at = time.time()
+    status, body = engineer.upload(f"/api/documents/{sla['id']}/versions", {}, "b-sla-e2e.docx", contract_docx(marker))
+    if not r.check(status == 201, f"엔지니어가 B사 SLA 계약서 새 버전(docx) 업로드 → {status}"):
+        return r
+    v = wait_for_index(engineer, sla["id"], body["version"], timeout=30)
+    r.check(v.get("indexStatus") == "INDEXED",
+            f"30초 안에 색인됐다 (v{body['version']} {v.get('indexStatus')}, {time.time() - upload_at:.0f}초"
+            + (f", {v.get('indexError')}" if v.get("indexError") else "") + ")")
+    with probe_task("tenant-b") as (probe_id, _):
+        hits = rag_search(probe_id, "tenant-b", f"E2E 확인 문구 {marker}")
+        top = hits[0] if hits else {}
+        r.check(marker in top.get("content", "") and top.get("uri") == "docs://tenant-b/sla-contract",
+                f"B사 작업의 문서 검색 1위가 새 조항이다 ({top.get('uri')}, {top.get('section_path')})")
+        r.check("제9조 E2E 확인 조항" in (top.get("section_path") or ""), "검색 결과에 Word 제목 경로가 있다")
+
+        # 2) 원래 버전으로 되돌리면 새 버전이 생기고 검색에서 새 조항이 빠진다
+        status, restored = engineer.call("POST", f"/api/documents/{sla['id']}/versions/{before}/restore")
+        r.check(status == 201, f"v{before}으로 되돌리기 → {status} (새 버전 v{(restored or {}).get('version')})")
+        if status == 201:
+            back = wait_for_index(engineer, sla["id"], restored["version"], timeout=30)
+            r.check(back.get("indexStatus") == "INDEXED" and back.get("activeVersion") == restored["version"],
+                    f"되돌린 버전이 검색 버전이다 (v{back.get('activeVersion')})")
+            hits = rag_search(probe_id, "tenant-b", f"E2E 확인 문구 {marker}")
+            r.check(not any(marker in h.get("content", "") for h in hits), "되돌린 뒤 검색에 새 조항이 없다")
+
+    # 3) 권한: 엔지니어는 공통 문서를 바꾸지 못하고, 담당하지 않는 고객사도 마찬가지다(엔지니어는 A·B사 담당)
+    common = {d["document"]["docId"]: d["document"] for d in admin.get("/api/documents?tenant=_common")}
+    standard = common.get("runbook-standard")
+    if not r.check(standard is not None, "공통 표준 런북이 문서 저장소에 있다 (시드)"):
+        return r
+    status, _ = engineer.upload(f"/api/documents/{standard['id']}/versions", {}, "runbook.md", b"# x\n\n## RB-STD-01\n")
+    r.check(status == 403, f"엔지니어가 공통 표준 런북 업로드 → {status}")
+    viewer = Session("viewer-b")
+    status, _ = viewer.call("GET", "/api/documents?tenant=tenant-b")
+    r.check(status == 403, f"고객사 담당자는 문서 관리 API를 쓰지 않는다 → {status}")
+
+    # 4) 관리자가 조항 번호를 뺀 표준 런북 PDF를 올리면 색인이 거부되고 검색은 이전 버전으로 계속된다
+    active = standard["activeVersion"]
+    lines = ["MSP standard runbook (E2E, RB-STD-04 removed)"] + [
+        line for i in range(1, 8) if i != 4 for line in (f"RB-STD-0{i} clause {i}", "Body text of the clause.")]
+    status, body = admin.upload(f"/api/documents/{standard['id']}/versions", {}, "runbook-standard.pdf",
+                                ascii_pdf(lines))
+    if r.check(status == 201, f"관리자가 조항 번호를 뺀 표준 런북 PDF 업로드 → {status}"):
+        bad = wait_for_index(admin, standard["id"], body["version"], timeout=30)
+        r.check(bad.get("indexStatus") == "FAILED" and "RB-STD-04" in (bad.get("indexError") or ""),
+                f"색인 거부: {bad.get('indexStatus')} [{bad.get('indexStage')}] {(bad.get('indexError') or '')[:60]}")
+        r.check(bad.get("activeVersion") == active, f"검색은 이전 버전 v{active} 그대로다 (v{bad.get('activeVersion')})")
+        # 화면에 실패한 최신 버전이 남지 않게 검색 버전을 다시 최신으로 올린다 (같은 내용이라 임베딩하지 않는다)
+        status, again = admin.call("POST", f"/api/documents/{standard['id']}/versions/{active}/restore")
+        if status == 201:
+            wait_for_index(admin, standard["id"], again["version"], timeout=30)
+    r.seconds = time.time() - started
+    return r
 
 
 def scenario_isolation(args) -> Result:
@@ -841,6 +1000,7 @@ SCENARIOS = {
     "guard": ("backend 방어선 (안전 상한·실행 환경·계약)", scenario_guard),
     "question": ("문서 질문 → RAG 답변", scenario_question),
     "no-issue": ("열린 인시던트가 없는 질문 → 이상 없음", scenario_no_issue),
+    "documents": ("근거 문서 업로드 → 색인 → 검색 반영 → 되돌리기, 권한, 표준 런북 검사", scenario_documents),
     "a-pool": ("A사 잘못된 설정 배포 → 롤백 PR → 병합 → 동기화 (GITOPS)", scenario_a_pool),
     "a-hang": ("A사 파드 멈춤 → 순차 재시작", scenario_a_hang),
     "a-surge": ("A사 트래픽 급증 → HPA 최대치 4 PR → 병합 → 확장", scenario_a_surge),
@@ -861,7 +1021,7 @@ GITHUB_SCENARIOS = {"a-pool", "a-surge", "a-surge-max"}         # PR을 만들�
 # guard는 앞 시나리오가 만든 A사·B사 인시던트 번호로 요청하므로 A사 묶음 끝에 둔다 (빈 DB에서도 돌게).
 # A사 장애를 정리하고 레플리카 2로 돌아온 뒤라 거부 전후 레플리카 비교도 흔들리지 않는다
 LANES = {
-    "공통": ["isolation", "question", "no-issue"],
+    "공통": ["isolation", "question", "no-issue", "documents"],
     "tenant-a": ["a-hang", "a-latency", "a-dbslow", "a-pool", "a-surge", "a-surge-max", "guard"],
     "tenant-b": ["b-hang", "b-latency", "b-pool", "b-surge"],
 }
