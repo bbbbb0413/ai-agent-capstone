@@ -85,37 +85,33 @@ public class OrderService {
         try {
             long cpu = busy(CPU_MILLIS);
             sleep(Math.max(0, random.nextLong(20, 80) - cpu));
-            switch (faults.fault()) {
-                case DB_POOL_EXHAUSTION -> {
-                    if (random.nextBoolean()) {
-                        hikari.error("HikariPool-1 - Connection is not available, request timed out after 30000ms "
-                                + "(total={}, active={}, idle=0, waiting={})",
-                                faults.poolSize(), faults.poolSize(), random.nextInt(15, 40));
-                        log.error("order failed: 503 Service Unavailable customer=minsu.kim@example.com "
-                                + "phone=010-1234-5678");
-                        return false;
-                    }
-                }
-                case WORKER_HANG -> {
-                    log.error("order rejected: 503 worker pool saturated (active=200/200, queued=1000/1000), "
-                            + "oldest worker blocked {}s waiting for internal lock ReservationCache.refreshLock "
-                            + "(deadlock suspected)", random.nextInt(120, 600));
-                    return false;
-                }
-                default -> {
-                }
+            // 장애가 겹치면 이 순서로 나타난다. 앞에서 거부된 요청은 뒤의 의존 호출까지 가지 않는다
+            // (파드 멈춤은 외부·DB 지연을 가린다. SPEC-compound-faults 6.1)
+            if (faults.has(FaultState.Fault.DB_POOL_EXHAUSTION) && random.nextBoolean()) {
+                hikari.error("HikariPool-1 - Connection is not available, request timed out after 30000ms "
+                        + "(total={}, active={}, idle=0, waiting={})",
+                        faults.poolSize(), faults.poolSize(), random.nextInt(15, 40));
+                log.error("order failed: 503 Service Unavailable customer=minsu.kim@example.com "
+                        + "phone=010-1234-5678");
+                return false;
+            }
+            if (faults.has(FaultState.Fault.WORKER_HANG)) {
+                log.error("order rejected: 503 worker pool saturated (active=200/200, queued=1000/1000), "
+                        + "oldest worker blocked {}s waiting for internal lock ReservationCache.refreshLock "
+                        + "(deadlock suspected)", random.nextInt(120, 600));
+                return false;
             }
         } finally {
             slots.release();
         }
         // 의존 대상 호출 (슬롯 밖)
-        long query = faults.fault() == FaultState.Fault.DB_SLOW ? random.nextLong(800, 1500) : random.nextLong(2, 10);
+        long query = faults.has(FaultState.Fault.DB_SLOW) ? random.nextLong(800, 1500) : random.nextLong(2, 10);
         dependency("postgres", query);
         if (query >= 500) {
             jdbc.warn("slow query: SELECT * FROM orders WHERE customer_id = ? FOR UPDATE took {}ms (db=postgres)",
                     query);
         }
-        long call = faults.fault() == FaultState.Fault.PAYMENT_LATENCY
+        long call = faults.has(FaultState.Fault.PAYMENT_LATENCY)
                 ? random.nextLong(1500, 2200) : random.nextLong(20, 60);
         dependency("payment-gateway", call);
         if (call >= 1000) {

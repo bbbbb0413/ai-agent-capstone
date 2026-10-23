@@ -30,6 +30,6 @@ public class OrderSimulator {
     void logSummary() {
         int[] counts = orders.drainCounts();
         log.info("orders processed in last 10s: total={}, failed={}, fault={}, poolSize={}",
-                counts[0], counts[1], faults.fault(), faults.poolSize());
+                counts[0], counts[1], faults.faults(), faults.poolSize());
     }
 }

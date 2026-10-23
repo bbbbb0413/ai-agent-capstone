@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -43,12 +44,32 @@ public class AdminController {
         return state();
     }
 
+    /** 지금 장애를 모두 빼고 하나만 넣는다 (예전 API) */
     @PostMapping("/faults")
     Map<String, Object> inject(@RequestHeader("Authorization") String authorization,
             @RequestBody FaultRequest request) {
         authorize(authorization);
         faults.inject(request.fault());
         log.info("fault injected: {}", request.fault());
+        return state();
+    }
+
+    /** 장애를 하나 더한다. 이미 있는 장애는 그대로 둔다 (겹친 장애, SPEC-compound-faults 6.1) */
+    @PostMapping("/faults/{fault}")
+    Map<String, Object> add(@RequestHeader("Authorization") String authorization,
+            @PathVariable FaultState.Fault fault) {
+        authorize(authorization);
+        faults.add(fault);
+        log.info("fault added: {}", fault);
+        return state();
+    }
+
+    @DeleteMapping("/faults/{fault}")
+    Map<String, Object> remove(@RequestHeader("Authorization") String authorization,
+            @PathVariable FaultState.Fault fault) {
+        authorize(authorization);
+        faults.remove(fault);
+        log.info("fault removed: {}", fault);
         return state();
     }
 
@@ -61,7 +82,7 @@ public class AdminController {
     }
 
     private Map<String, Object> state() {
-        return Map.of("fault", faults.fault(), "poolSize", faults.poolSize());
+        return Map.of("fault", faults.fault(), "faults", faults.faults(), "poolSize", faults.poolSize());
     }
 
     private void authorize(String authorization) {

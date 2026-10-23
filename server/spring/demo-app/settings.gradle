@@ -1,1 +1,9 @@
+// Maven Central과 같은 내용의 Google 미러를 먼저 본다. Central이 요청 제한으로 막혔을 때도 빌드된다(2026-10-23)
+pluginManagement {
+    repositories {
+        maven { url 'https://maven-central.storage-download.googleapis.com/maven2/' }
+        gradlePluginPortal()
+    }
+}
+
 rootProject.name = 'opslens-demo-app'

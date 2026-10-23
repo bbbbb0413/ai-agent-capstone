@@ -13,6 +13,8 @@ demo:
   admin-token: ${SERVICE_TOKEN:}
   loki-url: ${LOKI_URL:http://localhost:3100/loki/api/v1/push}
   pool-size: ${DEMO_POOL_SIZE:20}   # 20보다 작으면 시작부터 커넥션 풀 고갈 (잘못된 설정 배포 시나리오)
+  # 의존 대상 장애(결제 지연, DB 지연). 시작할 때만 읽는다. 고객사 ConfigMap dependency-faults를 마운트한 파일이다
+  dependency-faults-file: ${DEMO_DEPENDENCY_FAULTS_FILE:}
   traffic-interval-ms: 200   # 자체 생성 트래픽 주기
   workers: ${DEMO_WORKERS:4}   # 처리 슬롯. 주문 하나가 50ms 안팎 점유해서 파드당 용량은 초당 약 80건
   loadgen:
