@@ -7,11 +7,21 @@ export function setUnauthorizedHandler(handler) {
   onUnauthorized = handler
 }
 
+/** 변경 요청에는 backend가 내려준 XSRF-TOKEN 쿠키 값을 X-XSRF-TOKEN 헤더로 되돌려 보낸다 (CSRF 방어) */
+export function csrfHeader(method, cookie = globalThis.document?.cookie ?? '') {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(method)) return {}
+  const token = cookie.split(';').map((c) => c.trim()).find((c) => c.startsWith('XSRF-TOKEN='))
+  return token ? { 'X-XSRF-TOKEN': decodeURIComponent(token.slice('XSRF-TOKEN='.length)) } : {}
+}
+
 async function request(method, path, body) {
   const response = await fetch(path, {
     method,
     credentials: 'same-origin',
-    headers: body && !(body instanceof FormData) ? { 'Content-Type': 'application/json' } : {},
+    headers: {
+      ...(body && !(body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
+      ...csrfHeader(method),
+    },
     body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined,
   })
   if (response.status === 401 && path !== '/api/auth/login') {

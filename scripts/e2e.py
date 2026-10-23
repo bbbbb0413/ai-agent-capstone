@@ -130,15 +130,20 @@ class Session:
 
     def __init__(self, user: str) -> None:
         self.user = user
-        self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+        self.cookies = http.cookiejar.CookieJar()
+        self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.cookies))
         status, _ = self.call("POST", "/api/auth/login", {"username": user, "password": USERS[user]})
         if status != 200:
             raise RuntimeError(f"{user} 로그인 실패 ({status})")
 
     def call(self, method: str, path: str, body: dict | None = None) -> tuple[int, object]:
         data = json.dumps(body).encode() if body is not None else None
-        req = urllib.request.Request(API + path, data=data, method=method,
-                                     headers={"Content-Type": "application/json"})
+        headers = {"Content-Type": "application/json"}
+        # 화면과 같이 변경 요청에는 backend가 준 XSRF-TOKEN 쿠키 값을 헤더로 되돌려 보낸다 (CSRF)
+        token = next((c.value for c in self.cookies if c.name == "XSRF-TOKEN"), None)
+        if method not in ("GET", "HEAD") and token:
+            headers["X-XSRF-TOKEN"] = token
+        req = urllib.request.Request(API + path, data=data, method=method, headers=headers)
         try:
             with self.opener.open(req, timeout=30) as res:
                 raw = res.read()
