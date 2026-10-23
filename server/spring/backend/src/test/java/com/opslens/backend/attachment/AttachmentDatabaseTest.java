@@ -24,7 +24,7 @@ class AttachmentDatabaseTest {
         String url=System.getenv("OPSLENS_TEST_DATABASE_URL");schema="attachment_"+UUID.randomUUID().toString().replace("-","");
         try(var c=DriverManager.getConnection(url,"postgres","")){c.createStatement().execute("CREATE SCHEMA "+schema);}
         var ds=new DriverManagerDataSource(url+"?currentSchema="+schema,"postgres","");jdbc=JdbcClient.create(ds);
-        for(String version:List.of("V1__init","V5__task_summary","V12__task_outbox","V15__task_attachments"))
+        for(String version:List.of("V1__init","V5__task_summary","V12__task_outbox","V15__task_attachments","V16__task_retry"))
             new ResourceDatabasePopulator(new ClassPathResource("db/migration/"+version+".sql")).execute(ds);
         jdbc.sql("INSERT INTO tenants VALUES('tenant-a','A','GOLD',99,15,'http://local','{}')").update();
         var tenants=mock(TenantRepository.class);var tenant=mock(Tenant.class);when(tenant.slaTier()).thenReturn("GOLD");when(tenants.get("tenant-a")).thenReturn(tenant);
