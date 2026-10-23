@@ -1,13 +1,15 @@
+# 데모 환경의 값이다. 장애를 바로 넣고 빼므로 30초 창과 15초 지속으로 둔다 (SPEC-e2e-speed ⑤).
+# 실제 고객사에 적용할 창과 지속 시간은 고객사별로 정한다. 스크랩 주기가 5초라 30초 창에도 점이 6개다
 groups:
   - name: demo-app
     rules:
       # 시나리오 A: DB 커넥션 고갈 → 5xx 급증
       - alert: HighErrorRate
         expr: |
-          sum by (tenant, service) (rate(demo_orders_seconds_count{outcome="error"}[1m]))
+          sum by (tenant, service) (rate(demo_orders_seconds_count{outcome="error"}[30s]))
             /
-          sum by (tenant, service) (rate(demo_orders_seconds_count[1m])) > 0.2
-        for: 30s
+          sum by (tenant, service) (rate(demo_orders_seconds_count[30s])) > 0.2
+        for: 15s
         labels:
           severity: critical
         annotations:
@@ -17,8 +19,8 @@ groups:
       - alert: HighLatency
         expr: |
           histogram_quantile(0.95,
-            sum by (tenant, service, le) (rate(demo_orders_seconds_bucket[1m]))) > 1
-        for: 30s
+            sum by (tenant, service, le) (rate(demo_orders_seconds_bucket[30s]))) > 1
+        for: 15s
         labels:
           severity: warning
         annotations:
