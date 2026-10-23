@@ -471,7 +471,11 @@ backend가 JWT를 발급한다. SSE는 `EventSource`가 헤더를 못 싣기 때
 | `b-surge` | 트래픽 급증 | B | 확장이 계약상 불가 → **에스컬레이션**(`ACTION_BLOCKED`, `CONTRACT`) + 공지 |
 | `guard` | Agent를 거치지 않고 backend 내부 API에 직접 요청 | A·B | HPA 서비스 직접 확장, 안전 상한 초과, 지원하지 않는 실행 환경(Docker), 계약상 불가한 롤백이 모두 **422** |
 | `isolation` | B사 담당자가 A사 정보 요청, B사 작업에서 A사 네임스페이스·문서 접근 | B | 접근 거부, 감사 로그 기록 |
+| `a-hang-latency` | 겹친 장애: 파드 멈춤 + 외부 결제 지연 | A | 처리할 원인 RB-STD-02 → **재시작** → 가려져 있던 결제 지연이 남아 미회복 → 다시 진단해 RB-STD-04 → **고객 공지** |
+| `a-dbslow-backlog` | 겹친 장애: DB 지연 + 트래픽 급증 | A | DB p95 비율이 0.5 이상이면 대기열을 증상으로 보고 **DBA 에스컬레이션**, 미만이면 **HPA 최대치 4 PR** 뒤 DBA 에스컬레이션 |
+| `b-pool-dbslow` | 겹친 장애: 잘못된 배포 + DB 지연 | B | 직전 변경이 있어 풀 고갈은 독립 원인 → RB-STD-01 **롤백 불가 에스컬레이션**, RB-STD-05는 원인 후보로 보고 |
 
+- 겹친 장애에서는 코드가 원인 후보별 사실(신호 건수, 처음 나온 시각, 의존 대상 상태·비율)을 정리하고, 원인 후보와 처리 순서는 Agent가 판단하며, 코드는 명백한 위반만 막는다. 같은 서비스의 알림은 인시던트 하나로 묶는다. 흐름 전체는 [장애 처리 흐름](장애-처리-흐름.md), 설계는 [SPEC-compound-faults](specs/SPEC-compound-faults.md).
 - A사·B사 묶음은 동시에 돈다. 같은 시각에 들어온 Gold(A사)와 Silver(B사) 작업은 등급별 소비자가 각각 처리하고, 실행 슬롯이 모자라면 Gold가 먼저 받는다.
 - 장애 복구(LLM 503, 브로커 중단, 실행 파드 강제 종료)는 [Harness 명세](harness-spec.md)와 [SPEC-kafka-scale](specs/SPEC-kafka-scale.md) 14장의 측정으로 확인한다.
 

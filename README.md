@@ -283,7 +283,7 @@ docker compose --profile tools down -v --remove-orphans   # 컨테이너와 볼�
 장애 주입부터 알림, Agent 진단, 승인, 조치 반영, 회복 확인, 보고서·공지까지 실제로 돌리고 판정한다. 환경 세팅 2~4단계가 끝난 상태에서 실행한다.
 
 ```bash
-python3 scripts/e2e.py                    # 전체 15개 (약 30~40분)
+python3 scripts/e2e.py                    # 전체 18개 (약 40~50분)
 python3 scripts/e2e.py --quick            # PR이 없는 빠른 확인: guard a-hang a-dbslow b-surge
 python3 scripts/e2e.py b-hang a-dbslow    # 고른 시나리오만
 python3 scripts/e2e.py --list             # 시나리오 목록
@@ -303,6 +303,9 @@ python3 scripts/e2e.py --list             # 시나리오 목록
 | B사 | `b-latency` | 외부 결제 지연 → 재시작 없이 고객 공지 |
 | B사 | `b-pool` | 잘못된 배포 → 롤백이 계약상 불가 → 에스컬레이션 + 공지 |
 | B사 | `b-surge` | 트래픽 급증 → 확장이 계약상 불가 → 에스컬레이션 + 공지 |
+| A사 | `a-hang-latency` | 겹친 장애: 파드 멈춤 + 결제 지연 → 재시작 → 다시 진단 → 고객 공지 |
+| A사 | `a-dbslow-backlog` | 겹친 장애: DB 지연 + 트래픽 급증 → 판단 기준(의존 대상 비율)대로 처리 |
+| B사 | `b-pool-dbslow` | 겹친 장애: 잘못된 배포 + DB 지연 → 롤백 불가 에스컬레이션, DB 지연은 원인 후보로 보고 |
 
 - **사전 점검:** 서비스 기동, 고객사 배포, ArgoCD 동기화, 문서 색인, 부하 발생기·HPA 평소 상태, 진행 중인 작업·열린 인시던트 없음을 확인한다. 실패하면 이유를 보여 주고 멈춘다.
 - **실행 순서:** 공통 묶음 → A사·B사 묶음을 동시에. 한 고객사 안에서는 순서대로 돌고, 앞 장애의 인시던트가 닫힌 뒤 다음 장애를 넣는다.
