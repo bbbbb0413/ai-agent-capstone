@@ -81,15 +81,23 @@ public class GitOpsRepository {
                 }));
     }
 
+    /** 서비스의 매니페스트 파일. 서비스의 배포 설정(이미지, 환경변수)은 이 파일에 있다. */
+    static String manifest(Tenant tenant, String service) {
+        return tenant.gitopsPath() + "/" + service + ".yaml";
+    }
+
     /**
      * 장애 시작 전 마지막 변경을 되돌리는 PR. 그 커밋이 바꾼 파일을 커밋 직전 내용으로 복원한다.
+     * 그 서비스의 매니페스트를 바꾼 커밋만 보고, 그 파일만 복원한다. 같은 고객사의 다른 서비스 커밋을 되돌리지 않는다
+     * (SPEC-e2e-speed 8.2).
      * "가장 최근 커밋"이 아니라 장애 시작 시각 기준으로 고른다. 그래야 롤백을 두 번 해도 수정 커밋을 되돌리지 않는다.
      * 이미 복원된 상태면 PR을 만들지 않고 거부한다.
      */
     public PullRequest rollback(Tenant tenant, String service, String reason, OffsetDateTime incidentStartedAt) {
-        JsonNode culprit = commitNodes(tenant, 1, incidentStartedAt).stream().findFirst().orElseThrow(() ->
+        String file = manifest(tenant, service);
+        JsonNode culprit = commitNodes(tenant, file, 1, incidentStartedAt).stream().findFirst().orElseThrow(() ->
                 new ResponseStatusException(HttpStatus.CONFLICT,
-                        "%s에 장애 시작 전 변경 이력이 없다".formatted(tenant.gitopsPath())));
+                        "%s에 장애 시작 전 변경 이력이 없다".formatted(file)));
         String sha = culprit.path("sha").asText();
         JsonNode detail = get("/commits/{sha}", sha);
         String parent = detail.path("parents").path(0).path("sha").asText();
@@ -97,7 +105,7 @@ public class GitOpsRepository {
         boolean restored = true;
         for (JsonNode f : detail.path("files")) {
             String path = f.path("filename").asText();
-            if (path.startsWith(tenant.gitopsPath() + "/")) {
+            if (path.equals(file)) {
                 String before = readFile(path, parent);
                 restored &= before.equals(readFile(path, tenant.gitopsBranch()));
                 edits.put(path, current -> before);
@@ -113,15 +121,19 @@ public class GitOpsRepository {
                 "Revert \"%s\" (%s)".formatted(subject, sha.substring(0, 7)), reason, edits);
     }
 
-    /** 고객사 경로의 최근 커밋 (최신순). 커밋마다 변경 내용의 앞부분을 붙인다. */
-    public List<Commit> recentCommits(Tenant tenant, int limit) {
+    /**
+     * 서비스 매니페스트의 최근 커밋 (최신순). 커밋마다 변경 내용의 앞부분을 붙인다.
+     * 고객사 경로 전체로 보면 다른 서비스의 설정 변경이 이 서비스의 "직전 변경"으로 잡힌다 (SPEC-e2e-speed 8.2).
+     */
+    public List<Commit> recentCommits(Tenant tenant, String service, int limit) {
+        String file = manifest(tenant, service);
         List<Commit> commits = new ArrayList<>();
-        for (JsonNode c : commitNodes(tenant, limit, null)) {
+        for (JsonNode c : commitNodes(tenant, file, limit, null)) {
             JsonNode detail = get("/commits/{sha}", c.path("sha").asText());
             StringBuilder patch = new StringBuilder();
             for (JsonNode f : detail.path("files")) {
-                if (!f.path("filename").asText().startsWith(tenant.gitopsPath() + "/")) {
-                    continue;  // 같은 커밋의 다른 경로(앱 코드 등)는 이 고객사 변경이 아니다
+                if (!f.path("filename").asText().equals(file)) {
+                    continue;  // 같은 커밋의 다른 파일(다른 서비스, 앱 코드 등)은 이 서비스의 변경이 아니다
                 }
                 patch.append(f.path("filename").asText()).append('\n').append(f.path("patch").asText()).append('\n');
             }
@@ -192,13 +204,13 @@ public class GitOpsRepository {
 
     // ── GitHub API ─────────────────────────────────────────────
 
-    /** 고객사 경로의 커밋 (최신순). until을 주면 그 시각 이전 커밋만. */
-    private List<JsonNode> commitNodes(Tenant tenant, int limit, OffsetDateTime until) {
+    /** 그 파일을 바꾼 커밋 (최신순). until을 주면 그 시각 이전 커밋만. */
+    private List<JsonNode> commitNodes(Tenant tenant, String path, int limit, OffsetDateTime until) {
         List<JsonNode> list = new ArrayList<>();
         JsonNode commits = until == null
-                ? get("/commits?sha={b}&path={path}&per_page={n}", tenant.gitopsBranch(), tenant.gitopsPath(), limit)
+                ? get("/commits?sha={b}&path={path}&per_page={n}", tenant.gitopsBranch(), path, limit)
                 : get("/commits?sha={b}&path={path}&per_page={n}&until={until}", tenant.gitopsBranch(),
-                        tenant.gitopsPath(), limit, until.toInstant().toString());
+                        path, limit, until.toInstant().toString());
         commits.forEach(list::add);
         return list;
     }

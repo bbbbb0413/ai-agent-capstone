@@ -125,8 +125,8 @@ public class ChangeService {
         result.put("service", service);
         result.put("changeMode", tenant.changeMode());
         if (tenant.gitops()) {
-            result.put("source", "설정 저장소 " + tenant.gitopsPath());
-            result.put("commits", gitops.recentCommits(tenant, 3));
+            result.put("source", "설정 저장소 " + GitOpsRepository.manifest(tenant, service));
+            result.put("commits", gitops.recentCommits(tenant, service, 3));
         } else {
             result.put("source", entry.runtime() + " 배포 이력");
             result.put("revisions", adapter(entry).history(tenant, entry).stream().limit(3).toList());
