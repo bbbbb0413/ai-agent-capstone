@@ -51,6 +51,9 @@ class InternalTokensTest {
                 {"/internal/tenants/tenant-a/services", "t-mb"},
                 {"/internal/.well-known/jwks.json", "t-mb"},
                 {"/internal/tenants/tenant-a/postmortems", "t-ib"},
+                {"/internal/documents/versions/1", "t-ib"},
+                {"/internal/documents/pending", "t-ib"},
+                {"/internal/tenants/tenant-a/documents/runbook-order-api", "t-mb"},
                 {"/internal/gitops/sync-events", "t-gw"},
                 {"/internal/alerts", "t-alert"},
         };

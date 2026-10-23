@@ -14,6 +14,7 @@ java {
 }
 
 repositories {
+    maven { url 'https://maven-central.storage-download.googleapis.com/maven2/' }   // Maven Central 미러 (settings.gradle)
     mavenCentral()
 }
 
@@ -25,6 +26,13 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.kafka:spring-kafka'
+    // 근거 문서 원본 저장 (S3 호환 저장소, SeaweedFS). HTTP 클라이언트는 JDK URLConnection을 쓴다
+    implementation platform('software.amazon.awssdk:bom:2.29.0')
+    implementation('software.amazon.awssdk:s3') {
+        exclude group: 'software.amazon.awssdk', module: 'apache-client'
+        exclude group: 'software.amazon.awssdk', module: 'netty-nio-client'
+    }
+    implementation 'software.amazon.awssdk:url-connection-client'
     implementation 'org.flywaydb:flyway-core'
     implementation 'org.flywaydb:flyway-database-postgresql'
     runtimeOnly 'org.postgresql:postgresql'

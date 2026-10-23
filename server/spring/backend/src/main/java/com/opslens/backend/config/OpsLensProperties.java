@@ -22,7 +22,7 @@ public record OpsLensProperties(
      *   backendAgent   backend → agent (보낸다)
      *   agentBackend   agent → backend (/internal/tasks/**)
      *   mcpBackend     MCP Server → backend (/internal/tenants/**, 작업 토큰 공개키)
-     *   indexerBackend postmortem-indexer → backend (/internal/tenants/{id}/postmortems)
+     *   indexerBackend postmortem-indexer·document-indexer → backend (/internal/tenants/{id}/postmortems, /internal/documents/**)
      *   gitopsWebhook  ArgoCD 알림 → backend (/internal/gitops/**)
      */
     public record InternalTokens(String backendAgent, String agentBackend, String mcpBackend, String indexerBackend,

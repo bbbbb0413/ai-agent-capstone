@@ -25,12 +25,13 @@ public class ServiceTokenFilter extends OncePerRequestFilter {
 
     record Route(String pattern, String caller, Function<OpsLensProperties, String> token) {}
 
-    /** 위에서부터 처음 맞는 경로의 토큰을 쓴다. 회고 경로는 고객사 경로보다 먼저 둔다 */
+    /** 위에서부터 처음 맞는 경로의 토큰을 쓴다. 회고 경로는 고객사 경로보다 먼저 둔다. 문서 색인은 document-indexer다 */
     static final List<Route> ROUTES = List.of(
             new Route("/internal/alerts", "alertmanager", OpsLensProperties::alertWebhookToken),
             new Route("/internal/gitops/**", "argocd", p -> p.internalTokens().gitopsWebhook()),
             new Route("/internal/tasks/**", "agent", p -> p.internalTokens().agentBackend()),
             new Route("/internal/.well-known/jwks.json", "mcp", p -> p.internalTokens().mcpBackend()),
+            new Route("/internal/documents/**", "indexer", p -> p.internalTokens().indexerBackend()),
             new Route("/internal/tenants/*/postmortems", "indexer", p -> p.internalTokens().indexerBackend()),
             new Route("/internal/tenants/**", "mcp", p -> p.internalTokens().mcpBackend()));
 

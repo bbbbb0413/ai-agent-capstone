@@ -1,8 +1,8 @@
 spring:
   servlet:
     multipart:
-      max-file-size: 4MB
-      max-request-size: 9MB
+      max-file-size: 20MB      # 근거 문서(PDF·Word) 상한. 작업 첨부는 TaskAttachments가 파일당 4MB로 따로 막는다
+      max-request-size: 21MB
   application:
     name: opslens-backend
   datasource:
@@ -46,6 +46,12 @@ opslens:
   dispatch-mode: ${DISPATCH_MODE:kafka}   # kafka(기본) | http
   kafka:
     partitions: ${KAFKA_PARTITIONS:3}   # 작업 토픽 파티션 수 (tasks.gold·silver·retry.*)
+  documents:   # 근거 문서 저장소 (SPEC-document-store). S3 계정은 backend만 갖는다
+    endpoint: ${DOCUMENTS_S3_ENDPOINT:http://localhost:8333}
+    bucket: ${DOCUMENTS_S3_BUCKET:opslens-documents}
+    access-key: ${DOCUMENTS_S3_ACCESS_KEY:}
+    secret-key: ${DOCUMENTS_S3_SECRET_KEY:}
+    seed-dir: ${DOCUMENTS_SEED_DIR:}   # 처음 데이터(data/documents). 없는 문서만 올린다
   auto-approve-allowed: ${AUTO_APPROVE_ALLOWED:true}   # true면 관리자가 화면에서 자동 승인을 켤 수 있다. 운영에서는 false
   kubernetes:
     credentials-dir: ${TENANT_CREDENTIALS_DIR:../../../.local/tenants}
