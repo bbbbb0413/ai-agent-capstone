@@ -55,7 +55,14 @@ def metric_queries(obs: dict[str, Any], service: str, window: str) -> dict[str, 
 def log_query(obs: dict[str, Any], service: str) -> str:
     return f'{{{_matchers(obs["logSelector"], f"service=\"{service}\"", "level=~\"ERROR|WARN\"")}}}'
 LOG_WINDOW = timedelta(minutes=10)
-LOG_LEAD = timedelta(minutes=2)   # 알림(for 30s + 평가 주기)은 이상 시작보다 1분 남짓 늦게 인시던트를 만든다
+LOG_LEAD = timedelta(minutes=2)   # 알림(rate 30s + for 15s + 평가 주기)은 이상 시작보다 40초 남짓 늦게 인시던트를 만든다. 넉넉히 둔다
+
+
+def _time(value: Any) -> datetime | None:
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00")) if value else None
+    except ValueError:
+        return None
 
 
 def log_window_start(now: datetime, incident: dict[str, Any] | None) -> datetime:
@@ -63,13 +70,17 @@ def log_window_start(now: datetime, incident: dict[str, Any] | None) -> datetime
 
     E2E에서 B(파드 멈춤) 직후 B2(결제 지연)를 진단할 때, 10분 창에 남은 B의 `worker pool saturated` 로그를 보고
     재시작을 제안한 적이 있다 (docs/harness-spec.md).
+    같은 서비스의 직전 인시던트가 그 사이에 닫혔으면(load_context가 넣는 previousResolvedAt) 그 뒤부터 본다.
+    앞 장애 직후에 새 장애가 나도 앞 장애의 로그가 근거에 섞이지 않는다. E2E는 그래서 장애 사이에 쉬지 않는다
+    (SPEC-e2e-speed ②).
     """
     start = now - LOG_WINDOW
-    try:
-        started = datetime.fromisoformat(str((incident or {})["startedAt"]).replace("Z", "+00:00"))
-    except (KeyError, ValueError):
+    started = _time((incident or {}).get("startedAt"))
+    if started is None:
         return start
-    return max(start, min(now - LOG_LEAD, started - LOG_LEAD))
+    start = max(start, min(now - LOG_LEAD, started - LOG_LEAD))
+    previous = _time((incident or {}).get("previousResolvedAt"))
+    return max(start, previous) if previous and previous < started else start
 
 
 async def recent_log_patterns(box: ToolBox, counts: dict[str, int], incident_id: int | None,

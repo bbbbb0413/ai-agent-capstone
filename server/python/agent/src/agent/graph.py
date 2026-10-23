@@ -117,6 +117,10 @@ async def load_context(state: State, runtime: Rt) -> dict:
         incidents = parse_json(await read("business_list_incidents", {"status": "OPEN"}))
         if isinstance(incidents, list):
             context["incident"] = next((i for i in incidents if i.get("id") == incident_id), None)
+        if context.get("incident"):
+            resolved = parse_json(await read("business_list_incidents", {"status": "RESOLVED"}))
+            context["incident"] = {**context["incident"],
+                                   "previousResolvedAt": _previous_resolved_at(context["incident"], resolved)}
     else:
         # 질문 작업: 인식된 장애가 있는지 본다. 조회에 실패하면(None) 장애가 없다고 단정하지 않는다
         incidents = parse_json(await read("business_list_incidents", {"status": "OPEN"}))
@@ -124,6 +128,17 @@ async def load_context(state: State, runtime: Rt) -> dict:
             incidents = []  # MCP 어댑터는 빈 목록을 빈 내용으로 넘긴다
         context["open_incidents"] = incidents if isinstance(incidents, list) else None
     return {"context": context, "tool_counts": counts}
+
+
+def _previous_resolved_at(incident: dict, resolved: Any) -> str | None:
+    """같은 서비스에서 이 인시던트보다 앞서 닫힌 인시던트의 가장 늦은 종료 시각. 로그 창을 그 뒤로 자른다
+    (signals.log_window_start)."""
+    if not isinstance(resolved, list):
+        return None
+    times = [str(i["resolvedAt"]) for i in resolved
+             if isinstance(i, dict) and i.get("resolvedAt") and i.get("service") == incident.get("service")
+             and isinstance(i.get("id"), int) and i["id"] < (incident.get("id") or 0)]
+    return max(times, key=lambda t: signals._time(t) or datetime.min.replace(tzinfo=timezone.utc), default=None)
 
 
 _DOCUMENT_QUESTION_MARKERS = (

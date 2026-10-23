@@ -2,6 +2,7 @@
 
 import json
 import unittest
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -52,6 +53,33 @@ class QueryTests(unittest.IsolatedAsyncioTestCase):
         _, logged = await signals.recent_log_patterns(box, {}, None, None, obs, "order-api")
         self.assertEqual(logged["signals"], {"slow_query": 1})   # 문구가 없는 신호는 0건이 아니라 모른다
         self.assertEqual(box.call.await_args.args[2]["logql"], signals.log_query(obs, "order-api"))
+
+
+class LogWindowTests(unittest.TestCase):
+    """같은 서비스의 직전 인시던트가 닫힌 뒤부터 로그를 본다 (SPEC-e2e-speed ②)."""
+    NOW = datetime(2026, 10, 23, 9, 0, tzinfo=timezone.utc)
+
+    def test_previous_resolution_cuts_the_lead(self):
+        incident = {"startedAt": "2026-10-23T08:59:00Z", "previousResolvedAt": "2026-10-23T08:57:30Z"}
+        self.assertEqual(signals.log_window_start(self.NOW, incident), datetime(2026, 10, 23, 8, 57, 30, tzinfo=timezone.utc))
+        # 직전 인시던트가 2분보다 먼저 닫혔으면 지금과 같다
+        older = {**incident, "previousResolvedAt": "2026-10-23T08:50:00Z"}
+        self.assertEqual(signals.log_window_start(self.NOW, older), self.NOW - timedelta(minutes=3))
+        # 이 인시던트보다 늦게 닫힌 값(시계 차이 등)은 쓰지 않는다
+        later = {**incident, "previousResolvedAt": "2026-10-23T08:59:30Z"}
+        self.assertEqual(signals.log_window_start(self.NOW, later), self.NOW - timedelta(minutes=3))
+        self.assertEqual(signals.log_window_start(self.NOW, {"startedAt": "2026-10-23T08:59:00Z"}),
+                         self.NOW - timedelta(minutes=3))
+
+    def test_previous_resolved_at_is_the_latest_earlier_incident_of_the_same_service(self):
+        incident = {"id": 9, "service": "order-api"}
+        resolved = [{"id": 7, "service": "order-api", "resolvedAt": "2026-10-23T08:40:00Z"},
+                    {"id": 8, "service": "order-api", "resolvedAt": "2026-10-23T08:57:30Z"},
+                    {"id": 6, "service": "cart-api", "resolvedAt": "2026-10-23T08:58:30Z"},
+                    {"id": 10, "service": "order-api", "resolvedAt": "2026-10-23T08:59:50Z"}]
+        self.assertEqual(graph._previous_resolved_at(incident, resolved), "2026-10-23T08:57:30Z")
+        self.assertIsNone(graph._previous_resolved_at(incident, "실패"))
+        self.assertIsNone(graph._previous_resolved_at(incident, []))
 
 
 class DiagnoseServiceTests(unittest.IsolatedAsyncioTestCase):
