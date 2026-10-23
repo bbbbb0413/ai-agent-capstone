@@ -22,3 +22,26 @@ spec:
   behavior:
     scaleDown:
       stabilizationWindowSeconds: 60   # 기본 5분. 부하가 빠진 뒤 E2E가 원래 크기로 돌아오기를 오래 기다리지 않게 한다
+---
+# cart-api: order-api와 같은 자동 확장 (SPEC-e2e-speed 8.1). 서비스마다 HPA가 따로라 maxReplicas PR도 서비스마다다
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cart-api
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cart-api
+  minReplicas: 2
+  maxReplicas: 3
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 100   # 평상시 약 50%(JVM + 자체 트래픽), 과부하 때 파드당 약 400%
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 60   # 기본 5분. 부하가 빠진 뒤 E2E가 원래 크기로 돌아오기를 오래 기다리지 않게 한다

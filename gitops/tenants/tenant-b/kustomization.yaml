@@ -5,3 +5,4 @@ kind: Kustomization
 namespace: tenant-b
 resources:
   - reservation-api.yaml
+  - checkin-api.yaml    # 장애용 데모 서비스 (SPEC-e2e-speed 8.1)

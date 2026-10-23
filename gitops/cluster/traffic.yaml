@@ -56,3 +56,54 @@ spec:
           resources:
             requests: { cpu: 50m, memory: 192Mi }
             limits: { memory: 384Mi }
+# 장애용 데모 서비스의 부하 발생기 (SPEC-e2e-speed 8.1)
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loadgen-tenant-a-cart-api
+  namespace: traffic
+spec:
+  replicas: 0
+  selector:
+    matchLabels: { app: loadgen, target: tenant-a-cart-api }
+  template:
+    metadata:
+      labels: { app: loadgen, target: tenant-a-cart-api }
+    spec:
+      containers:
+        - name: loadgen
+          image: opslens/demo-app:0.1.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - { name: DEMO_MODE, value: loadgen }
+            - { name: LOADGEN_TARGET, value: "http://cart-api.tenant-a.svc:8080/orders" }
+            - { name: LOADGEN_RATE, value: "250" }   # HPA 최대 3(약 210건/초)은 넘고, 4(약 280건/초)면 감당한다
+          resources:
+            requests: { cpu: 50m, memory: 192Mi }
+            limits: { memory: 384Mi }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loadgen-tenant-b-checkin-api
+  namespace: traffic
+spec:
+  replicas: 0
+  selector:
+    matchLabels: { app: loadgen, target: tenant-b-checkin-api }
+  template:
+    metadata:
+      labels: { app: loadgen, target: tenant-b-checkin-api }
+    spec:
+      containers:
+        - name: loadgen
+          image: opslens/demo-app:0.1.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - { name: DEMO_MODE, value: loadgen }
+            - { name: LOADGEN_TARGET, value: "http://checkin-api.tenant-b.svc:8080/orders" }
+            - { name: LOADGEN_RATE, value: "120" }   # B사 용량 약 80건/초(파드 1개)를 넘긴다
+          resources:
+            requests: { cpu: 50m, memory: 192Mi }
+            limits: { memory: 384Mi }

@@ -100,6 +100,8 @@ services:
       LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
       LANGSMITH_PROJECT: ${LANGSMITH_PROJECT:-opslens}
       AGENT_CONSUMER_ROLE: ${AGENT_CONSUMER_ROLE:-all}
+      # 동시에 실행하는 작업 수. E2E는 서비스 묶음 5개를 동시에 돌린다 (SPEC-e2e-speed 8.3)
+      AGENT_WORKERS: ${AGENT_WORKERS:-5}
     depends_on:
       postgres:
         condition: service_healthy
