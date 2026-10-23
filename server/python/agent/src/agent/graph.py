@@ -14,6 +14,7 @@ import json
 import re
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Annotated, Any, Literal, TypedDict
 from uuid import NAMESPACE_URL, uuid5
 
@@ -57,7 +58,10 @@ class State(TypedDict, total=False):
     notice_result: dict[str, Any] | None
     escalation_result: dict[str, Any] | None   # 에스컬레이션 발송 대기열 등록 결과 (받는 사람, 메시지, status QUEUED)
     no_action_reason: str | None    # 조치하지 않기로 한 이유 (HPA가 확장 중일 때만 생긴다)
-    signals: dict[str, Any]         # 진단 시작 때 코드가 조회한 지표와 로그 신호 건수 (장애 형태 판정표의 입력)
+    signals: dict[str, Any]         # 진단 때 코드가 조회한 지표, 로그 신호 건수, 의존 대상 상태, 원인 후보별 사실 표(facts)
+    causes: list[str]               # 진단이 적은 원인 후보 조항 (순위 순서, 모델이 정한다. SPEC-compound-faults)
+    target_clause: str | None       # 진단이 적은 처리할 원인. 조치 검사의 기준이다
+    handled: list[dict[str, Any]]   # 이 작업에서 앱 조치를 한 원인 {clause, action, signal, signal_count_before, at, ...}
 
 
 @dataclass
@@ -91,7 +95,7 @@ Rt = Runtime[Context]
 async def intake(state: State, runtime: Rt) -> dict:
     return {"turns": state.get("turns", 0), "tool_counts": state.get("tool_counts", {}),
             "attempts": state.get("attempts", 0), "evidence": state.get("evidence", []),
-            "approvals": state.get("approvals", [])}
+            "approvals": state.get("approvals", []), "handled": state.get("handled", [])}
 
 
 async def load_context(state: State, runtime: Rt) -> dict:
@@ -240,10 +244,21 @@ async def execute(state: State, runtime: Rt) -> dict:
     update: dict[str, Any] = {}
     if action["tool"] == "business_escalate_incident":   # 조치 대신 고른 에스컬레이션 (RB-STD-05~07)
         update["escalation_result"] = outcome
+    if action["tool"] == "business_execute_runbook_action" and outcome["status"] in ("EXECUTED", "PR_CREATED"):
+        update["handled"] = state.get("handled", []) + [_handled(state, action)]
     change = None
     if outcome and outcome["status"] == "PR_CREATED":
         change = {key: outcome.get(key) for key in ("action", "service", "changeMode", "prNumber", "prUrl", "files")}
     return {"evidence": evidence, "tool_counts": counts, "action_result": outcome, "change": change, **update}
+
+
+def _handled(state: State, action: dict) -> dict[str, Any]:
+    """앱 조치를 한 원인. 회복되지 않으면 verify가 그 신호를 조치 뒤 구간으로 다시 센다 (signal_count_after)."""
+    clause = state.get("target_clause")
+    signal = next((name for name, c in signals.LOG_SIGNALS.items() if c == clause), None)
+    return {"clause": clause, "action": (action.get("args") or {}).get("action"), "signal": signal,
+            "signal_count_before": ((state.get("signals") or {}).get("logs") or {}).get(signal),
+            "at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
 
 
 def route_execute(state: State) -> Literal["verify", "await_change", "report"]:
@@ -347,14 +362,24 @@ async def diagnose(state: State, runtime: Rt) -> dict:
         # (A사 a-surge-max, docs/harness-spec.md). 정해진 조회라 모델의 탐색 한도에 넣지 않는다
         logs, logged, metrics = await signals.observe(runtime.context.toolbox, {}, state.get("incident_id"),
                                                       state.get("context", {}).get("incident"), obs, service)
-        state = {**state, "signals": {**(state.get("signals") or {}), "metrics": metrics,
-                                      "logs": logged.get("signals", {})}}
+        # 원인 후보별 사실은 마지막 조치 이후 구간으로 다시 센다. 조치 전의 신호가 남아 처리한 원인이 그대로인 것처럼 보이지 않게
+        since = _last_action_at(state) or signals.log_window_start(datetime.now(timezone.utc),
+                                                                    state.get("context", {}).get("incident"))
+        observed = await _cause_inputs(runtime.context.toolbox, state, obs, service, since, logged, metrics)
+        state = {**state, "signals": {**(state.get("signals") or {}), **observed}}
         prefetch = [logged, {"tool": "grafana_query_prometheus", "args": signals.diagnose_queries(obs, service),
-                             "summary": json.dumps(metrics, ensure_ascii=False)}]
+                             "summary": json.dumps(metrics, ensure_ascii=False)},
+                    {"tool": "cause_facts", "summary": json.dumps(observed["facts"], ensure_ascii=False)[:500]}]
         intro = [HumanMessage(f"조치 후에도 회복되지 않았다. 조치 이후 시간대를 다시 조사한다.\n\n"
+                              f"이미 조치한 원인(코드가 기록, signal_count_after는 조치 뒤 다시 센 건수):\n"
+                              f"{json.dumps(state.get('handled', []), ensure_ascii=False)}\n\n"
                               f"지금 시점의 ERROR·WARN 로그 반복 메시지(코드가 조회, 많은 순):\n{harness.as_untrusted(logs)}\n\n"
                               f"현재 지표(코드가 조회, 최근 1분):\n{json.dumps(metrics, ensure_ascii=False)}\n\n"
-                              f"알려진 로그 신호 건수(코드가 셈):\n{json.dumps(logged.get('signals', {}), ensure_ascii=False)}")]
+                              f"원인 후보별 사실(코드가 조회, 마지막 조치 이후. 순위는 정하지 않았다):\n"
+                              f"{json.dumps(observed['facts'], ensure_ascii=False)}\n\n"
+                              f"의존 대상 상태(코드가 조회):\n{json.dumps(observed['dependencies'], ensure_ascii=False)}\n\n"
+                              "진단 단계의 출력 형식으로 원인 후보와 처리할 원인을 다시 적는다. 이미 조치한 원인은 처리할 원인으로 "
+                              "고르지 않는다. 그 원인의 신호가 남아 있으면 같은 원인에 앱 조치를 다시 하지 말고 에스컬레이션한다.")]
     else:
         counts = dict(state["tool_counts"])
         logs, logged, metrics = await signals.observe(runtime.context.toolbox, counts, state.get("incident_id"),
@@ -365,12 +390,15 @@ async def diagnose(state: State, runtime: Rt) -> dict:
             "diagnose", "business_list_recent_changes", {"service": service}, {}))
         past_incidents = await retrieve_history(state, runtime.context.toolbox, counts, logged.get("signals", {}))
         started_at = (state.get("context", {}).get("incident") or {}).get("startedAt")
-        state = {**state, "tool_counts": counts, "signals": {"metrics": metrics, "logs": logged.get("signals", {}),
+        since = signals.log_window_start(datetime.now(timezone.utc), state.get("context", {}).get("incident"))
+        observed = await _cause_inputs(runtime.context.toolbox, state, obs, service, since, logged, metrics)
+        state = {**state, "tool_counts": counts, "signals": {**observed,
                                                              "recent_change": signals.recent_change(changes, started_at)}}
         prefetch = [logged, {"tool": "grafana_query_prometheus", "args": signals.diagnose_queries(obs, service),
                              "summary": json.dumps(metrics, ensure_ascii=False)},
                     {"tool": "business_list_recent_changes", "args": {"service": service},
-                     "summary": json.dumps(changes, ensure_ascii=False, default=str)[:500]}]
+                     "summary": json.dumps(changes, ensure_ascii=False, default=str)[:500]},
+                    {"tool": "cause_facts", "summary": json.dumps(observed["facts"], ensure_ascii=False)[:500]}]
         intro = [
             SystemMessage(harness.prompt("system") + "\n\n" + harness.prompt("diagnose")),
             HumanMessage(f"요청: {state['question']}\n\n진단할 서비스: {service}. 아래 지표·로그는 이 서비스만 조회했다. "
@@ -382,7 +410,11 @@ async def diagnose(state: State, runtime: Rt) -> dict:
                          f"(코드가 조회, 많은 순. 인시던트 시작 2분 전부터, 최대 10분):\n"
                          f"{harness.as_untrusted(logs)}\n\n"
                          f"현재 지표(코드가 조회, 최근 1분. 에러율은 0~1):\n{json.dumps(metrics, ensure_ascii=False)}\n\n"
-                         f"알려진 로그 신호 건수(코드가 셈, 0이면 없음):\n{json.dumps(logged.get('signals', {}), ensure_ascii=False)}\n\n"
+                         f"원인 후보별 사실(코드가 조회, 인시던트 시작 2분 전부터. 순위는 정하지 않았다. "
+                         f"signal_count는 Loki가 센 건수이고 null이면 셀 수 없다):\n"
+                         f"{json.dumps(state['signals']['facts'], ensure_ascii=False)}\n\n"
+                         f"의존 대상 상태(코드가 조회, 최근 1분):\n"
+                         f"{json.dumps(state['signals']['dependencies'], ensure_ascii=False)}\n\n"
                          f"인시던트 시작: {(state.get('context', {}).get('incident') or {}).get('startedAt')}\n"
                          f"최근 배포·설정 변경(코드가 조회, 최신순):\n"
                          f"{harness.as_untrusted(json.dumps(changes, ensure_ascii=False, default=str)[:3000])}\n\n"
@@ -396,13 +428,52 @@ async def diagnose(state: State, runtime: Rt) -> dict:
     if not any(isinstance(m, ToolMessage) and m.status != "error" for m in new):
         # 근거 없는 글(조사 계획 등)이 런북 검색어와 조치 제안의 입력이 되지 않게 한다
         findings = "원인 미확정: 도구로 근거를 모으지 못했다"
+    causes, target = parse_causes(findings)
     update = {"messages": intro + new, "findings": findings, "turns": turns, "tool_counts": counts,
-              "evidence": state["evidence"] + prefetch + evidence, "past_incidents": past_incidents}
+              "evidence": state["evidence"] + prefetch + evidence, "past_incidents": past_incidents,
+              "causes": causes, "target_clause": target}
     if state.get("signals"):
         update["signals"] = state["signals"]
     if not state.get("plan") and new and isinstance(new[0], AIMessage):
         update["plan"] = str(new[0].content)
     return update
+
+
+async def _cause_inputs(box: ToolBox, state: State, obs: dict, service: str, since: datetime, logged: dict,
+                       metrics: dict) -> dict[str, Any]:
+    """원인 후보를 판단할 사실: 신호별 건수(Loki가 셈), 의존 대상 상태, 원인 후보별 사실 표 (SPEC-compound-faults 3장).
+
+    로그 신호 건수(logs)는 Loki가 센 값으로 바꾼다. 200줄 요약으로 센 값은 함께 난 다른 신호를 0건으로 셀 수 있다.
+    Loki 집계에 실패한 신호는 요약으로 센 값을 남긴다.
+    """
+    details = await signals.log_signal_details(box, obs, service, since, datetime.now(timezone.utc))
+    dependencies = await signals.dependency_health(box, state.get("context", {}), service)
+    logs = {**logged.get("signals", {}), **{name: d["count"] for name, d in details.items()}}
+    return {"metrics": metrics, "logs": logs, "log_details": details, "dependencies": dependencies,
+            "facts": signals.cause_facts(details, dependencies, metrics)}
+
+
+_CAUSE_LINE = re.compile(r"^\s*\d+[).]\s*(RB-STD-0\d)", re.MULTILINE)
+_TARGET_LINE = re.compile(r"^\s*처리할 원인\s*[:：]\s*(RB-STD-0\d)", re.MULTILINE)
+
+
+def parse_causes(findings: str) -> tuple[list[str], str | None]:
+    """진단 출력의 `원인 후보:` 목록(조항, 적힌 순서)과 `처리할 원인:` 조항. 형식이 깨졌으면 ([], None)이고
+    조치 검사는 처리할 원인 없이 지금처럼 동작한다."""
+    if findings.startswith("원인 미확정"):
+        return [], None
+    head, _, rest = findings.partition("원인 후보")
+    causes = list(dict.fromkeys(_CAUSE_LINE.findall(rest.split("처리할 원인")[0]))) if rest else []
+    target = _TARGET_LINE.search(findings)
+    return causes, target.group(1) if target else None
+
+
+def _last_action_at(state: State) -> datetime | None:
+    handled = state.get("handled") or []
+    try:
+        return datetime.fromisoformat(handled[-1]["at"]) if handled else None
+    except (KeyError, ValueError):
+        return None
 
 
 def route_diagnose(state: State) -> Literal["retrieve_runbook", "report"]:
@@ -427,15 +498,24 @@ async def propose_action(state: State, runtime: Rt) -> dict:
     if fault:
         # Jev는 장애 형태만 정한다. 확신도가 낮으면 GPT가 지금처럼 판정표로 직접 고르고, 판정은 기록만 남긴다.
         # Jev는 코드가 센 신호만 보고 GPT는 로그 원문까지 본다. Jev의 RB-STD-07은 "신호가 안 맞는다"일 뿐이라 넘기지 않는다
-        applied = fault["choice"] != "RB-STD-07" and fault["confidence"] >= jev.JEV_MIN_CONFIDENCE
+        # 진단이 처리할 원인을 적었으면 Jev 판정은 기록만 한다. 원인이 겹치면 Jev는 그중 하나만 고른다 (SPEC-compound-faults)
+        applied = (fault["choice"] != "RB-STD-07" and fault["confidence"] >= jev.JEV_MIN_CONFIDENCE
+                   and not state.get("target_clause"))
         await backend.emit(state["task_id"], "STEP", {"node": "propose_action", "fault": fault["choice"],
-                                                       "confidence": round(fault["confidence"], 2), "applied": applied})
+                                                       "confidence": round(fault["confidence"], 2), "applied": applied,
+                                                       **({"target": state["target_clause"]}
+                                                          if state.get("target_clause") else {})})
         if applied:
             fault_note = (f"장애 형태(Jev 판정, 확신도 {fault['confidence']:.0%}): {fault['choice']}. "
                           "1단계(장애 형태 정하기)는 이 판정을 따르고 2단계부터 진행한다.\n\n")
     context = {**state.get("context", {}), "services": services} if isinstance(services, list) \
         else state.get("context", {})
     state = {**state, "context": context, "tool_counts": counts}
+    if state.get("causes"):
+        # 원인 순위는 모델이 정한다. 코드는 막지 않고 사실 표와 함께 남긴다. 기준대로였는지는 E2E가 본다
+        await backend.emit(state["task_id"], "STEP", {"node": "propose_action", "causes": state["causes"],
+                                                       "target": state.get("target_clause"),
+                                                       "facts": (state.get("signals") or {}).get("facts")})
     # 조치를 하지 않는 것이 맞는 경우는 HPA가 아직 최대치 아래에서 늘리는 중일 때뿐이다. 그때만 도구를 강제하지 않는다
     scaling = _autoscaler_scaling(context, (context.get("incident") or {}).get("service"))
     tools = [t for t in box.for_node("propose_action") if t.name != "business_get_service_inventory"]
@@ -443,7 +523,8 @@ async def propose_action(state: State, runtime: Rt) -> dict:
     messages = [
         SystemMessage(harness.prompt("system") + "\n\n" + harness.prompt("propose")),
         HumanMessage(f"{fault_note}진단 결과:\n{state['findings']}\n\n"
-                     f"지표와 로그 신호(코드가 조회):\n{json.dumps(state.get('signals', {}), ensure_ascii=False)}\n\n런북·계약 조항:\n"
+                     f"지표와 로그 신호(코드가 조회):\n{json.dumps(state.get('signals', {}), ensure_ascii=False)}\n\n"
+                     f"이미 조치한 원인:\n{json.dumps(state.get('handled', []), ensure_ascii=False)}\n\n런북·계약 조항:\n"
                      f"{json.dumps(state.get('runbook', []), ensure_ascii=False)}\n\n"
                      f"고객사 컨텍스트:\n{json.dumps(state.get('context', {}), ensure_ascii=False, default=str)}"),
     ]
@@ -454,7 +535,8 @@ async def propose_action(state: State, runtime: Rt) -> dict:
     for _ in range(PROPOSE_SEND_BACKS):
         # 조항과 맞지 않거나 할 수 없는 조치를 골랐다. 이유를 돌려주고 다시 고르게 한다 (판단은 여전히 모델이 한다).
         # 거부 이유는 쌓아서 넘긴다. 재시작을 거부하자 계약상 불가한 롤백을 고른 적이 있다 (b-pool E2E)
-        problem = action_guards.first_problem(ai, context, state.get("signals") or {}, recent_change)
+        problem = action_guards.first_problem(ai, context, state.get("signals") or {}, recent_change,
+                                              state.get("target_clause"), state.get("handled") or [])
         if not problem or turns >= harness.MAX_TURNS:
             break
         call = ai.tool_calls[0]
@@ -556,8 +638,32 @@ async def verify(state: State, runtime: Rt) -> dict:
     else:  # 턴 한도를 다 썼으면 알림 기준으로 코드가 판단한다
         recovered = by_threshold
         verdict = f"{'RECOVERED' if recovered else 'NOT_RECOVERED'} (턴 한도로 기준값 판단)\n{json.dumps(metrics)}"
-    return {"recovered": recovered, "verification": verdict, "turns": turns, "tool_counts": counts,
-            "evidence": evidence}
+    update = {"recovered": recovered, "verification": verdict, "turns": turns, "tool_counts": counts,
+              "evidence": evidence}
+    if not recovered and obs and state.get("handled"):
+        update["handled"] = await _recount_handled(box, state, obs, service)
+    return update
+
+
+CLEARED_RATIO = 0.2   # 조치 뒤 신호가 조치 전의 이 비율 미만이면 그 원인은 사라졌다고 본다
+
+
+async def _recount_handled(box: ToolBox, state: State, obs: dict, service: str) -> list[dict[str, Any]]:
+    """회복되지 않았으면 마지막으로 조치한 원인의 신호를 조치 뒤 구간으로 다시 센다. 사라졌으면 다른 원인이 남은 것이고,
+    그대로면 조치가 듣지 않은 것이다. 판단은 다시 진단하는 모델이 하고, 같은 원인에 앱 조치를 또 하는 것은 검사가 막는다."""
+    handled = list(state["handled"])
+    last = dict(handled[-1])
+    since = _last_action_at(state)
+    if not last.get("signal") or since is None:
+        return handled
+    details = await signals.log_signal_details(box, obs, service, since, datetime.now(timezone.utc))
+    after = (details.get(last["signal"]) or {}).get("count")
+    before = last.get("signal_count_before")
+    last["signal_count_after"] = after
+    if isinstance(after, int) and isinstance(before, (int, float)):
+        last["cleared"] = after < max(1, before * CLEARED_RATIO)
+    handled[-1] = last
+    return handled
 
 
 def route_verify(state: State) -> Literal["report", "diagnose", "final_escalate"]:
@@ -585,6 +691,8 @@ async def report(state: State, runtime: Rt) -> dict:
         "past_incidents": state.get("past_incidents", []),
         "action": state.get("proposed_action"), "approvals": state.get("approvals", []),
         "recovered": state.get("recovered"), "verification": state.get("verification"),
+        "causes": state.get("causes", []), "target_clause": state.get("target_clause"),
+        "handled": state.get("handled", []), "cause_facts": (state.get("signals") or {}).get("facts"),
         "action_result": state.get("action_result"), "change": state.get("change"),
         "escalation": state.get("escalation_result"), "no_action_reason": state.get("no_action_reason"),
         "context": state.get("context", {}),
@@ -740,8 +848,11 @@ def _escalation_args(state: State) -> dict[str, Any]:
     elif not state.get("attempts"):
         args |= {"category": "P1", "reason": "P1 장애 발생"}
     else:
+        handled = {h.get("clause") for h in state.get("handled") or []}
+        remaining = [c for c in state.get("causes") or [] if c not in handled]
         args |= {"category": "NOT_RECOVERED",
-                 "reason": f"{action.get('action') or '조치'} 후 다시 진단했지만 회복되지 않음"}
+                 "reason": f"{action.get('action') or '조치'} 후 다시 진단했지만 회복되지 않음"
+                           + (f". 처리하지 못한 원인 후보: {', '.join(remaining)}" if remaining else "")}
     if action.get("service"):
         args["service"] = action["service"]
     return args

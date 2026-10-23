@@ -1,6 +1,6 @@
 """공통 표준 런북(data/documents/_common/runbook-standard.md)과 코드·프롬프트가 어긋나지 않는지 본다.
 
-조항별 조치 규칙은 런북, prompts/propose.md의 장애 형태 판정표, action_guards.CLAUSE_ACTIONS 세 곳에 있다.
+조항별 조치 규칙은 런북, prompts/diagnose.md의 장애 형태 판정표(원인 후보를 정하는 표), action_guards.CLAUSE_ACTIONS 세 곳에 있다.
 한 곳을 고치고 나머지를 빠뜨리면 모델이 없는 조항을 고르거나 조치 검사가 엉뚱하게 거부한다.
 """
 
@@ -11,7 +11,7 @@ from pathlib import Path
 from agent import action_guards, signals
 
 RUNBOOK = Path(__file__).resolve().parents[4] / "data" / "documents" / "_common" / "runbook-standard.md"
-PROPOSE = Path(__file__).resolve().parents[1] / "prompts" / "propose.md"
+DIAGNOSE = Path(__file__).resolve().parents[1] / "prompts" / "diagnose.md"
 # 장애 형태가 아니라 "조치를 할 수 없을 때"의 조항이라 판정표에 없다
 NOT_A_FAULT_SHAPE = {"RB-STD-06"}
 ACTIONS = {"restart_pods", "scale_deployment", "rollback_deployment", "adjust_autoscaler"}
@@ -48,7 +48,7 @@ class RunbookClauseTests(unittest.TestCase):
 
 
 def judgment_table(text: str) -> list[tuple[str, str]]:
-    """propose.md 판정표의 (로그 신호 칸, 장애 형태 칸). 머리줄과 구분줄은 뺀다."""
+    """diagnose.md 판정표의 (로그 신호 칸, 장애 형태 칸). 머리줄과 구분줄, 칸이 넷인 흡수 표는 뺀다."""
     rows = [line.strip().strip("|").split("|") for line in text.splitlines() if line.strip().startswith("| ")]
     return [(cells[1], cells[2]) for cells in rows if len(cells) == 3 and "RB-STD" in cells[2]]
 
@@ -57,7 +57,7 @@ def judgment_table(text: str) -> list[tuple[str, str]]:
 class JudgmentTableTests(unittest.TestCase):
     def setUp(self):
         self.runbook = set(sections(RUNBOOK.read_text(encoding="utf-8")))
-        self.rows = judgment_table(PROPOSE.read_text(encoding="utf-8"))
+        self.rows = judgment_table(DIAGNOSE.read_text(encoding="utf-8"))
 
     def test_table_names_every_fault_shape_of_the_runbook(self):
         clauses = {c for _, shape in self.rows for c in re.findall(r"RB-STD-0\d", shape)}

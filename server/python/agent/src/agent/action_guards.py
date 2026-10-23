@@ -28,10 +28,75 @@ def fixes(clause: str, recent_change: bool) -> set[str]:
     return CLAUSE_ACTIONS[clause] - ({"restart_pods"} if clause == "RB-STD-01" and recent_change else set())
 
 
-def first_problem(ai: AIMessage, context: dict, signals: dict, recent_change: bool) -> str | None:
-    """돌려보낼 이유. 맞지 않는 점이 없으면 None."""
-    return (clause_mismatch(ai, recent_change) or unsupported_action(ai, context)
-            or blocked_action_mismatch(ai, signals, recent_change) or blocked_scaling_unfit(ai, context))
+def first_problem(ai: AIMessage, context: dict, signals: dict, recent_change: bool, target: str | None = None,
+                  handled: list[dict] | tuple = ()) -> str | None:
+    """돌려보낼 이유. 맞지 않는 점이 없으면 None.
+
+    target은 진단이 적은 처리할 원인(graph.parse_causes), handled는 이 작업에서 이미 조치한 원인이다.
+    """
+    return (target_without_evidence(target, signals) or target_already_handled(ai, target, handled)
+            or target_mismatch(ai, target, recent_change)
+            or clause_mismatch(ai, recent_change) or unsupported_action(ai, context)
+            or blocked_action_mismatch(ai, signals, recent_change, target) or blocked_scaling_unfit(ai, context))
+
+
+# 겹친 장애의 처리할 원인 검사 (SPEC-compound-faults 4.2). 원인 후보의 순위는 모델이 정하고, 여기서는 명백한 위반만 막는다
+
+def target_without_evidence(target: str | None, signals: dict) -> str | None:
+    """① 처리할 원인에 근거가 없다: 코드가 정리한 사실 표에서 그 조항의 evidence가 false다. 사실 표에 없는 조항은 보지 않는다."""
+    fact = next((f for f in signals.get("facts") or [] if f.get("clause") == target), None) if target else None
+    if not fact or fact.get("evidence"):
+        return None
+    return (f"거부: 처리할 원인 {target}에는 근거가 없다 (신호 {fact.get('signal')} {fact.get('signal_count')}건, "
+            f"의존 대상 상태 {fact.get('dependency_status') or '없음'}). 근거가 있는 원인 후보를 처리하거나, "
+            "근거가 있는 후보가 없으면 원인 미확정(RB-STD-07)으로 에스컬레이션한다.")
+
+
+def target_already_handled(ai: AIMessage, target: str | None, handled: list[dict] | tuple) -> str | None:
+    """② 이 작업에서 이미 앱 조치를 한 원인에 앱 조치를 또 하려 한다. 효과가 없던 원인에 다른 조치를 시도하지 않는다.
+
+    같은 원인의 에스컬레이션은 된다: 최대치를 올려도 회복되지 않은 트래픽 급증은 구조상 더 늘릴 수 없다는
+    ACTION_BLOCKED 에스컬레이션으로 넘긴다 (a-surge-max).
+    """
+    if not ai.tool_calls or ai.tool_calls[0]["name"] != "business_execute_runbook_action":
+        return None
+    done = next((h for h in handled if h.get("clause") == target), None) if target else None
+    if not done:
+        return None
+    return (f"거부: {target}은 이미 {done.get('action')}로 조치했고 회복되지 않았다. 같은 원인에 다른 앱 조치를 시도하지 "
+            "않는다. 그 원인의 신호가 사라졌으면 처리하지 않은 다음 원인 후보를 처리하고, 남아 있으면 "
+            "에스컬레이션한다.")
+
+
+def target_mismatch(ai: AIMessage, target: str | None, recent_change: bool) -> str | None:
+    """③ 고른 조치가 처리할 원인을 고치는 조치도, 그 조항에 맞는 에스컬레이션·공지도 아니다.
+
+    앱 원인(RB-STD-01~03)은 그 조항의 조치이거나 막혀서 하는 ACTION_BLOCKED 에스컬레이션이다. 외부 원인(RB-STD-04)은
+    고객 공지, DB 원인(RB-STD-05)은 DEPENDENCY 에스컬레이션이다. P1·원인 미확정 에스컬레이션은 언제나 된다.
+    """
+    if not target or target not in CLAUSE_ACTIONS or not ai.tool_calls:
+        return None
+    call = ai.tool_calls[0]
+    name, args = call["name"], call["args"]
+    fits = fixes(target, recent_change)
+    if name == "business_execute_runbook_action":
+        ok = args.get("action") in fits
+    elif name == "business_send_customer_notice":
+        ok = target == "RB-STD-04"
+    elif name == "business_escalate_incident":
+        category = args.get("category")
+        ok = (category not in ("ACTION_BLOCKED", "DEPENDENCY")
+              or (category == "ACTION_BLOCKED" and bool(fits))
+              or (category == "DEPENDENCY" and target in ("RB-STD-04", "RB-STD-05")))
+    else:
+        ok = True
+    if ok:
+        return None
+    expected = {"RB-STD-04": "고객 공지(business_send_customer_notice)",
+                "RB-STD-05": "DEPENDENCY 에스컬레이션"}.get(
+        target, f"{sorted(fits)} 중 하나, 할 수 없으면 ACTION_BLOCKED 에스컬레이션")
+    return (f"거부: 진단이 정한 처리할 원인은 {target}이고 그 조치는 {expected}다. 고른 조치({name} "
+            f"{args.get('action') or args.get('category') or ''})는 다른 원인의 조치다. 처리할 원인 하나만 조치한다.")
 
 
 def unsupported_action(ai: AIMessage, context: dict) -> str | None:
@@ -53,7 +118,8 @@ def unsupported_action(ai: AIMessage, context: dict) -> str | None:
 
 
 def signal_clause(signals: dict) -> str | None:
-    """코드가 센 지표와 로그 신호로 정한 장애 형태 (prompts/propose.md의 판정표 앞 세 행). 애매하면 None."""
+    """코드가 센 지표와 로그 신호로 정한 장애 형태 (prompts/diagnose.md의 판정표 앞 세 행). 애매하면 None.
+    진단이 처리할 원인을 적었으면 그것을 쓴다 (blocked_action_mismatch)."""
     error_rate = (signals.get("metrics") or {}).get("error_rate")
     logs = signals.get("logs") or {}
     if not isinstance(error_rate, (int, float)):
@@ -67,7 +133,8 @@ def signal_clause(signals: dict) -> str | None:
     return found[0] if len(found) == 1 else None
 
 
-def blocked_action_mismatch(ai: AIMessage, signals: dict, recent_change: bool) -> str | None:
+def blocked_action_mismatch(ai: AIMessage, signals: dict, recent_change: bool,
+                            target: str | None = None) -> str | None:
     """ACTION_BLOCKED 에스컬레이션의 required_action이 신호로 정한 장애 형태의 조치와 다르면 그 이유.
 
     받는 사람(고객사 승인 담당)에게 엉뚱한 조치의 승인을 요청하게 된다. 풀 고갈(RB-STD-01)인데
@@ -76,7 +143,8 @@ def blocked_action_mismatch(ai: AIMessage, signals: dict, recent_change: bool) -
     if not ai.tool_calls or ai.tool_calls[0]["name"] != "business_escalate_incident":
         return None
     args = ai.tool_calls[0]["args"]
-    clause = signal_clause(signals)
+    # 신호가 둘 이상 맞으면 코드로는 하나를 정할 수 없다. 진단이 처리할 원인을 적었으면 그 조항으로 본다
+    clause = target if target in CLAUSE_ACTIONS else signal_clause(signals)
     if args.get("category") != "ACTION_BLOCKED" or not args.get("required_action") or not clause:
         return None
     fits = fixes(clause, recent_change)

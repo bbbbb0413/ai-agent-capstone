@@ -20,6 +20,8 @@ ErrorType = Literal["DB 커넥션 풀 고갈", "트래픽 급증", "파드 응�
 class Classification(BaseModel):
     error_type: ErrorType
     cause: str = Field(description="근본 원인 한 문장")
+    other_causes: list[str] = Field(default_factory=list,
+                                    description="그 밖의 원인 후보. 원인이 겹쳤을 때만 있다 (SPEC-compound-faults 4.4)")
     runbook_clause: str | None = Field(description="근거 런북·계약 조항 번호와 이름. 없으면 null")
 
 
