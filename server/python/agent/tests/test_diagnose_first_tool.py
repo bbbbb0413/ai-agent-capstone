@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 from langchain_core.messages import AIMessage, ToolMessage
 
 from agent import graph
+from fixtures import OBS
 
 NO_EVIDENCE = "원인 미확정: 도구로 근거를 모으지 못했다"
 
@@ -32,7 +33,8 @@ def models(required: SimpleNamespace, normal: SimpleNamespace):
 
 
 STATE = {"turns": 0, "tool_counts": {}, "incident_id": 1, "evidence": [], "question": "order-api 에러율 20% 초과",
-         "context": {}}
+         "context": {"incident": {"service": "order-api"},
+                     "services": [{"name": "order-api", "observability": OBS}]}}
 
 
 class FirstToolLoopTests(unittest.IsolatedAsyncioTestCase):

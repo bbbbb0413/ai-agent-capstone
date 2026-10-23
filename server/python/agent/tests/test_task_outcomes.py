@@ -13,6 +13,7 @@ from mcp.types import CallToolResult, TextContent, Tool
 from agent import action_guards, graph, signals, summary
 from agent.runner import Runner
 from agent.toolbox import ToolBox, parse_json
+from fixtures import OBS
 
 
 class ToolOutcomeTests(unittest.IsolatedAsyncioTestCase):
@@ -207,7 +208,8 @@ class ToolOutcomeTests(unittest.IsolatedAsyncioTestCase):
         model = SimpleNamespace(ainvoke=AsyncMock(return_value=AIMessage(content="RECOVERED")))
         runtime = SimpleNamespace(context=SimpleNamespace(toolbox=None, settle=AsyncMock(), check_time=lambda: None))
         state = {"task_id": "t", "tool_counts": {}, "turns": 0, "evidence": [], "findings": "급증",
-                 "proposed_action": {"tool": "business_execute_runbook_action", "args": {}}}
+                 "context": {"services": [{"name": "order-api", "observability": OBS}]},
+                 "proposed_action": {"tool": "business_execute_runbook_action", "args": {"service": "order-api"}}}
         # 첫 측정은 기준 안, 20초 뒤 다시 잰 p95가 기준(1초)을 넘는다
         with patch("agent.signals.metric", new=AsyncMock(side_effect=[0.0, 0.5, 0.0, 3.0])), \
                 patch("agent.graph.harness.chat_model", return_value=model), \

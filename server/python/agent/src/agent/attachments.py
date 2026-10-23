@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from langchain_core.messages import HumanMessage, SystemMessage
 from langsmith import tracing_context
 
-from agent import harness
+from agent import harness, signals
 from agent.backend import backend
 
 TEXT_CHARS = 16_000
@@ -64,12 +64,14 @@ async def analyze(state, runtime) -> dict:
     files = await backend.attachments(state['task_id'], state['tenant_id'])
     parts, evidence = content_parts(files)
     counts = dict(state.get('tool_counts', {}))
-    queries = {
-        '요청량(초당)': 'sum by(service)(rate(demo_orders_seconds_count[1m]))',
-        '오류 요청량(초당)': 'sum by(service)(rate(demo_orders_seconds_count{outcome="error"}[1m]))',
-        '응답 p95(초)': 'histogram_quantile(0.95,sum by(service,le)(rate(demo_orders_seconds_bucket[1m])))',
-    }
-    metrics = {}
+    # 서비스마다 서비스 카탈로그의 관측 정의로 조회한다. 정의가 없는 서비스는 조회하지 않는다 (SPEC-limitations-fixes 4단계)
+    labels = {'error_rate': '에러율', 'p95_seconds': '응답 p95(초)', 'requests_per_second': '요청량(초당)'}
+    context = state.get('context', {})
+    queries = {f'{name} {labels[key]}': expr
+               for name in [s.get('name') for s in context.get('services') or [] if isinstance(s, dict)]
+               if (obs := signals.observability(context, name))
+               for key, expr in signals.metric_queries(obs, name, '1m').items()}
+    metrics = {} if queries else {'지표': {'status': 'error', 'data': '관측 정의가 있는 서비스가 없어 확인 불가'}}
     for label, expr in queries.items():
         try:
             result = await runtime.context.toolbox.call('analyze_attachments', 'grafana_query_prometheus',

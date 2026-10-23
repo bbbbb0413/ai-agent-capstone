@@ -6,10 +6,11 @@ from unittest.mock import AsyncMock, patch
 from langchain_core.messages import ToolMessage
 
 from agent import graph, signals
+from fixtures import OBS
 
 
 STATE = {"tenant_id": "tenant-a", "incident_id": 10, "question": "order-api 커넥션 풀 고갈",
-         "context": {"incident": {"service": "order-api"}}}
+         "context": {"incident": {"service": "order-api"}, "services": [{"name": "order-api", "observability": OBS}]}}
 
 
 def result(rows, status="success"):

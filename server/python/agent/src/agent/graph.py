@@ -320,18 +320,36 @@ async def retrieve_history(state: State, box: ToolBox, counts: dict[str, int], l
             and d.get("doc_id") != args["exclude_doc_id"]][:2]
 
 
+def _diagnosed_service(state: State) -> str | None:
+    """진단할 서비스: 인시던트의 서비스. 인시던트 없는 질문이면 질문 속 서비스나, 열린 인시던트가 한 서비스뿐일 때 그 서비스."""
+    context = state.get("context", {})
+    service = (context.get("incident") or {}).get("service") or _reported_service(state)
+    if service:
+        return service
+    opened = {i.get("service") for i in (context.get("open_incidents") or []) if isinstance(i, dict)}
+    return opened.pop() if len(opened) == 1 else None
+
+
 async def diagnose(state: State, runtime: Rt) -> dict:
     prefetch: list[dict] = []
     past_incidents = state.get("past_incidents", [])
+    service = _diagnosed_service(state)
+    obs = signals.observability(state.get("context", {}), service)
+    if obs is None:
+        # 다른 서비스의 지표로 진단하지 않는다. 데모 앱 기본값으로 대신하지 않고 사유를 남긴다 (SPEC-limitations-fixes 4단계)
+        findings = (f"원인 미확정: {service}의 관측 정의(서비스 카탈로그)가 없어 지표와 로그를 조회할 수 없다"
+                    if service else "원인 미확정: 진단할 서비스를 정할 수 없다 (인시던트나 질문에 서비스가 없다)")
+        return {"findings": findings, "evidence": state["evidence"] + [{"tool": "service_catalog", "status": "error",
+                                                                         "summary": findings}]}
     if state.get("messages"):
         # 조치 후 재진단. 로그 신호와 지표를 지금 시점으로 다시 센다. 첫 진단 때는 경고 로그가 아직 Loki에 들어오지
         # 않아 0건이었고, 그 값을 그대로 쓰자 장애 형태 표에 맞는 행이 없어 원인 미확정이 된 적이 있다
         # (A사 a-surge-max, docs/harness-spec.md). 정해진 조회라 모델의 탐색 한도에 넣지 않는다
         logs, logged, metrics = await signals.observe(runtime.context.toolbox, {}, state.get("incident_id"),
-                                                      state.get("context", {}).get("incident"))
+                                                      state.get("context", {}).get("incident"), obs, service)
         state = {**state, "signals": {**(state.get("signals") or {}), "metrics": metrics,
                                       "logs": logged.get("signals", {})}}
-        prefetch = [logged, {"tool": "grafana_query_prometheus", "args": signals.DIAGNOSE_QUERIES,
+        prefetch = [logged, {"tool": "grafana_query_prometheus", "args": signals.diagnose_queries(obs, service),
                              "summary": json.dumps(metrics, ensure_ascii=False)}]
         intro = [HumanMessage(f"조치 후에도 회복되지 않았다. 조치 이후 시간대를 다시 조사한다.\n\n"
                               f"지금 시점의 ERROR·WARN 로그 반복 메시지(코드가 조회, 많은 순):\n{harness.as_untrusted(logs)}\n\n"
@@ -340,23 +358,25 @@ async def diagnose(state: State, runtime: Rt) -> dict:
     else:
         counts = dict(state["tool_counts"])
         logs, logged, metrics = await signals.observe(runtime.context.toolbox, counts, state.get("incident_id"),
-                                                      state.get("context", {}).get("incident"))
+                                                      state.get("context", {}).get("incident"), obs, service)
         # 직전 변경 여부는 RB-STD-01(롤백)과 RB-STD-02(재시작)를 가른다. 모델이 조회하지 않고 "직전 변경 없음"이라고
         # 단정해 롤백 대신 재시작을 제안한 적이 있어 코드가 미리 조회한다 (docs/harness-spec.md)
-        service = (state.get("context", {}).get("incident") or {}).get("service")
         changes = parse_json(await runtime.context.toolbox.call(
-            "diagnose", "business_list_recent_changes", {"service": service}, {})) if service else None
+            "diagnose", "business_list_recent_changes", {"service": service}, {}))
         past_incidents = await retrieve_history(state, runtime.context.toolbox, counts, logged.get("signals", {}))
         started_at = (state.get("context", {}).get("incident") or {}).get("startedAt")
         state = {**state, "tool_counts": counts, "signals": {"metrics": metrics, "logs": logged.get("signals", {}),
                                                              "recent_change": signals.recent_change(changes, started_at)}}
-        prefetch = [logged, {"tool": "grafana_query_prometheus", "args": signals.DIAGNOSE_QUERIES,
+        prefetch = [logged, {"tool": "grafana_query_prometheus", "args": signals.diagnose_queries(obs, service),
                              "summary": json.dumps(metrics, ensure_ascii=False)},
                     {"tool": "business_list_recent_changes", "args": {"service": service},
                      "summary": json.dumps(changes, ensure_ascii=False, default=str)[:500]}]
         intro = [
             SystemMessage(harness.prompt("system") + "\n\n" + harness.prompt("diagnose")),
-            HumanMessage(f"요청: {state['question']}\n\n고객사 컨텍스트(backend 계산값):\n"
+            HumanMessage(f"요청: {state['question']}\n\n진단할 서비스: {service}. 아래 지표·로그는 이 서비스만 조회했다. "
+                         f"직접 조회할 때도 service=\"{service}\" 조건을 붙인다. "
+                         f"관측 정의(서비스 카탈로그): {json.dumps(obs, ensure_ascii=False)}\n\n"
+                         f"고객사 컨텍스트(backend 계산값):\n"
                          f"{json.dumps(state.get('context', {}), ensure_ascii=False, default=str)}\n\n"
                          f"{logged['args']['startRfc3339']} 이후 ERROR·WARN 로그의 반복 메시지"
                          f"(코드가 조회, 많은 순. 인시던트 시작 2분 전부터, 최대 10분):\n"
@@ -483,15 +503,23 @@ async def verify(state: State, runtime: Rt) -> dict:
     메트릭 이름을 지어내거나(reservation_api_requests_…) 조회 없이 결론을 낸 적이 있다 (docs/harness-spec.md).
     """
     box, counts = runtime.context.toolbox, dict(state["tool_counts"])
+    # 조치한 서비스만 본다. 서비스 조건이 없으면 같은 고객사의 다른 서비스 지표가 섞인다 (SPEC-limitations-fixes 4단계)
+    service = (state["proposed_action"].get("args") or {}).get("service")
+    obs = signals.observability(state.get("context", {}), service)
+    queries = signals.verify_queries(obs, service) if obs else {}
+
+    async def sample(name: str, sample_counts: dict[str, int]) -> float | None:
+        return await signals.metric(box, queries[name], sample_counts) if queries else None
+
     await backend.emit(state["task_id"], "STEP", {"node": "verify", "waitSeconds": harness.VERIFY_SETTLE_SECONDS})
     await runtime.context.settle(harness.VERIFY_SETTLE_SECONDS)  # 조치가 메트릭에 반영될 시간
-    error_rate = await signals.metric(box, signals.VERIFY_QUERIES["error_rate"], counts)
-    if error_rate is None:  # 재시작한 파드의 메트릭이 아직 수집되지 않았다. 한 번만 더 기다린다
+    error_rate = await sample("error_rate", counts)
+    if error_rate is None and queries:  # 재시작한 파드의 메트릭이 아직 수집되지 않았다. 한 번만 더 기다린다
         await runtime.context.settle(harness.VERIFY_RETRY_SECONDS)
-        error_rate = await signals.metric(box, signals.VERIFY_QUERIES["error_rate"], counts)
-    metrics = {"error_rate": error_rate, "p95_seconds": await signals.metric(box, signals.VERIFY_QUERIES["p95_seconds"], counts),
-               "window": "조치 직후 15초", "thresholds": {"error_rate": signals.ERROR_RATE_THRESHOLD,
-                                                        "p95_seconds": signals.P95_THRESHOLD_SECONDS}}
+        error_rate = await sample("error_rate", counts)
+    metrics = {"error_rate": error_rate, "p95_seconds": await sample("p95_seconds", counts),
+               "window": "조치 직후 15초" if queries else f"{service}의 관측 정의가 없어 조회하지 못했다",
+               "thresholds": {"error_rate": signals.ERROR_RATE_THRESHOLD, "p95_seconds": signals.P95_THRESHOLD_SECONDS}}
     by_threshold = signals.within_thresholds(metrics)
     if by_threshold:
         # 새 파드가 막 Ready가 된 순간에는 빈 파드가 대기 요청을 받아 p95가 잠깐 기준 아래로 내려간다.
@@ -499,14 +527,17 @@ async def verify(state: State, runtime: Rt) -> dict:
         # 코드가 정한 재측정이라 같은 도구 한도(3회)에 넣지 않는다. 넣으면 재시도와 합쳐 한도를 넘는다
         await runtime.context.settle(harness.VERIFY_CONFIRM_SECONDS)
         confirm_counts: dict[str, int] = {}
-        metrics["confirm"] = {"error_rate": await signals.metric(box, signals.VERIFY_QUERIES["error_rate"], confirm_counts),
-                              "p95_seconds": await signals.metric(box, signals.VERIFY_QUERIES["p95_seconds"], confirm_counts),
+        metrics["confirm"] = {"error_rate": await sample("error_rate", confirm_counts),
+                              "p95_seconds": await sample("p95_seconds", confirm_counts),
                               "window": f"그 {harness.VERIFY_CONFIRM_SECONDS}초 뒤 15초"}
         by_threshold = signals.within_thresholds(metrics["confirm"])
-    evidence = state["evidence"] + [{"tool": "grafana_query_prometheus", "args": signals.VERIFY_QUERIES,
+    evidence = state["evidence"] + [{"tool": "grafana_query_prometheus", "args": queries,
                                      "summary": json.dumps(metrics, ensure_ascii=False)}]
     turns = state["turns"]
-    if turns < harness.MAX_TURNS:
+    if not queries:   # 잴 수 없으면 회복을 확인할 수 없다. 모델에게 수치 없이 판단을 맡기지 않는다
+        recovered = False
+        verdict = f"NOT_RECOVERED ({metrics['window']})"
+    elif turns < harness.MAX_TURNS:
         runtime.context.check_time()
         ai: AIMessage = await harness.chat_model().ainvoke([
             SystemMessage(harness.prompt("system") + "\n\n" + harness.prompt("verify")),
