@@ -1,6 +1,6 @@
 # Spec: 알려진 한계 해소
 
-- 상태: **진행 중** (2026-10-23). 1·2·3단계 완료. 4단계 구현, A사 E2E 남음
+- 상태: **완료** (2026-10-23). 1~4단계 완료
 - 근거: [기획안](../OpsLens-기획안.md) 14.1 알려진 한계, [SPEC-review-fixes](SPEC-review-fixes.md)
 - 원칙: 단계마다 테스트를 붙이고 따로 커밋한다. 작고 위험이 낮은 단계부터 한다. 각 단계가 끝나면 14.1의 해당 행을 지우거나 고친다.
 
@@ -219,7 +219,7 @@
 - 로그 신호 이름 5개는 `signals.LOG_SIGNALS`(이름 → 런북 조항)에 고정이고, 카탈로그에 문구가 없는 신호는 0건이 아니라 결과에서 빠진다.
 - demo-app 로그에 `service` 라벨(`SERVICE_NAME`). A사 GitOps 설정과 B사 초기 배포에 넣었다.
 - 테스트: backend 전체, agent 104건(`tests/test_signals.py`: 지금 쿼리 + 서비스 조건과 같음, 두 서비스 중 조치한 서비스만 측정, 관측 정의 없음).
-- E2E(2026-10-23): `isolation question no-issue b-hang b-latency b-pool b-surge` 통과.
+- E2E(2026-10-23): 전체 14개 통과. `isolation question no-issue b-hang b-latency b-pool b-surge`, 이어서 A사 배포 설정(`SERVICE_NAME`)을 `main`에 반영한 뒤 `guard a-pool a-hang a-surge a-surge-max a-latency a-dbslow`.
 - 남는 것: 알림 규칙, 영향 범위(`ImpactMetrics`), 의존 대상 상태(`DependencyHealth`)는 아직 데모 메트릭 이름을 쓴다 (5번과 같은 이유로 범위 밖).
 
 ## 6. 하지 않는 것
