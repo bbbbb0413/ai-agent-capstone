@@ -50,6 +50,18 @@ class StorageDatabaseTests(unittest.TestCase):
         self.assertEqual(self.conn.execute("SELECT count(DISTINCT tenant_id) FROM chunks").fetchone()[0], 2)
         self.assertEqual(self.embedder.embeddings.create.call_count, 2)
 
+    def test_older_document_version_does_not_overwrite_newer_chunks(self):
+        from indexer.storage import Chunk, delete_document
+
+        def doc(version, text):
+            return [Chunk("tenant-a", "sla-contract", "sla", "SLA", f"h{version}", 0, "제1조", text,
+                          "SLA > 제1조", "md", version, "v2")]
+        self.assertTrue(index_document(self.conn, self.embedder, doc(3, "세 번째"), "test-model"))
+        self.assertFalse(index_document(self.conn, self.embedder, doc(2, "두 번째"), "test-model"))
+        self.assertEqual(self.conn.execute("SELECT content, document_version FROM chunks").fetchone(), ("세 번째", 3))
+        self.assertEqual(delete_document(self.conn, "tenant-a", "sla-contract"), 1)
+        self.assertEqual(self.conn.execute("SELECT count(*) FROM chunks").fetchone()[0], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

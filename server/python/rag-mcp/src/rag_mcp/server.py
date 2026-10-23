@@ -5,10 +5,16 @@
   헤더의 고객사(X-Tenant-Id)는 믿지 않는다. 모델이 인자로 다른 고객사를 고를 수 없다.
 - MSP 공통 문서(tenant_id = '_common', 표준 런북)는 모든 고객사가 함께 검색·조회한다. 다른 고객사 문서는 계속 볼 수 없다.
 - 질문 Embedding은 색인(indexer)과 같은 모델을 쓴다.
+- 원문 참조(read_document)는 backend 내부 API로 근거 문서 저장소(S3)의 검색 버전을 받는다(SPEC-document-store 7장).
+  이 Server에는 저장소 계정이 없다. 회고는 저장소에 없으므로 조각을 이어 붙인다.
 """
 
+import asyncio
 import os
 from typing import Any, Literal
+from urllib.error import HTTPError, URLError
+from urllib.parse import quote
+from urllib.request import Request, urlopen
 
 import psycopg
 from fastmcp import FastMCP
@@ -26,7 +32,8 @@ EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "text-embedding-3-small")
 AGENT_MCP_TOKEN = os.environ.get("AGENT_MCP_TOKEN", "")   # agent → rag-mcp 요청 검사
 
 READ = {"readOnlyHint": True, "destructiveHint": False}
-COMMON = "_common"  # data/documents/_common/ (indexer가 디렉터리 이름을 tenant_id로 쓴다)
+COMMON = "_common"  # MSP 공통 문서의 범위 (근거 문서 저장소의 tenant_id)
+POSTMORTEM_PREFIX = "postmortem-"   # 회고 문서 ID. 근거 문서 저장소가 아니라 종료된 인시던트에서 만들어진다
 
 mcp = FastMCP("rag")
 _openai: AsyncOpenAI | None = None
@@ -63,8 +70,9 @@ async def search_documents(
 ) -> list[dict[str, Any]]:
     """현재 고객사의 근거 문서와 MSP 공통 문서(표준 런북)에서 질문과 가까운 조항을 찾는다.
     doc_type: sla(SLA 계약서), runbook(런북: 표준 런북과 서비스 런북), postmortem(과거 장애 회고). 비우면 전체에서 찾는다.
-    결과마다 문서 id, 제목, 조항(section), 버전, 본문, 유사도(score, 1에 가까울수록 가깝다), 원문 주소(uri),
-    범위(scope: common=MSP 표준, tenant=이 고객사)를 돌려준다. 답변에 근거를 붙일 때 section과 uri를 함께 인용한다.
+    결과마다 문서 id, 제목, 조항(section), 조항 경로(section_path, 예: "SLA 계약서 > 제5조"), 버전, 원본 형식,
+    본문, 유사도(score, 1에 가까울수록 가깝다), 원문 주소(uri), 범위(scope: common=MSP 표준, tenant=이 고객사)를
+    돌려준다. 답변에 근거를 붙일 때 section(또는 section_path)과 uri를 함께 인용한다.
     scope 인자로 검색 범위를 좁힐 수 있다: all(둘 다), common(표준 런북만), tenant(이 고객사 문서만).
     exclude_doc_id는 현재 장애의 회고를 과거 사례로 다시 읽지 않도록 제외할 문서 ID다."""
     tenant = await _tenant()
@@ -75,8 +83,8 @@ async def search_documents(
     async with await _connect() as conn:
         rows = await (await conn.execute(
             """
-            SELECT tenant_id, doc_id, doc_type, title, section, version, content,
-                   1 - (embedding <=> %(e)s::vector) AS score
+            SELECT tenant_id, doc_id, doc_type, title, section, section_path, version, source_format,
+                   document_version, content, 1 - (embedding <=> %(e)s::vector) AS score
             FROM chunks
             WHERE tenant_id = ANY(%(o)s) AND (%(d)s::text IS NULL OR doc_type = %(d)s)
               AND (%(exclude)s::text IS NULL OR doc_id <> %(exclude)s)
@@ -87,18 +95,25 @@ async def search_documents(
         )).fetchall()
 
     return [
-        {"doc_id": doc_id, "doc_type": kind, "title": title, "section": section, "version": version,
+        {"doc_id": doc_id, "doc_type": kind, "title": title, "section": section, "section_path": path,
+         "version": version, "source_format": source_format, "document_version": document_version,
          "content": content, "score": round(float(score), 3), "uri": f"docs://{owner}/{doc_id}",
          "scope": "common" if owner == COMMON else "tenant"}
-        for owner, doc_id, kind, title, section, version, content, score in rows
+        for owner, doc_id, kind, title, section, path, version, source_format, document_version, content, score
+        in rows
     ]
 
 
 @mcp.resource("docs://{tenant}/{doc_id}", mime_type="text/markdown")
 async def read_document(tenant: str, doc_id: str) -> str:
-    """근거 패널에 보여줄 문서 원문. 공통 문서가 아닌데 요청한 고객사와 문서의 고객사가 다르면 거부한다."""
+    """근거 패널에 보여줄 문서 원문. 공통 문서가 아닌데 요청한 고객사와 문서의 고객사가 다르면 거부한다.
+
+    런북·계약서는 근거 문서 저장소의 검색 버전 원문(PDF·Word는 추출 본문)이다. backend도 작업 토큰으로 다시 검사한다.
+    """
     if tenant not in (await _tenant(), COMMON):
         raise ResourceError("다른 고객사의 문서는 읽을 수 없다")
+    if not doc_id.startswith(POSTMORTEM_PREFIX):
+        return await _stored_document(tenant, doc_id)
     async with await _connect() as conn:
         rows = await (await conn.execute(
             "SELECT section, content FROM chunks WHERE tenant_id = %s AND doc_id = %s ORDER BY chunk_index",
@@ -107,6 +122,27 @@ async def read_document(tenant: str, doc_id: str) -> str:
     if not rows:
         raise ResourceError(f"문서를 찾을 수 없다: {doc_id}")
     return "\n\n".join(content for _, content in rows)
+
+
+async def _stored_document(tenant: str, doc_id: str) -> str:
+    url = f"{task_token.BACKEND_URL}/internal/tenants/{quote(tenant, safe='')}/documents/{quote(doc_id, safe='')}"
+    headers = {"Authorization": f"Bearer {task_token.MCP_BACKEND_TOKEN}",
+               "X-Task-Token": get_http_headers().get("x-task-token") or ""}
+
+    def fetch() -> str:
+        with urlopen(Request(url, headers=headers), timeout=10) as response:
+            return response.read().decode("utf-8")
+
+    try:
+        return await asyncio.to_thread(fetch)
+    except HTTPError as e:
+        if e.code == 404:
+            raise ResourceError(f"문서를 찾을 수 없다: {doc_id}") from e
+        if e.code == 403:
+            raise ResourceError("다른 고객사의 문서는 읽을 수 없다") from e
+        raise ResourceError(f"원문을 가져오지 못했다 (backend {e.code})") from e
+    except URLError as e:
+        raise ResourceError(f"원문을 가져오지 못했다 ({type(e).__name__})") from e
 
 
 @mcp.prompt

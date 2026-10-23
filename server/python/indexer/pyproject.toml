@@ -1,12 +1,17 @@
 [project]
 name = "indexer"
 version = "0.1.0"
-description = "OpsLens indexer: 근거 문서 Chunking → Embedding → Indexing (오프라인)"
+description = "OpsLens indexer: 근거 문서 형식별 Parsing → Chunking → Embedding → Indexing"
 requires-python = ">=3.12"
 dependencies = [
     "openai>=3.35,<4",
     "psycopg[binary]>=3.3,<3.4",
     "pgvector>=0.5,<0.6",
+    # 색인 요청 수신 (Kafka documents.index). agent와 같은 라이브러리
+    "aiokafka>=0.14,<0.15",
+    # 형식별 파서 (SPEC-document-store 5.3). PyMuPDF는 AGPL이라 쓰지 않는다
+    "pdfplumber>=0.11.4,<0.12",
+    "python-docx>=1.1.2,<2",
 ]
 
 [build-system]
