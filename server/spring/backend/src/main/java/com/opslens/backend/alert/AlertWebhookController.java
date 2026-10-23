@@ -12,7 +12,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Alertmanager webhook. 고객사를 식별해 인시던트와 진단 작업을 만든다.
- * 같은 알림이 반복해서 와도 열린 인시던트가 있으면 새 작업을 만들지 않는다.
+ * 같은 서비스에 열린 인시던트가 있으면 알림을 거기에 덧붙이고 새 작업을 만들지 않는다 (SPEC-compound-faults 5장).
+ * 같은 알림이 반복해서 오면 아무것도 하지 않는다.
  */
 @RestController
 public class AlertWebhookController {
@@ -44,8 +45,13 @@ public class AlertWebhookController {
             String service = alert.labels().get("service");
             String title = alert.annotations().getOrDefault("summary", alert.labels().get("alertname"));
             String severity = "critical".equals(alert.labels().get("severity")) ? "P1" : "P2";
-            incidents.openIfAbsent(tenantId, service, title, severity, alert.fingerprint())
-                    .ifPresent(incidentId -> tasks.create(tenantId, incidentId, "DIAGNOSE", title, null));
+            IncidentRepository.AlertOutcome outcome = incidents.openOrAttach(tenantId, service,
+                    alert.labels().get("alertname"), title, severity, alert.fingerprint());
+            if (outcome.opened()) {
+                tasks.create(tenantId, outcome.incidentId(), "DIAGNOSE", title, null);
+            } else if (outcome.attached()) {
+                tasks.alertAdded(outcome.incidentId(), title, severity);
+            }
         }
     }
 }

@@ -216,6 +216,18 @@ public class TaskService {
         return true;
     }
 
+    /**
+     * 같은 서비스에 알림이 하나 더 울려 열린 인시던트에 덧붙었다. 작업을 새로 만들지 않고 진행 중인 작업에 남긴다.
+     * 진행 중인 작업은 조치 뒤 다시 진단할 때 새 신호를 함께 본다 (SPEC-compound-faults 5장).
+     */
+    public void alertAdded(long incidentId, String title, String severity) {
+        Map<String, Object> data = Map.of("title", title, "severity", severity);
+        for (TaskRecord task : tasks.activeForIncident(incidentId)) {
+            tasks.addEvent(task.id(), "ALERT_ADDED", data);
+            events.publish(task.id(), "ALERT_ADDED", data);
+        }
+    }
+
     public void onEvent(UUID taskId, String type, JsonNode data) {
         if (!TaskEventHub.EVENT_TYPES.contains(type)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "unknown event type " + type);

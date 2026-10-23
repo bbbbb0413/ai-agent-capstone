@@ -8,6 +8,7 @@ import java.util.Optional;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 @Repository
@@ -19,17 +20,51 @@ public class IncidentRepository {
         this.jdbc = jdbc;
     }
 
-    /** 같은 알림(fingerprint)으로 열린 인시던트가 없을 때만 만든다. 이미 있으면 빈 값을 돌려준다. */
-    public Optional<Long> openIfAbsent(String tenantId, String service, String title, String severity,
+    /** 알림을 받은 결과. opened면 새 인시던트, attached면 열린 인시던트에 덧붙였다. 둘 다 아니면 이미 받은 알림이다. */
+    public record AlertOutcome(long incidentId, boolean opened, boolean attached) {}
+
+    /**
+     * 같은 (고객사, 서비스)에 열린 인시던트가 있으면 알림을 덧붙이고, 없으면 인시던트를 연다 (SPEC-compound-faults 5장).
+     * 원인이 겹쳐 HighErrorRate와 HighLatency가 함께 울려도 인시던트와 작업은 하나다. 덧붙인 알림의 심각도가 더 높으면 올린다.
+     * 알림이 모두 해제돼 닫혔어도 그 인시던트의 진단 작업이 아직 진행 중이면 다시 열고 덧붙인다. 파드 멈춤을 재시작으로
+     * 고친 직후 에러율 알림이 풀리고 가려져 있던 결제 지연 알림이 울리면, 작업 하나가 두 원인을 이어서 처리해야 한다.
+     * 서비스 라벨이 없는 알림은 묶을 기준이 없어 알림마다 인시던트를 연다.
+     * 두 알림이 동시에 와도 인시던트가 둘 생기지 않게 (고객사, 서비스)마다 잠근다.
+     */
+    @Transactional
+    public AlertOutcome openOrAttach(String tenantId, String service, String alertname, String title, String severity,
             String fingerprint) {
-        return jdbc.sql("""
+        jdbc.sql("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))")
+                .param("incident-alerts:" + tenantId + "/" + (service == null ? fingerprint : service)).query().listOfRows();
+        Optional<Long> firing = jdbc.sql("SELECT incident_id FROM incident_alerts WHERE fingerprint = ? AND resolved_at IS NULL")
+                .param(fingerprint).query(Long.class).optional();
+        if (firing.isPresent()) {
+            return new AlertOutcome(firing.get(), false, false);
+        }
+        Optional<Long> open = service == null ? Optional.empty() : jdbc.sql("""
+                        SELECT id FROM incidents i WHERE tenant_id = ? AND service = ?
+                          AND (status <> 'RESOLVED' OR EXISTS (
+                                SELECT 1 FROM ai_tasks t WHERE t.incident_id = i.id AND t.type = 'DIAGNOSE'
+                                  AND t.status NOT IN ('DONE', 'FAILED')))
+                        ORDER BY id DESC LIMIT 1
+                        """).params(tenantId, service).query(Long.class).optional();
+        open.ifPresent(id -> jdbc.sql("""
+                        UPDATE incidents SET status = 'OPEN', resolved_at = NULL WHERE id = ? AND status = 'RESOLVED'
+                        """).param(id).update());
+        long incidentId = open.orElseGet(() -> jdbc.sql("""
                         INSERT INTO incidents (tenant_id, service, title, severity, fingerprint)
+                        VALUES (?, ?, ?, ?, ?) RETURNING id
+                        """).params(tenantId, service, title, severity, fingerprint).query(Long.class).single());
+        jdbc.sql("""
+                        INSERT INTO incident_alerts (incident_id, fingerprint, alertname, title, severity)
                         VALUES (?, ?, ?, ?, ?)
-                        ON CONFLICT (fingerprint) WHERE status = 'OPEN' DO NOTHING
-                        RETURNING id
-                        """)
-                .params(tenantId, service, title, severity, fingerprint)
-                .query(Long.class).optional();
+                        """).params(incidentId, fingerprint, alertname, title, severity).update();
+        if (open.isPresent()) {
+            // P1 < P2 < P3 순이라 문자열로 작은 쪽이 더 심각하다
+            jdbc.sql("UPDATE incidents SET severity = ? WHERE id = ? AND severity > ?")
+                    .params(severity, incidentId, severity).update();
+        }
+        return new AlertOutcome(incidentId, open.isEmpty(), open.isPresent());
     }
 
     public long create(String tenantId, String service, String title, String severity) {
@@ -38,9 +73,20 @@ public class IncidentRepository {
                 .query(Long.class).single();
     }
 
+    /** 알림이 해제됐다. 그 인시던트에 묶인 알림이 모두 해제됐을 때만 인시던트를 닫는다. */
+    @Transactional
     public void resolveByFingerprint(String fingerprint) {
-        jdbc.sql("UPDATE incidents SET status = 'RESOLVED', resolved_at = now() WHERE fingerprint = ? AND status = 'OPEN'")
-                .param(fingerprint).update();
+        List<Long> touched = jdbc.sql("""
+                        UPDATE incident_alerts SET resolved_at = now() WHERE fingerprint = ? AND resolved_at IS NULL
+                        RETURNING incident_id
+                        """).param(fingerprint).query(Long.class).list();
+        for (long incidentId : touched) {
+            jdbc.sql("""
+                            UPDATE incidents SET status = 'RESOLVED', resolved_at = now()
+                            WHERE id = ? AND status = 'OPEN'
+                              AND NOT EXISTS (SELECT 1 FROM incident_alerts WHERE incident_id = ? AND resolved_at IS NULL)
+                            """).params(incidentId, incidentId).update();
+        }
     }
 
     /** 사람이 복구를 확인한 인시던트를 닫는다. 알림 fingerprint가 없는 제보 인시던트도 이 경로로 종료할 수 있다. */

@@ -68,6 +68,7 @@ function subscribe() {
   record('STEP', () => setStatus('RUNNING'))
   record('TOOL_START', () => setStatus('RUNNING'))
   record('TOOL_END')
+  record('ALERT_ADDED')
   record('APPROVAL_REQUIRED', (data) => {
     approval.value = data
     setStatus('WAITING_APPROVAL')

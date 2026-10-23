@@ -58,6 +58,12 @@ public class TaskRepository {
                 .param(tenantIds.toArray(String[]::new)).query(this::toTask).list();
     }
 
+    /** 그 인시던트의 끝나지 않은 진단 작업. 같은 서비스의 알림이 덧붙을 때 이 작업에 알린다 (SPEC-compound-faults 5장). */
+    public List<TaskRecord> activeForIncident(long incidentId) {
+        return jdbc.sql(SELECT_TASK + "WHERE incident_id = ? AND type = 'DIAGNOSE' AND status NOT IN ('DONE', 'FAILED')")
+                .param(incidentId).query(this::toTask).list();
+    }
+
     /** QUEUED였던 작업만 RUNNING으로 바꾼다 (첫 진행 이벤트가 도착했을 때). */
     public void markRunningIfQueued(UUID id) {
         jdbc.sql("UPDATE ai_tasks SET status = 'RUNNING', updated_at = now() WHERE id = ? AND status = 'QUEUED'")

@@ -211,6 +211,12 @@ export function toTimeline(events) {
         break
       }
       case 'STEP':
+        if (data.node === 'propose_action' && data.causes) {
+          // 원인 후보와 처리 순서는 진단(모델)이 정한다. 화면은 그대로 보여 준다 (SPEC-compound-faults)
+          add({ kind: 'decision', stage: STAGES.propose_action, label: `처리할 원인: ${data.target || '정하지 않음'}`,
+                detail: `원인 후보 ${data.causes.join(' > ') || '없음'}`, state: 'ok' }, createdAt)
+          break
+        }
         if (data.node === 'propose_action') {
           add({ kind: 'decision', stage: STAGES.propose_action, label: `장애 형태 판정 (Jev): ${data.fault}`,
                 detail: `확신도 ${Math.round(data.confidence * 100)}% · ${data.applied ? '조치 판단에 사용' : '기록만 (GPT가 판단)'}`,
@@ -220,6 +226,11 @@ export function toTimeline(events) {
         add(data.node === 'verify'
           ? { kind: 'step', stage: STAGES.verify, label: `조치가 메트릭에 반영되기를 기다림 (${data.waitSeconds}초)`, state: 'running' }
           : { kind: 'step', stage: STAGES[data.node], label: data.node === 'analyze_attachments' ? '로그·에러 화면 분석' : '보고서 작성', state: 'running' }, createdAt)
+        break
+      case 'ALERT_ADDED':
+        // 같은 서비스에 알림이 하나 더 울려 이 인시던트에 묶였다. 작업은 새로 만들지 않는다
+        add({ kind: 'decision', stage: STAGES.diagnose, label: `알림 추가: ${data.title}`,
+              detail: `${data.severity} · 같은 서비스라 이 인시던트에 묶음`, state: 'ok' }, createdAt)
         break
       case 'APPROVAL_REQUIRED':
         add({ kind: 'approval', stage: '승인', label: `승인 요청: ${toolLabel(data.tool)}`,

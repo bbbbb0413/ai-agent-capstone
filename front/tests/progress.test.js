@@ -38,6 +38,20 @@ test('Jev fault verdict is a finished row, not the report step', () => {
   assert.match(rows[1].detail, /기록만/)
 })
 
+test('cause candidates chosen by the diagnosis are a finished row', () => {
+  const [row] = toTimeline([event('STEP', { node: 'propose_action', causes: ['RB-STD-02', 'RB-STD-04'],
+    target: 'RB-STD-02', facts: [] })])
+  assert.equal(row.label, '처리할 원인: RB-STD-02')
+  assert.equal(row.detail, '원인 후보 RB-STD-02 > RB-STD-04')
+  assert.equal(row.state, 'ok')
+})
+
+test('an alert attached to the open incident is shown without a new task', () => {
+  const [row] = toTimeline([event('ALERT_ADDED', { title: 'tenant-a order-api p95 응답시간 1초 초과', severity: 'P2' })])
+  assert.equal(row.label, '알림 추가: tenant-a order-api p95 응답시간 1초 초과')
+  assert.match(row.detail, /P2 · 같은 서비스/)
+})
+
 test('approval is not used as a substitute for execution outcome', () => {
   assert.equal(actionResultLabel(null), '실행 확인 안 됨')
   assert.equal(actionResultLabel({ status: 'FAILED' }), '실행 실패')
