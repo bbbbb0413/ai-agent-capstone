@@ -447,7 +447,7 @@ async def diagnose(state: State, runtime: Rt) -> dict:
     if not any(isinstance(m, ToolMessage) and m.status != "error" for m in new):
         # 근거 없는 글(조사 계획 등)이 런북 검색어와 조치 제안의 입력이 되지 않게 한다
         findings = "원인 미확정: 도구로 근거를 모으지 못했다"
-    causes, target = parse_causes(findings)
+    causes, target = parse_causes(findings, (state.get("signals") or {}).get("facts"))
     update = {"messages": intro + new, "findings": findings, "turns": turns, "tool_counts": counts,
               "evidence": state["evidence"] + prefetch + evidence, "past_incidents": past_incidents,
               "causes": causes, "target_clause": target}
@@ -476,15 +476,31 @@ _CAUSE_LINE = re.compile(r"^\s*\d+[).]\s*(RB-STD-0\d)", re.MULTILINE)
 _TARGET_LINE = re.compile(r"^\s*처리할 원인\s*[:：]\s*(RB-STD-0\d)", re.MULTILINE)
 
 
-def parse_causes(findings: str) -> tuple[list[str], str | None]:
+def parse_causes(findings: str, facts: list[dict[str, Any]] | None = None) -> tuple[list[str], str | None]:
     """진단 출력의 `원인 후보:` 목록(조항, 적힌 순서)과 `처리할 원인:` 조항. 형식이 깨졌으면 ([], None)이고
     조치 검사는 처리할 원인 없이 지금처럼 동작한다."""
     if findings.startswith("원인 미확정"):
         return [], None
     head, _, rest = findings.partition("원인 후보")
     causes = list(dict.fromkeys(_CAUSE_LINE.findall(rest.split("처리할 원인")[0]))) if rest else []
-    target = _TARGET_LINE.search(findings)
-    return causes, target.group(1) if target else None
+    target_match = _TARGET_LINE.search(findings)
+    target = target_match.group(1) if target_match else None
+
+    # SPEC-compound-faults 3.2 및 결정 9.1:
+    # facts가 주어졌을 때, 의존 대상 비율(dependency_share)과 앱 우선 순위를 보장한다
+    if facts and target in ("RB-STD-03", "RB-STD-05"):
+        facts_by_clause = {f.get("clause"): f for f in facts if isinstance(f, dict)}
+        f3 = facts_by_clause.get("RB-STD-03")
+        f5 = facts_by_clause.get("RB-STD-05")
+        if f3 and f5 and f3.get("evidence") and f5.get("evidence"):
+            share = f5.get("dependency_share")
+            if isinstance(share, (int, float)):
+                if share >= 0.5:
+                    target = "RB-STD-05"
+                else:
+                    target = "RB-STD-03"
+
+    return causes, target
 
 
 def _last_action_at(state: State) -> datetime | None:
