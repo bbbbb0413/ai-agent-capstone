@@ -37,6 +37,7 @@ REPO = "bbbbb0413/ai-agent-capstone"
 SERVICE = {"tenant-a": "order-api", "tenant-b": "reservation-api"}   # 대표 서비스 (--service가 없을 때)
 SERVICES = {"tenant-a": ["order-api", "cart-api", "inventory-api"], "tenant-b": ["reservation-api", "checkin-api"]}
 HPA_SERVICES = {"order-api", "cart-api"}   # gitops/tenants/tenant-a/hpa.yaml
+LOADGEN_SERVICES = {"order-api", "cart-api", "reservation-api", "checkin-api"}   # gitops/cluster/traffic.yaml
 POOL_NORMAL = 20
 HPA_FILE = "gitops/tenants/tenant-a/hpa.yaml"
 HPA_MAX_NORMAL = 3   # A사가 평소 쓰는 최대치. E2E가 adjust_autoscaler PR을 병합하면 올라가므로 clear가 되돌린다
@@ -115,6 +116,10 @@ def set_dependency_faults(tenant: str, faults: set[str], service: str) -> None:
 def set_surge(tenant: str, on: bool, service: str, rate: int | None = None) -> None:
     """부하 발생기를 켜고 끈다. rate를 주면 초당 건수를 바꾸고, 응답 대기 상한도 건수에 맞춰 늘린다
     (상한이 그대로면 대기열이 길어져도 처리량이 상한/지연에 묶여 과부하가 덜 보인다). 끌 때는 기본값으로 되돌린다."""
+    if service not in LOADGEN_SERVICES:
+        if on:
+            raise RuntimeError(f"{tenant} {service}에는 부하 발생기(traffic.yaml)가 없다")
+        return
     deploy = f"deploy/{loadgen(tenant, service)}"
     if on and rate:
         kubectl("-n", "traffic", "set", "env", deploy, f"LOADGEN_RATE={rate}", f"LOADGEN_MAX_IN_FLIGHT={rate * 2}")
@@ -218,9 +223,19 @@ def clear(tenant: str, allow_main: bool = False, service: str | None = None) -> 
     if service is None:
         return "; ".join(clear(tenant, allow_main, s) for s in SERVICES[tenant])
     notes = []
-    set_dependency_faults(tenant, set(), service)
-    set_fault(tenant, None, service)
-    set_surge(tenant, False, service)
+    try:
+        set_dependency_faults(tenant, set(), service)
+    except Exception as e:
+        notes.append(f"의존 장애 해제 실패: {e}")
+    try:
+        set_fault(tenant, None, service)
+    except Exception as e:
+        notes.append(f"관리 API 장애 해제 실패: {e}")
+    if service in LOADGEN_SERVICES:
+        try:
+            set_surge(tenant, False, service)
+        except Exception as e:
+            notes.append(f"부하 발생기 끔 실패: {e}")
     restores = []
     if pool_size(tenant, service) not in (None, POOL_NORMAL):
         restores.append(("풀 크기", lambda: set_pool(tenant, POOL_NORMAL, service, allow_main)))
@@ -229,7 +244,7 @@ def clear(tenant: str, allow_main: bool = False, service: str | None = None) -> 
     for name, restore in restores:
         try:
             notes.append(restore())
-        except SystemExit as e:
+        except (SystemExit, Exception) as e:
             notes.append(f"{name} 복원 안 함: {e}")
     return f"{tenant} {service} 장애 해제" + (f" ({'; '.join(notes)})" if notes else "")
 

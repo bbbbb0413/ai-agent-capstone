@@ -41,7 +41,7 @@ class AttachmentTests(unittest.TestCase):
 class AttachmentFlowTests(unittest.IsolatedAsyncioTestCase):
     async def test_complete_graph_uses_file_metrics_and_runbook_without_mutating_tools(self):
         calls=[]
-        async def call(node,name,args,counts):
+        async def call(node, name, args, counts, *a, **kw):
             calls.append(name)
             payload=([{'uri':'runbook://db','section':'DB-1','text':'DB 연결 확인'}] if name=='rag_search_documents'
                      else [] if name=='business_list_incidents' else {'name':'A','data':[]})

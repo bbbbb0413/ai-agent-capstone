@@ -376,9 +376,12 @@ FLOW_CATEGORIES = {"P1", "NOT_RECOVERED", "CHANGE_TIMEOUT"}   # Agent 흐름이 
 
 
 def chosen(pending: dict) -> bool:
-    """Agent가 조치로 고른 제안인가. 흐름이 정한 에스컬레이션(P1, 미회복, PR 기한 초과)은 아니다."""
-    return not (pending.get("tool") == "business_escalate_incident"
-                and (pending.get("args") or {}).get("category") in FLOW_CATEGORIES)
+    """Agent가 조치로 고른 제안인가. 흐름이 정한 에스컬레이션(P1, 미회복, PR 기한 초과)이나 보고서 후 공지는 아니다."""
+    if pending.get("tool") == "business_escalate_incident" and (pending.get("args") or {}).get("category") in FLOW_CATEGORIES:
+        return False
+    if pending.get("tool") == "business_send_customer_notice" and pending.get("reason") == "고객 공지 발송":
+        return False
+    return True
 
 
 def describe(pending: dict) -> str:

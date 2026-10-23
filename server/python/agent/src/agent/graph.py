@@ -100,9 +100,9 @@ async def intake(state: State, runtime: Rt) -> dict:
 
 async def load_context(state: State, runtime: Rt) -> dict:
     box, counts = runtime.context.toolbox, dict(state["tool_counts"])
-    async def read(name, args):
+    async def read(name, args, max_chars=harness.TOOL_RESULT_CHARS):
         try:
-            return await box.call("load_context", name, args, counts)
+            return await box.call("load_context", name, args, counts, max_chars=max_chars)
         except Exception:
             if state.get("type") != "ATTACHMENT":
                 raise
@@ -114,16 +114,16 @@ async def load_context(state: State, runtime: Rt) -> dict:
     if state.get("incident_id"):
         incident_id = state["incident_id"]
         context["sla"] = parse_json(await read("business_get_sla_terms", {"incident_id": incident_id}))
-        incidents = parse_json(await read("business_list_incidents", {"status": "OPEN"}))
+        incidents = parse_json(await read("business_list_incidents", {"status": "OPEN"}, max_chars=200_000))
         if isinstance(incidents, list):
             context["incident"] = next((i for i in incidents if i.get("id") == incident_id), None)
         if context.get("incident"):
-            resolved = parse_json(await read("business_list_incidents", {"status": "RESOLVED"}))
+            resolved = parse_json(await read("business_list_incidents", {"status": "RESOLVED"}, max_chars=200_000))
             context["incident"] = {**context["incident"],
                                    "previousResolvedAt": _previous_resolved_at(context["incident"], resolved)}
     else:
         # 질문 작업: 인식된 장애가 있는지 본다. 조회에 실패하면(None) 장애가 없다고 단정하지 않는다
-        incidents = parse_json(await read("business_list_incidents", {"status": "OPEN"}))
+        incidents = parse_json(await read("business_list_incidents", {"status": "OPEN"}, max_chars=200_000))
         if incidents == "":
             incidents = []  # MCP 어댑터는 빈 목록을 빈 내용으로 넘긴다
         context["open_incidents"] = incidents if isinstance(incidents, list) else None
@@ -133,11 +133,15 @@ async def load_context(state: State, runtime: Rt) -> dict:
 def _previous_resolved_at(incident: dict, resolved: Any) -> str | None:
     """같은 서비스에서 이 인시던트보다 앞서 닫힌 인시던트의 가장 늦은 종료 시각. 로그 창을 그 뒤로 자른다
     (signals.log_window_start)."""
-    if not isinstance(resolved, list):
+    if not isinstance(resolved, list) or not incident:
         return None
+    try:
+        inc_id = int(incident.get("id") or 0)
+    except (ValueError, TypeError):
+        inc_id = 0
     times = [str(i["resolvedAt"]) for i in resolved
-             if isinstance(i, dict) and i.get("resolvedAt") and i.get("service") == incident.get("service")
-             and isinstance(i.get("id"), int) and i["id"] < (incident.get("id") or 0)]
+             if isinstance(i, dict) and i.get("resolvedAt") and str(i.get("service")) == str(incident.get("service"))
+             and isinstance(i.get("id"), (int, str)) and int(i["id"]) < inc_id]
     return max(times, key=lambda t: signals._time(t) or datetime.min.replace(tzinfo=timezone.utc), default=None)
 
 
@@ -644,12 +648,14 @@ async def verify(state: State, runtime: Rt) -> dict:
         ])
         turns += 1
         verdict = str(ai.content)
-        # 모델이 "회복 여부 확인: RECOVERED"처럼 첫 줄 형식을 어긴 적이 있다. 판정 단어를 어디서든 찾고, 없으면 기준값으로 정한다
-        token = re.search(r"NOT_RECOVERED|RECOVERED", verdict.upper())
-        recovered = token.group() == "RECOVERED" if token else by_threshold
-        if recovered and "confirm" in metrics and not by_threshold:   # 다시 잰 값이 기준을 넘으면 회복이 아니다
+        # 메트릭이 기준을 넘으면 모델의 설명과 관계없이 회복이 아니다
+        if not by_threshold:
             recovered = False
-            verdict = f"NOT_RECOVERED (다시 잰 값이 기준 초과)\n{json.dumps(metrics['confirm'], ensure_ascii=False)}"
+            verdict = f"NOT_RECOVERED (메트릭 기준 초과)\n{verdict}"
+        else:
+            # 모델이 "회복 여부 확인: RECOVERED"처럼 첫 줄 형식을 어긴 적이 있다. 판정 단어를 어디서든 찾고, 없으면 기준값으로 정한다
+            token = re.search(r"\b(NOT_RECOVERED|RECOVERED)\b", verdict.upper())
+            recovered = (token.group(1) == "RECOVERED") if token else True
     else:  # 턴 한도를 다 썼으면 알림 기준으로 코드가 판단한다
         recovered = by_threshold
         verdict = f"{'RECOVERED' if recovered else 'NOT_RECOVERED'} (턴 한도로 기준값 판단)\n{json.dumps(metrics)}"

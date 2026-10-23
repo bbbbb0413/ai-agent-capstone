@@ -15,7 +15,7 @@ def question(text: str = "A사 order-api 지금 느린데 왜 그래?", **contex
 
 
 def runtime_with(incidents: ToolMessage) -> SimpleNamespace:
-    def call(node, name, args, counts):
+    def call(node, name, args, counts, *a, **kw):
         if name == "business_list_incidents":
             return incidents
         return ToolMessage(content=json.dumps({"name": "A사 온라인 쇼핑몰"}), status="success", tool_call_id="t")

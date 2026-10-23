@@ -82,6 +82,7 @@ class TargetGuardTests(unittest.TestCase):
             ("RB-STD-04", "notice"): (NOTICE, True),
             ("RB-STD-04", "restart"): (act("restart_pods"), False),
             ("RB-STD-04", "blocked"): (escalate("ACTION_BLOCKED", required_action="restart_pods"), False),
+            ("RB-STD-04", "dependency"): (escalate("DEPENDENCY", dependency="payment-gateway"), False),
             ("RB-STD-05", "dependency"): (escalate("DEPENDENCY", dependency="postgres"), True),
             ("RB-STD-05", "notice"): (NOTICE, False),
             ("RB-STD-01", "rollback"): (act("rollback_deployment"), True),

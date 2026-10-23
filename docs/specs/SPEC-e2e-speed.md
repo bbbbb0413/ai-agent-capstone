@@ -210,3 +210,7 @@
 - 서비스 묶음이 같은 임시 브랜치에 동시에 커밋하면 GitHub가 409로 거절할 수 있다. `inject.py`가 파일을 다시 읽어 최대 4번 커밋한다.
 - `inject.sh <고객사> clear`는 `--service`가 없으면 그 고객사의 모든 서비스를 정리한다. E2E는 시나리오의 서비스만 정리한다.
 - 예전 키 `a-hang-latency`는 `b-hang-latency`로 바뀌었다(`ALIASES`).
+- **Loki4j 로그 플러시 주기 단축**: 알림 가속(`for: 15s`)으로 인시던트 생성이 빨라져 데모 앱의 loki4j 기본 버퍼(60초 타임아웃)가 에이전트 진단보다 늦게 flush되는 문제가 발생했다. `logback-spring.xml`에 `<batch><maxItems>50</maxItems><timeoutMs>1000</timeoutMs></batch>`를 설정해 1초 안에 Loki로 로그가 전송되도록 단축했다.
+- **해결 인시던트 조회 크기 확장**: 누적된 해결 인시던트 목록 JSON이 4KB를 초과하여 `ToolBox.call`에서 잘리고 JSON 파싱 실패로 `previousResolvedAt`이 `None`이 되던 문제를 수정했다. `load_context`의 `business_list_incidents` 호출 시 `max_chars=200_000`을 넘겨 정상 파싱되도록 하고, 타입 검사를 안전하게 보강했다.
+- **부하 발생기 없는 서비스의 정리 예외 방지**: `inventory-api`는 HPA와 부하 발생기가 없는 서비스다. `scripts/inject.py`가 부하 발생기가 있는 서비스 목록(`LOADGEN_SERVICES`)을 관리하고, 없는 서비스에 대해 `set_surge`를 건너뛰며 개별 복원 단계를 예외 처리로 보호했다.
+- **서드파티 외부 의존(RB-STD-04) 조치 가드**: `action_guards.py`에서 `category == "DEPENDENCY"` 에스컬레이션을 허용하는 대상을 `RB-STD-05`(내부 팀 소유 DB)로 한정하여, 서드파티 소유 외부 API(`payment-gateway`)는 실패하는 에스컬레이션 대신 런북에 따라 고객 공지(`business_send_customer_notice`)를 직접 제안하도록 일관성을 확보했다.

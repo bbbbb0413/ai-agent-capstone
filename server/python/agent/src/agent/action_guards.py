@@ -87,7 +87,7 @@ def target_mismatch(ai: AIMessage, target: str | None, recent_change: bool) -> s
         category = args.get("category")
         ok = (category not in ("ACTION_BLOCKED", "DEPENDENCY")
               or (category == "ACTION_BLOCKED" and bool(fits))
-              or (category == "DEPENDENCY" and target in ("RB-STD-04", "RB-STD-05")))
+              or (category == "DEPENDENCY" and target == "RB-STD-05"))
     else:
         ok = True
     if ok:
