@@ -8,7 +8,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record OpsLensProperties(
         String jwtSecret,
         Duration jwtTtl,
-        String serviceToken,
+        InternalTokens internalTokens,
         String alertWebhookToken,
         String agentUrl,
         String prometheusUrl,
@@ -16,6 +16,17 @@ public record OpsLensProperties(
         boolean autoApproveAllowed,
         Kubernetes kubernetes,
         Gitops gitops) {
+
+    /**
+     * 내부 호출별 서비스 토큰 (docs/specs/SPEC-limitations-fixes.md 3단계). 호출마다 다른 값을 쓴다.
+     *   backendAgent   backend → agent (보낸다)
+     *   agentBackend   agent → backend (/internal/tasks/**)
+     *   mcpBackend     MCP Server → backend (/internal/tenants/**, 작업 토큰 공개키)
+     *   indexerBackend postmortem-indexer → backend (/internal/tenants/{id}/postmortems)
+     *   gitopsWebhook  ArgoCD 알림 → backend (/internal/gitops/**)
+     */
+    public record InternalTokens(String backendAgent, String agentBackend, String mcpBackend, String indexerBackend,
+            String gitopsWebhook) {}
 
     /**
      * 고객사 클러스터 접속 정보. credentialsDir에 scripts/cluster-up.sh가 만든 파일이 있다.

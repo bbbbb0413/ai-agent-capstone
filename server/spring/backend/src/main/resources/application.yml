@@ -34,7 +34,12 @@ server:
 opslens:
   jwt-secret: ${JWT_SECRET:}
   jwt-ttl: 8h
-  service-token: ${SERVICE_TOKEN:}
+  internal-tokens:   # 호출별 서비스 토큰. 모두 필수이고 서로 달라야 한다 (InternalTokenCheck)
+    backend-agent: ${BACKEND_AGENT_TOKEN:}
+    agent-backend: ${AGENT_BACKEND_TOKEN:}
+    mcp-backend: ${MCP_BACKEND_TOKEN:}
+    indexer-backend: ${INDEXER_BACKEND_TOKEN:}
+    gitops-webhook: ${GITOPS_WEBHOOK_TOKEN:}
   alert-webhook-token: ${ALERT_WEBHOOK_TOKEN:}
   agent-url: ${AGENT_URL:http://localhost:8000}
   prometheus-url: ${PROMETHEUS_URL:http://prometheus:9090}   # 의존 대상 상태와 영향 분석. 로컬 실행 시 변경 가능

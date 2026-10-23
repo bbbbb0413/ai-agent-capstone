@@ -20,7 +20,7 @@ public class AgentClient {
 
     public AgentClient(RestClient.Builder builder, OpsLensProperties props) {
         this.http = builder.baseUrl(props.agentUrl())
-                .defaultHeader("Authorization", "Bearer " + props.serviceToken())
+                .defaultHeader("Authorization", "Bearer " + props.internalTokens().backendAgent())
                 .build();
     }
 
