@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useSession } from './session.js'
+import DocumentsView from './views/DocumentsView.vue'
 import IncidentsView from './views/IncidentsView.vue'
 import LoginView from './views/LoginView.vue'
 import PortalIncidentView from './views/PortalIncidentView.vue'
@@ -14,6 +15,7 @@ const router = createRouter({
     { path: '/login', component: LoginView },
     { path: '/', component: IncidentsView, meta: { title: '운영 개요' } },
     { path: '/tasks/:id', component: TaskView, props: true, meta: { title: '작업 상세' } },
+    { path: '/documents', component: DocumentsView, meta: { title: '근거 문서' } },
     // 고객사 포털: 고객사 담당자는 여기만 본다. MSP 직원은 고객이 보는 화면을 미리 볼 수 있다
     { path: '/portal', component: PortalView, meta: { title: '장애 현황' } },
     { path: '/portal/incidents/:id', component: PortalIncidentView, props: true, meta: { title: '인시던트 상세' } },

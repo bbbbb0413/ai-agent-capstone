@@ -26,6 +26,7 @@ const navItems = computed(() =>
     ? [{ to: '/portal', label: '장애 현황', icon: 'building', match: (p) => p.startsWith('/portal') }]
     : [
         { to: '/', label: '운영 개요', icon: 'grid', match: (p) => p === '/' || p.startsWith('/tasks') },
+        { to: '/documents', label: '근거 문서', icon: 'file', match: (p) => p.startsWith('/documents') },
         { to: '/portal', label: '고객사 포털 미리보기', icon: 'building', match: (p) => p.startsWith('/portal') },
       ],
 )

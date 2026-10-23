@@ -14,6 +14,20 @@ export function csrfHeader(method, cookie = globalThis.document?.cookie ?? '') {
   return token ? { 'X-XSRF-TOKEN': decodeURIComponent(token.slice('XSRF-TOKEN='.length)) } : {}
 }
 
+/** 본문을 글자 그대로 받는다 (문서 추출 본문). 오류 처리는 request와 같다 */
+async function requestText(path) {
+  const response = await fetch(path, { credentials: 'same-origin' })
+  if (response.status === 401) {
+    onUnauthorized()
+    throw new Error('로그인이 만료되었다. 다시 로그인한다')
+  }
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.message || `${response.status} ${response.statusText}`)
+  }
+  return response.text()
+}
+
 async function request(method, path, body) {
   const response = await fetch(path, {
     method,
@@ -69,6 +83,23 @@ export const api = {
   retryTask: (id) => request('POST', `/api/admin/tasks/${id}/retry`),
   approve: (id, decision, comment, approvalId) => request('POST', `/api/ai/tasks/${id}/approval`, { decision, comment, approvalId }),
   stream: (id) => new EventSource(`/api/ai/tasks/${id}/stream`),
+  documents: (tenant) => request('GET', `/api/documents${tenant ? `?tenant=${encodeURIComponent(tenant)}` : ''}`),
+  document: (id) => request('GET', `/api/documents/${id}`),
+  createDocument: ({ tenant, docType, docId, title, file }) => {
+    const form = new FormData()
+    form.append('tenant', tenant); form.append('docType', docType); form.append('docId', docId)
+    form.append('title', title); form.append('file', file)
+    return request('POST', '/api/documents', form)
+  },
+  uploadDocumentVersion: (id, file) => {
+    const form = new FormData()
+    form.append('file', file)
+    return request('POST', `/api/documents/${id}/versions`, form)
+  },
+  restoreDocumentVersion: (id, version) => request('POST', `/api/documents/${id}/versions/${version}/restore`),
+  deleteDocument: (id) => request('DELETE', `/api/documents/${id}`),
+  documentText: (id, version) => requestText(`/api/documents/${id}/versions/${version}/extracted`),
+  documentOriginalUrl: (id, version) => `/api/documents/${id}/versions/${version}/original`,
   settings: () => request('GET', '/api/settings'),
   setAutoApprove: (enabled) => request('PUT', '/api/settings/auto-approve', { enabled }),
 }
