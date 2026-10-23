@@ -130,7 +130,8 @@ onUnmounted(() => {
         자동 승인 켜짐: 승인 요청을 사람 확인 없이 바로 승인한다 (테스트용 · {{ settings.updatedBy }}님이 켬)
       </div>
       <main class="content">
-        <RouterView />
+        <!-- 다시 실행한 새 작업처럼 같은 화면의 다른 작업으로 가면 새로 불러온다 -->
+        <RouterView :key="route.fullPath" />
       </main>
     </div>
   </div>

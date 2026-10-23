@@ -6,6 +6,7 @@ import { api } from '../api.js'
 import StatusBadge from '../components/StatusBadge.vue'
 import SlackEscalations from '../components/SlackEscalations.vue'
 import TaskAttachments from '../components/TaskAttachments.vue'
+import TaskRetry from '../components/TaskRetry.vue'
 import { ADMIN_ONLY_TOOLS, ESCALATION_CATEGORIES, actionDetail, actionResultLabel, approvalChangeMode, approvalFields, approvalImpact, approvalImpactFields, recipientsLabel, toolLabel, toTimeline } from '../progress.js'
 import { useSession } from '../session.js'
 
@@ -129,6 +130,7 @@ async function decide(decision) {
   <section v-if="task" class="card">
     <h2>작업 {{ task.type === 'ATTACHMENT' ? '첨부 자료 분석' : task.type }} · {{ task.tenantId }} <StatusBadge kind="task" :value="task.status" /></h2>
     <p class="muted">{{ task.question }}</p>
+    <TaskRetry :task="task" :is-admin="session.isAdmin" />
   </section>
 
   <TaskAttachments v-if="task?.type === 'ATTACHMENT' && session.isMspStaff" :task-id="id" />

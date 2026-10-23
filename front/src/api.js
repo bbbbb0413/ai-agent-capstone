@@ -66,6 +66,7 @@ export const api = {
   task: (id) => request('GET', `/api/ai/tasks/${id}`),
   taskEvents: (id) => request('GET', `/api/ai/tasks/${id}/events`),
   tasks: () => request('GET', '/api/ai/tasks'),
+  retryTask: (id) => request('POST', `/api/admin/tasks/${id}/retry`),
   approve: (id, decision, comment, approvalId) => request('POST', `/api/ai/tasks/${id}/approval`, { decision, comment, approvalId }),
   stream: (id) => new EventSource(`/api/ai/tasks/${id}/stream`),
   settings: () => request('GET', '/api/settings'),
