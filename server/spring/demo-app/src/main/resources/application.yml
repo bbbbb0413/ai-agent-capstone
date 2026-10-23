@@ -9,6 +9,7 @@ spring:
 
 demo:
   tenant-id: ${TENANT_ID:tenant-local}
+  service-name: ${SERVICE_NAME:demo-local}   # 로그의 service 라벨. 서비스 카탈로그의 서비스 이름과 같아야 한다
   admin-token: ${SERVICE_TOKEN:}
   loki-url: ${LOKI_URL:http://localhost:3100/loki/api/v1/push}
   pool-size: ${DEMO_POOL_SIZE:20}   # 20보다 작으면 시작부터 커넥션 풀 고갈 (잘못된 설정 배포 시나리오)

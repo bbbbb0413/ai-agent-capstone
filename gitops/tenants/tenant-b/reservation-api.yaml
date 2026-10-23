@@ -23,6 +23,9 @@ spec:
           env:
             - name: TENANT_ID
               value: tenant-b
+            # 로그의 service 라벨 (서비스 카탈로그의 서비스 이름)
+            - name: SERVICE_NAME
+              value: reservation-api
             - name: LOKI_URL
               value: http://loki:3100/loki/api/v1/push
             - name: SERVICE_TOKEN

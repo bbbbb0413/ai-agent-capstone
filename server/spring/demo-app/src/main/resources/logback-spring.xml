@@ -4,13 +4,16 @@
     <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
 
     <springProperty name="TENANT_ID" source="demo.tenant-id"/>
+    <springProperty name="SERVICE_NAME" source="demo.service-name"/>
     <springProperty name="LOKI_URL" source="demo.loki-url"/>
 
-    <!-- 고객사별 X-Scope-OrgID(tenantId)로 로그를 분리해서 Loki에 보낸다 -->
+    <!-- 고객사별 X-Scope-OrgID(tenantId)로 로그를 분리해서 Loki에 보낸다.
+         service 라벨은 메트릭의 service 라벨과 같은 값이다. 진단이 서비스별로 로그를 거른다 -->
     <appender name="LOKI" class="com.github.loki4j.logback.Loki4jAppender">
         <labels>
             app = demo-app
             tenant = ${TENANT_ID}
+            service = ${SERVICE_NAME}
             level = %level
         </labels>
         <message>

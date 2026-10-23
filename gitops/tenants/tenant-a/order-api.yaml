@@ -23,6 +23,9 @@ spec:
           env:
             - name: TENANT_ID
               value: tenant-a
+            # 로그의 service 라벨 (서비스 카탈로그의 서비스 이름)
+            - name: SERVICE_NAME
+              value: order-api
             - name: LOKI_URL
               value: http://loki:3100/loki/api/v1/push
             # 커넥션 풀 크기. 20보다 작으면 커넥션 풀이 고갈된다 (시나리오 A: 잘못된 설정 배포)
