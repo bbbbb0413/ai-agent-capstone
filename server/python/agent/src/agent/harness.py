@@ -23,7 +23,7 @@ MAX_SAME_TOOL = 3        # 같은 Node 안에서 같은 도구 호출 한도
 # 조치가 메트릭에 반영될 때까지 기다리는 시간. signals.VERIFY_WINDOW(15s)보다 길어야 한다
 VERIFY_SETTLE_SECONDS = 20
 VERIFY_RETRY_SECONDS = 10   # 조치 후 메트릭이 아직 없으면 한 번 더 기다리는 시간 (재시작한 파드의 첫 수집)
-VERIFY_CONFIRM_SECONDS = 20   # 첫 측정이 기준 안이면 이만큼 뒤에 한 번 더 잰다 (확장 직후 일시적 하락)
+VERIFY_CONFIRM_SECONDS = 35   # 첫 측정이 기준 안이면 이만큼 뒤에 한 번 더 잰다 (확장 직후 일시적 하락)
 # gpt-5-mini가 조치 도구를 호출하지 않고 권고문만 쓰는 경우가 있었다 (low 2/2, medium 1/5, docs/harness-spec.md).
 # 그래서 propose_action은 도구 호출을 강제하고, 어떤 도구를 고를지는 medium으로 판단한다
 PROPOSE_REASONING_EFFORT = "medium"
