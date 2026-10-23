@@ -24,7 +24,7 @@ from openai import AuthenticationError
 from psycopg_pool import AsyncConnectionPool
 
 from agent import harness, summary
-from agent.backend import backend
+from agent.backend import TaskFinished, backend
 from agent.graph import Context
 from agent.toolbox import ToolBox, load_tools
 
@@ -134,10 +134,14 @@ class Runner:
         context: Context | None = None
         finished = True  # 종료 신호로 끊긴 경우만 False로 두고, 임대를 놓아 다른(또는 다시 뜬) 파드가 바로 이어 간다
         try:
-            if values.get("type") == "ATTACHMENT":
-                tools = await load_tools(values["tenant_id"], task_id, values["trace_id"], allow_partial=True)
-            else:
-                tools = await load_tools(values["tenant_id"], task_id, values["trace_id"])
+            try:
+                token = await backend.task_token(task_id)
+            except TaskFinished:
+                # 끝났거나 사람을 기다리는 작업이다: 중복·늦게 온 메시지, DLT에서 다시 꺼낸 메시지. 결과를 쓰지 않는다
+                log.info("task %s is not active in backend, not running it", task_id)
+                return "NOT_ACTIVE"
+            tools = await load_tools(values["tenant_id"], task_id, values["trace_id"], token,
+                                     allow_partial=values.get("type") == "ATTACHMENT")
             context = Context(toolbox=ToolBox(tools, values["tenant_id"], task_id), elapsed_before=elapsed)
             # 회복 확인 대기(verify, 재진입 포함 최대 2번)는 한도에서 빠지므로 그만큼 여유를 둔다
             remaining = max(1.0, harness.TASK_SECONDS - elapsed) + 2 * (harness.VERIFY_SETTLE_SECONDS

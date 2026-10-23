@@ -8,6 +8,7 @@ dependencies = [
     "openai>=3.35,<4",
     "psycopg[binary]>=3.3,<3.4",
     "pgvector>=0.5,<0.6",
+    "pyjwt[crypto]>=2.15,<3",   # 작업 토큰 검증 (fastmcp가 이미 가져오는 버전)
 ]
 
 [build-system]

@@ -2,7 +2,8 @@
 
 - Spring Boot `/internal/tenants/{tenant}/**`만 호출하고 DB에는 접근하지 않는다.
 - 업무 규칙(SLA 계산, 조치 허용 여부, 고객사 소유권)은 Spring Boot에만 있다. 여기서 복제하지 않는다.
-- 고객사는 agent가 요청 헤더(X-Tenant-Id)로 넘긴다. 모델은 도구 인자로 고객사를 바꿀 수 없다.
+- 고객사는 agent가 넘긴 작업 토큰(X-Task-Token)이 정한다. 그대로 backend에 넘기고 backend가 검증한다.
+  모델은 도구 인자로 고객사를 바꿀 수 없다. 경로의 고객사(X-Tenant-Id)는 토큰과 다르면 backend가 막는다.
 - 실패는 ToolError로 돌려준다. Spring Boot의 오류 메시지에 재시도에 필요한 정보가 들어 있다.
 """
 
@@ -18,7 +19,9 @@ from starlette.middleware import Middleware
 from business_mcp.auth import ServiceTokenMiddleware
 
 BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:8080")
-SERVICE_TOKEN = os.environ.get("SERVICE_TOKEN", "")
+# agent → business-mcp 요청 검사, business-mcp → backend 호출 (호출별 토큰, SPEC-limitations-fixes 3단계)
+AGENT_MCP_TOKEN = os.environ.get("AGENT_MCP_TOKEN", "")
+MCP_BACKEND_TOKEN = os.environ.get("MCP_BACKEND_TOKEN", "")
 
 READ = {"readOnlyHint": True, "destructiveHint": False}
 WRITE = {"readOnlyHint": False, "destructiveHint": True}
@@ -29,10 +32,12 @@ mcp = FastMCP("business")
 async def _call(method: str, path: str, timeout: float = 10, **kwargs: Any) -> Any:
     headers = get_http_headers()
     tenant = headers.get("x-tenant-id")
-    if not tenant:
-        raise ToolError("고객사 컨텍스트(X-Tenant-Id)가 없다. agent의 MCP 연결 설정을 확인한다")
+    task_token = headers.get("x-task-token")
+    if not tenant or not task_token:
+        raise ToolError("고객사 컨텍스트(X-Tenant-Id, X-Task-Token)가 없다. agent의 MCP 연결 설정을 확인한다")
     forward = {
-        "Authorization": f"Bearer {SERVICE_TOKEN}",
+        "Authorization": f"Bearer {MCP_BACKEND_TOKEN}",
+        "X-Task-Token": task_token,
         "X-Tenant-Id": tenant,
         "X-Trace-Id": headers.get("x-trace-id", ""),
     }
@@ -189,6 +194,6 @@ if __name__ == "__main__":
         transport="http",
         host="0.0.0.0",
         port=int(os.environ.get("PORT", "9101")),
-        middleware=[Middleware(ServiceTokenMiddleware, token=SERVICE_TOKEN)],
+        middleware=[Middleware(ServiceTokenMiddleware, token=AGENT_MCP_TOKEN)],
         show_banner=False,
     )

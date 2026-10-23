@@ -37,7 +37,7 @@ class PostmortemSearchTests(unittest.IsolatedAsyncioTestCase):
         self.patches = [
             patch.object(server, "DATABASE_URL", make_conninfo(os.environ["OPSLENS_TEST_DSN"],
                          options=f"-csearch_path={self.schema},public")),
-            patch.object(server, "get_http_headers", return_value={"x-tenant-id": "tenant-a"}),
+            patch.object(server, "_tenant", AsyncMock(return_value="tenant-a")),
             patch.object(server, "_embedder", return_value=SimpleNamespace(embeddings=SimpleNamespace(
                 create=AsyncMock(return_value=SimpleNamespace(data=[SimpleNamespace(embedding=[1.0, 0.0])]))))),
         ]

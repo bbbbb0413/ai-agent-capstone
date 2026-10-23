@@ -82,7 +82,7 @@ class AttachmentFlowTests(unittest.IsolatedAsyncioTestCase):
             raise ConnectionError('offline')
         with patch('agent.toolbox.MultiServerMCPClient') as client:
             client.return_value.get_tools=AsyncMock(side_effect=fetch)
-            self.assertEqual(await load_tools('tenant-a','t','trace',allow_partial=True),['business_tool'])
+            self.assertEqual(await load_tools('tenant-a','t','trace','token',allow_partial=True),['business_tool'])
 
 
 class AttachmentAuthTests(unittest.IsolatedAsyncioTestCase):
@@ -96,7 +96,8 @@ class AttachmentAuthTests(unittest.IsolatedAsyncioTestCase):
         runner._elapsed=AsyncMock(return_value=0)
         runner._add_elapsed=AsyncMock();runner._release=AsyncMock()
         state={'tenant_id':'tenant-a','trace_id':'trace','type':'ATTACHMENT'}
-        with patch('agent.runner.load_tools',AsyncMock(return_value=[])), patch('agent.runner.backend.result',AsyncMock()) as result:
+        with patch('agent.runner.load_tools',AsyncMock(return_value=[])), patch('agent.runner.backend.result',AsyncMock()) as result, \
+             patch('agent.runner.backend.task_token',AsyncMock(return_value='token')):
             status=await runner._drive_claimed('task',state,state,{},True)
         self.assertEqual(status,'FAILED')
         answer=result.await_args.kwargs['answer']

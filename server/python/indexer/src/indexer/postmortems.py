@@ -34,9 +34,9 @@ def tenant_ids() -> list[str]:
 
 
 def fetch_page(tenant: str, after_id: int) -> list[dict]:
-    token = os.environ.get("SERVICE_TOKEN", "")
+    token = os.environ.get("INDEXER_BACKEND_TOKEN", "")   # 회고 경로에만 통하는 토큰 (SPEC-limitations-fixes 3단계)
     if not token:
-        raise ValueError("SERVICE_TOKEN is required")
+        raise ValueError("INDEXER_BACKEND_TOKEN is required")
     base = os.environ.get("BACKEND_URL", "http://backend:8080").rstrip("/")
     request = Request(f"{base}/internal/tenants/{quote(tenant, safe='')}/postmortems?afterId={after_id}",
                       headers={"Authorization": f"Bearer {token}", "X-Tenant-Id": tenant})

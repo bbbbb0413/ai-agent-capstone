@@ -404,6 +404,35 @@ class ResumeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await runner._drive("t1", None, {}, {}, False), "RUNNING_ELSEWHERE")
         runner._drive_claimed.assert_not_awaited()
 
+    async def test_task_not_active_in_backend_is_not_run(self):
+        """끝났거나 사람을 기다리는 작업(DLT에서 다시 꺼낸 메시지 등)은 토큰을 받지 못하고 실행하지 않는다."""
+        from agent.backend import TaskFinished
+        graph_ = SimpleNamespace(ainvoke=AsyncMock())
+        runner = Runner(graph_, None)
+        runner._elapsed = AsyncMock(return_value=0)
+        runner._settle_lease = AsyncMock()
+        state = {"tenant_id": "tenant-a", "trace_id": "x", "type": "QUESTION"}
+        with patch("agent.runner.backend.task_token", AsyncMock(side_effect=TaskFinished("409"))), \
+                patch("agent.runner.load_tools", AsyncMock()) as tools, \
+                patch("agent.runner.backend.result", AsyncMock()) as result:
+            self.assertEqual(await runner._drive_claimed("t1", None, state, {}, True), "NOT_ACTIVE")
+        tools.assert_not_awaited()
+        graph_.ainvoke.assert_not_awaited()
+        result.assert_not_awaited()   # 이미 끝난 작업의 결과를 덮어쓰지 않는다
+
+    async def test_each_run_passes_a_fresh_task_token_to_the_tools(self):
+        graph_ = SimpleNamespace(ainvoke=AsyncMock(return_value={"report": "ok"}))
+        runner = Runner(graph_, None)
+        runner._elapsed = AsyncMock(return_value=0)
+        runner._settle_lease = AsyncMock()
+        state = {"tenant_id": "tenant-a", "trace_id": "x", "type": "QUESTION"}
+        with patch("agent.runner.backend.task_token", AsyncMock(return_value="tok-1")) as token, \
+                patch("agent.runner.load_tools", AsyncMock(return_value=[])) as tools, \
+                patch("agent.runner.backend.result", AsyncMock()):
+            await runner._drive_claimed("t1", None, state, {}, False)
+        token.assert_awaited_once_with("t1")
+        self.assertEqual(tools.await_args.args[3], "tok-1")
+
     async def test_lease_bookkeeping_failure_does_not_hide_the_result(self):
         runner = Runner(None, None)
         runner._add_elapsed = AsyncMock(side_effect=OSError("db down"))

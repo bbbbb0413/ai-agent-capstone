@@ -51,8 +51,8 @@ app = FastAPI(title="OpsLens agent", lifespan=lifespan)
 
 
 def require_service_token(authorization: str = Header(default="")) -> None:
-    expected = f"Bearer {settings.service_token}"
-    if not settings.service_token or not hmac.compare_digest(authorization, expected):
+    expected = f"Bearer {settings.backend_agent_token}"
+    if not settings.backend_agent_token or not hmac.compare_digest(authorization, expected):
         raise HTTPException(status_code=401, detail="invalid service token")
 
 

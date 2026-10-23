@@ -37,7 +37,7 @@ class PostmortemTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             postmortems.report_chunks("tenant-b", incident())
 
-    @patch.dict(os.environ, {"SERVICE_TOKEN": "test", "BACKEND_URL": "http://backend:8080"})
+    @patch.dict(os.environ, {"INDEXER_BACKEND_TOKEN": "test", "BACKEND_URL": "http://backend:8080"})
     def test_http_request_is_tenant_scoped_and_validates_response(self):
         def response(rows):
             return io.BytesIO(json.dumps(rows).encode())

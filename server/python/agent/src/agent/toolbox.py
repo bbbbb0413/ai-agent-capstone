@@ -17,10 +17,16 @@ from agent.backend import backend
 from agent.config import settings
 
 
-async def load_tools(tenant_id: str, task_id: str, trace_id: str, *, allow_partial: bool = False) -> list[BaseTool]:
-    """세 MCP Server의 도구를 LangChain 도구로 받는다. 고객사·추적 정보는 요청 헤더로 싣는다."""
+async def load_tools(tenant_id: str, task_id: str, trace_id: str, task_token: str, *,
+                     allow_partial: bool = False) -> list[BaseTool]:
+    """세 MCP Server의 도구를 LangChain 도구로 받는다. 고객사·추적 정보는 요청 헤더로 싣는다.
+
+    고객사는 작업 토큰(X-Task-Token)이 정한다. business-mcp는 그대로 backend에 넘기고 rag-mcp는 검증해 쓴다.
+    X-Tenant-Id는 로그·추적용으로만 남는다.
+    """
     headers = {
-        "Authorization": f"Bearer {settings.service_token}",
+        "Authorization": f"Bearer {settings.agent_mcp_token}",
+        "X-Task-Token": task_token,
         "X-Tenant-Id": tenant_id,
         "X-Task-Id": task_id,
         "X-Trace-Id": trace_id,

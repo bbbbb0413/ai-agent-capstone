@@ -11,7 +11,10 @@ def _env(name: str, default: str = "") -> str:
 @dataclass(frozen=True)
 class Settings:
     backend_url: str = _env("BACKEND_URL", "http://localhost:8080")
-    service_token: str = _env("SERVICE_TOKEN")
+    # 호출별 내부 토큰 (SPEC-limitations-fixes 3단계). backend → agent 요청 검사, agent → backend, agent → MCP Server
+    backend_agent_token: str = _env("BACKEND_AGENT_TOKEN")
+    agent_backend_token: str = _env("AGENT_BACKEND_TOKEN")
+    agent_mcp_token: str = _env("AGENT_MCP_TOKEN")
     database_url: str = _env("DATABASE_URL", "postgresql://opslens_agent@localhost:5432/opslens")
     business_mcp_url: str = _env("BUSINESS_MCP_URL", "http://localhost:9101/mcp")
     rag_mcp_url: str = _env("RAG_MCP_URL", "http://localhost:9102/mcp")
