@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """OpsLens 전체 시나리오 E2E 테스트. 장애 주입부터 승인, 조치, 회복 확인, 보고서까지 실제로 돌리고 결과를 판정한다.
 
-    python3 scripts/e2e.py                # 전체: 사전 점검 → 공통 묶음 → A사·B사 묶음 동시에 (장애 × 고객사 매트릭스)
+    python3 scripts/e2e.py                # 전체: 사전 점검 → 공통 묶음 → 서비스 묶음 5개 동시에 (장애 × 고객사 매트릭스)
+    python3 scripts/e2e.py --lane B1      # 한 묶음만 (여러 번 줄 수 있다)
     python3 scripts/e2e.py b-hang a-dbslow  # 고른 시나리오만 (사전 점검은 항상). 예전 키 a·b·b2도 받는다
     python3 scripts/e2e.py --quick        # PR이 없는 빠른 확인: guard a-hang a-dbslow b-surge
     python3 scripts/e2e.py --list         # 시나리오 목록
@@ -12,12 +13,14 @@
     --timeout 초     시나리오 하나의 최대 시간 (기본 600)
     --no-branch      임시 브랜치를 쓰지 않는다 (A사 설정 저장소 기준이 main 그대로. a-pool·a-surge*는 실패한다)
     --cleanup        지난 실행이 남긴 임시 브랜치와 설정을 정리하고 끝낸다
-    --serial         고객사 묶음을 동시에 돌리지 않고 하나씩 돌린다 (원인을 좁힐 때)
+    --serial         서비스 묶음을 동시에 돌리지 않고 하나씩 돌린다 (원인을 좁힐 때)
+    --lane 묶음      그 묶음만 돈다 (공통, A1, A2, A3, B1, B2)
 
-실행 순서: 공통 묶음(격리·문서 질문·이상 없음·근거 문서, 장애가 없을 때 돌린다) → A사 묶음과 B사 묶음을 동시에.
-한 고객사 안에서는 순서대로 돈다. 서비스가 고객사마다 하나라 같은 서비스에 장애를 겹쳐 넣으면 증상이 섞이고,
-같은 알림은 인시던트 하나로 합쳐지기 때문이다. 시나리오가 끝나면 장애를 모두 빼고(부하 발생기 0, 풀 20, HPA 최대 3)
-A사는 HPA가 레플리카 2로 줄 때까지 기다린다.
+실행 순서: 공통 묶음(격리·문서 질문·이상 없음·근거 문서, 장애가 없을 때 돌린다) → 서비스 묶음을 동시에 (SPEC-e2e-speed 8.3).
+묶음은 (고객사, 서비스)다: A1 order-api, A2 cart-api, A3 inventory-api, B1 reservation-api, B2 checkin-api.
+한 서비스 안에서는 순서대로 돈다. 같은 서비스에 장애를 겹쳐 넣으면 증상이 섞이고, 같은 서비스의 알림은 인시던트 하나로
+묶이기 때문이다. 서비스가 다르면 인시던트·관측·회복 확인·설정 이력이 모두 따로다. 시나리오가 끝나면 그 서비스의 장애를
+모두 뺀다(부하 발생기 0, 풀 20, HPA 최대 3). HPA 축소는 평소 크기가 필요한 다음 시나리오만 기다린다 (NEEDS_NORMAL).
 
 결과 파일 (.local/e2e/<시각>/, git에 올리지 않는다)
     summary.md       시나리오별 상태(대기·진행 중·통과·실패)와 시간. 실행 중에도 갱신된다
@@ -66,6 +69,12 @@ USERS = {"engineer": "engineer1234", "admin": "admin1234", "viewer-a": "viewer12
 
 _print_lock = threading.Lock()
 _log: contextvars.ContextVar["tuple[str, Path] | None"] = contextvars.ContextVar("e2e_log", default=None)
+_scenario: contextvars.ContextVar[str | None] = contextvars.ContextVar("e2e_scenario", default=None)
+
+
+def current_service() -> str | None:
+    """지금 도는 시나리오의 서비스. 묶음(LANES)이 정한다."""
+    return SERVICE_OF.get(_scenario.get() or "")
 
 
 def say(msg: str) -> None:
@@ -206,40 +215,30 @@ class Session:
         return body
 
 
-# Agent는 인시던트 시작 2분 전부터 로그를 본다 (agent graph._log_window_start). 인시던트는 주입 약 70초 뒤에
-# 생기므로, 앞 장애를 정리하고 이만큼 지난 뒤 주입해야 앞 장애의 로그가 다음 진단 근거에 섞이지 않는다
-QUIET_SECONDS = 75
-_cleared_at: dict[str, float] = {}
-
-
-def wait_for_closed_incidents(tenant: str, timeout: float = 420) -> None:
-    """앞 장애의 인시던트가 닫힐 때까지 기다린다. 같은 알림(예: p95 1초 초과)이 아직 울리는 중에 다음 장애를 넣으면
-    열린 인시던트로 합쳐져 새 인시던트가 생기지 않는다 (a-latency 직후 a-dbslow에서 600초 대기 후 실패)."""
+def wait_for_closed_incidents(tenant: str, service: str, timeout: float = 420) -> None:
+    """앞 장애의 인시던트가 닫힐 때까지 기다린다. 같은 서비스에 열린 인시던트가 있으면 새 알림이 거기에 묶여
+    새 인시던트가 생기지 않는다 (SPEC-compound-faults 5장). 앞 장애의 로그는 Agent가 직전 인시던트가 닫힌 시각부터
+    보므로 따로 쉬지 않는다 (SPEC-e2e-speed ②)."""
     deadline, said = time.time() + timeout, False
     while time.time() < deadline:
         open_ids = sql(f"select string_agg('#' || id, ', ') from app.incidents "
-                       f"where tenant_id = '{tenant}' and status = 'OPEN'")
+                       f"where tenant_id = '{tenant}' and service = '{service}' and status = 'OPEN'")
         if not open_ids:
             return
         if not said:
             say(f"앞 장애의 인시던트({open_ids})가 닫히기를 기다린다 (알림 해제 반영)")
             said = True
-        time.sleep(5)
-    say(f"⚠️  {timeout:.0f}초 안에 {tenant}의 열린 인시던트가 닫히지 않았다. 새 장애가 그 인시던트로 합쳐질 수 있다")
+        time.sleep(3)
+    say(f"⚠️  {timeout:.0f}초 안에 {tenant} {service}의 열린 인시던트가 닫히지 않았다. 새 장애가 그 인시던트로 합쳐질 수 있다")
 
 
-def inject(tenant: str, kind: str | None, **options) -> None:
-    """고객사 서비스에 장애를 주입한다 (kind는 scripts/inject.py의 종류). kind=None이면 모두 해제한다."""
+def inject(tenant: str, kind: str | None, service: str, **options) -> None:
+    """서비스에 장애를 주입한다 (kind는 scripts/inject.py의 종류). kind=None이면 그 서비스의 장애를 모두 해제한다."""
     if kind:
-        wait_for_closed_incidents(tenant)
-    if kind and (wait := QUIET_SECONDS - (time.time() - _cleared_at.get(tenant, 0))) > 0:
-        say(f"앞 장애의 로그가 진단 구간에 섞이지 않게 {wait:.0f}초 기다린다")
-        time.sleep(wait)
-    if kind:
-        say(faults.inject(tenant, kind, **options))
+        wait_for_closed_incidents(tenant, service)
+        say(faults.inject(tenant, kind, service=service, **options))
     else:
-        say(faults.clear(tenant))   # 관리 API 장애, 부하 발생기, 풀 크기를 모두 되돌린다
-        _cleared_at[tenant] = time.time()
+        say(faults.clear(tenant, service=service))   # 관리 API 장애, 부하 발생기, 풀 크기, HPA 최대치를 되돌린다
 
 
 def github(method: str, path: str, body: dict | None = None) -> dict:
@@ -320,17 +319,19 @@ class Steps:
     steps: list[Expect]
 
 
-def wait_for_incident_task(admin: Session, tenant: str, since: datetime, timeout: float) -> tuple[dict, dict]:
-    say(f"{tenant} 알림 → 인시던트·작업 생성을 기다린다 (알림 규칙 for 30s + 평가 주기)")
+def wait_for_incident_task(admin: Session, tenant: str, service: str, since: datetime,
+                           timeout: float) -> tuple[dict, dict]:
+    say(f"{tenant} {service} 알림 → 인시던트·작업 생성을 기다린다 (알림 규칙 for 15s + 평가 주기)")
     deadline = time.time() + timeout
     while time.time() < deadline:
         for inc in admin.get(f"/api/incidents?status=OPEN"):
-            if inc["tenantId"] == tenant and datetime.fromisoformat(inc["startedAt"]) >= since:
+            if (inc["tenantId"] == tenant and inc.get("service") == service
+                    and datetime.fromisoformat(inc["startedAt"]) >= since):
                 for task in admin.get("/api/ai/tasks"):
                     if task.get("incidentId") == inc["id"]:
                         say(f"인시던트 #{inc['id']} ({inc['severity']}) · 작업 {task['id'][:8]} · {WEB}/tasks/{task['id']}")
                         return inc, task
-        time.sleep(5)
+        time.sleep(3)
     raise TimeoutError(f"{timeout:.0f}초 안에 {tenant} 인시던트가 생기지 않았다")
 
 
@@ -455,7 +456,8 @@ def preflight(args) -> Result:
     ready = kubectl("get", "deploy", "-A", "-l", "app", "-o",
                     "jsonpath={range .items[*]}{.metadata.name}={.status.readyReplicas}/{.spec.replicas} {end}",
                     check=False)
-    r.check("order-api" in ready and "reservation-api" in ready, f"kind 고객사 서비스 ({ready.strip() or '응답 없음'})")
+    want = [svc for tenant, svc in LANE_TARGET.values()]
+    r.check(all(f"{svc}=" in ready for svc in want), f"kind 고객사 서비스 ({ready.strip() or '응답 없음'})")
     # 새 클러스터에서는 HPA가 첫 CPU 지표를 받기 전까지 ArgoCD가 잠깐 Degraded로 본다. 바로 실패하지 않고 기다린다
     deadline = time.time() + 90
     while True:
@@ -491,9 +493,12 @@ def preflight(args) -> Result:
                       "jsonpath={range .items[*]}{.metadata.name}={.spec.replicas} {end}", check=False).split()
     r.check(loadgen and all(x.endswith("=0") for x in loadgen),
             f"부하 발생기가 꺼져 있다 ({' '.join(loadgen) or '없음. scripts/cluster-up.sh'})")
-    hpa = kubectl("-n", "tenant-a", "get", "hpa", "order-api", "-o",
-                  "jsonpath={.spec.minReplicas}~{.spec.maxReplicas} {.status.desiredReplicas}", check=False)
-    r.check(hpa == "2~3 2", f"A사 HPA가 평소 상태다 (최소~최대 목표: {hpa or '없음'}, 기대 2~3 2)")
+    for svc in sorted(faults.HPA_SERVICES):
+        # 앞 실행 직후면 축소가 덜 끝났을 수 있다. 실패 대신 기다린다 (SPEC-e2e-speed ④)
+        wait_for_a_normal(svc)
+        hpa = kubectl("-n", "tenant-a", "get", "hpa", svc, "-o",
+                      "jsonpath={.spec.minReplicas}~{.spec.maxReplicas} {.status.desiredReplicas}", check=False)
+        r.check(hpa == "2~3 2", f"A사 {svc} HPA가 평소 상태다 (최소~최대 목표: {hpa or '없음'}, 기대 2~3 2)")
     if "postgres" in running:
         busy = sql("select string_agg(left(id::text, 8) || ' ' || tenant_id || ' ' || status || ' (' || "
                    "to_char(updated_at at time zone 'Asia/Seoul', 'HH24:MI') || ')', ', ') "
@@ -716,6 +721,7 @@ def internal_action(tenant: str, body: dict) -> tuple[int, str]:
 
 
 def scenario_guard(args) -> Result:
+    prepare(SERVICE_OF["guard"])
     """backend 방어선 (SPEC 6.2). AI가 잘못 제안해도 계약·구조 제약을 넘는 조치는 실행되지 않는다."""
     r = Result("backend 방어선 (계약·구조 제약)")
     incident = {t: sql(f"select max(id) from app.incidents where tenant_id = '{t}'") for t in ("tenant-a", "tenant-b")}
@@ -797,18 +803,21 @@ def scenario_no_issue(args) -> Result:
 
 def fault_scenario(args, title: str, tenant: str, kind: str, expect: Expect, checks, merge: bool = False,
                    **inject_args) -> Result:
-    """장애를 넣고 작업을 끝까지 진행한 뒤 checks(r, task, summary, proposal, incident, since)로 판정한다."""
+    """장애를 넣고 작업을 끝까지 진행한 뒤 checks(r, task, summary, proposal, incident, since)로 판정한다.
+    서비스는 그 시나리오의 묶음이 정한다 (SERVICE_OF)."""
     r = Result(title)
+    service = current_service()
+    prepare(service)
     started, since = time.time(), datetime.now(timezone.utc)
     try:
-        inject(tenant, kind, **inject_args)
-        incident, task = wait_for_incident_task(Session("admin"), tenant, since, args.timeout)
+        inject(tenant, kind, service, **inject_args)
+        incident, task = wait_for_incident_task(Session("admin"), tenant, service, since, args.timeout)
         task = drive(task["id"], expect, r, args.timeout, merge=merge)
         summary = summarize(task, r)
         proposal = check_proposals(task["id"], expect, r) or {}
         checks(r, task, summary, proposal, incident, since)
     finally:
-        reset(tenant)
+        reset(tenant, service)
     r.seconds = time.time() - started
     return r
 
@@ -822,9 +831,11 @@ def check_notice(r: Result, summary: dict) -> None:
 
 
 def check_no_app_action(r: Result, tenant: str, since: datetime, why: str) -> None:
-    """서비스를 바꾸는 조치(재시작·확장·롤백·PR)가 실행되지 않았다."""
+    """서비스를 바꾸는 조치(재시작·확장·롤백·PR)가 실행되지 않았다. 같은 고객사의 다른 서비스 묶음 조치는 세지 않는다."""
     executed = sql(f"select count(*) from app.audit_logs where tenant_id = '{tenant}' "
-                   f"and action in ('ACTION_EXECUTED', 'CHANGE_PR_CREATED') and created_at > '{since.isoformat()}'")
+                   f"and action in ('ACTION_EXECUTED', 'CHANGE_PR_CREATED') and created_at > '{since.isoformat()}' "
+                   f"and (detail ->> 'incidentId')::bigint in (select id from app.incidents "
+                   f"where tenant_id = '{tenant}' and service = '{current_service()}')")
     r.check(executed == "0", f"{why} 앱 조치를 실행하지 않았다 ({executed}건)")
 
 
@@ -855,17 +866,18 @@ def scenario_a_pool(args) -> Result:
         synced = any(e["type"] == "CHANGE_FINISHED" and (e.get("data") or {}).get("result") == "SYNCED" for e in events)
         r.check(synced, "PR 병합 후 ArgoCD 동기화 알림으로 재개됐다")
         check_recovered(r, summary)
-        size = faults.pool_size("tenant-a")
+        size = faults.pool_size("tenant-a", current_service())
         r.check(size == 20, f"클러스터의 풀 크기가 20으로 돌아왔다 (현재 {size})")
 
     # 풀 크기 5 커밋은 ArgoCD가 따라가는 임시 브랜치에 한다 (main에는 남지 않는다)
     return fault_scenario(args, "A-pool. 잘못된 설정 배포 → 롤백 PR (A사, GITOPS)", "tenant-a", "pool",
-                          Expect("business_execute_runbook_action", "rollback_deployment", "order-api"),
+                          Expect("business_execute_runbook_action", "rollback_deployment", SERVICE_OF["a-pool"]),
                           checks, merge=not args.no_merge, size=5)
 
 
 def scenario_a_hang(args) -> Result:
-    pods_before = kubectl("-n", "tenant-a", "get", "pods", "-l", "app=order-api", "-o", "name")
+    service = SERVICE_OF["a-hang"]
+    pods_before = kubectl("-n", "tenant-a", "get", "pods", "-l", f"app={service}", "-o", "name")
 
     def checks(r, task, summary, proposal, incident, since):
         impact = proposal.get("impact") or {}
@@ -876,23 +888,23 @@ def scenario_a_hang(args) -> Result:
         r.check(action_result.get("status") == "EXECUTED", "재시작이 Kubernetes API로 실행됐다")
         r.check(action_result.get("restartMode") == "ROLLING", "실제 조치도 파드를 하나씩 재시작했다")
         check_recovered(r, summary)
-        pods_after = kubectl("-n", "tenant-a", "get", "pods", "-l", "app=order-api", "-o", "name")
+        pods_after = kubectl("-n", "tenant-a", "get", "pods", "-l", f"app={service}", "-o", "name")
         r.check(pods_after and pods_after != pods_before, "파드가 새로 만들어졌다")
 
     return fault_scenario(args, "A-hang. 파드 멈춤 → 순차 재시작 (A사, GITOPS)", "tenant-a", "hang",
-                          Expect("business_execute_runbook_action", "restart_pods", "order-api"), checks)
+                          Expect("business_execute_runbook_action", "restart_pods", service), checks)
 
 
 def scenario_a_surge(args) -> Result:
     def checks(r, task, summary, proposal, incident, since):
         check_max_replicas(r, task["id"], 4)
-        hpa = faults.hpa_max()
+        hpa = faults.hpa_max(SERVICE_OF["a-surge"])
         r.check(hpa == 4, f"PR 병합·동기화 후 HPA 최대치가 4다 (현재 {hpa})")
         check_recovered(r, summary)
 
     # +250건/초: HPA 최대 3(약 210건/초)으로는 모자라고 4(약 280건/초)면 감당한다 (5.4.2)
     return fault_scenario(args, "A-surge. 트래픽 급증 → HPA 최대치 4 PR (A사, GITOPS)", "tenant-a", "surge",
-                          Expect("business_execute_runbook_action", "adjust_autoscaler", "order-api",
+                          Expect("business_execute_runbook_action", "adjust_autoscaler", SERVICE_OF["a-surge"],
                                  args={"max_replicas": 4}),
                           checks, merge=not args.no_merge)
 
@@ -906,7 +918,7 @@ def scenario_a_surge_max(args) -> Result:
 
     # +400건/초: 안전 상한 4(약 280건/초)로도 모자란다. 더 올리면 DB 연결이 모자라 A사 판단이 필요하다
     return fault_scenario(args, "A-surge-max. 안전 상한으로도 부족 → 에스컬레이션 (A사)", "tenant-a", "surge",
-                          Expect("business_execute_runbook_action", "adjust_autoscaler", "order-api",
+                          Expect("business_execute_runbook_action", "adjust_autoscaler", SERVICE_OF["a-surge-max"],
                                  args={"max_replicas": 4}),
                           checks, merge=not args.no_merge, rate=400)
 
@@ -931,7 +943,8 @@ def scenario_a_dbslow(args) -> Result:
 
 
 def scenario_b_hang(args) -> Result:
-    pods_before = kubectl("-n", "tenant-b", "get", "pods", "-l", "app=reservation-api", "-o", "name")
+    service = SERVICE_OF["b-hang"]
+    pods_before = kubectl("-n", "tenant-b", "get", "pods", "-l", f"app={service}", "-o", "name")
 
     def checks(r, task, summary, proposal, incident, since):
         impact = proposal.get("impact") or {}
@@ -939,11 +952,11 @@ def scenario_b_hang(args) -> Result:
         action = summary.get("action") or {}
         r.check((action.get("result") or {}).get("status") == "EXECUTED", "재시작이 Kubernetes API로 실행됐다")
         check_recovered(r, summary)
-        pods_after = kubectl("-n", "tenant-b", "get", "pods", "-l", "app=reservation-api", "-o", "name")
+        pods_after = kubectl("-n", "tenant-b", "get", "pods", "-l", f"app={service}", "-o", "name")
         r.check(pods_after and pods_after != pods_before, "파드가 새로 만들어졌다")
 
     return fault_scenario(args, "B-hang. 파드 멈춤 → 재시작 (B사, DIRECT)", "tenant-b", "hang",
-                          Expect("business_execute_runbook_action", "restart_pods", "reservation-api"), checks)
+                          Expect("business_execute_runbook_action", "restart_pods", service), checks)
 
 
 def scenario_b_latency(args) -> Result:
@@ -1016,18 +1029,23 @@ def check_steps(r: Result, task_id: str, order: list[Expect], targets: list[str]
 def check_one_incident(r: Result, tenant: str, since: datetime, incident: dict, task_id: str) -> None:
     """같은 서비스의 알림이 인시던트 하나로 묶였다 (5장). 덧붙은 알림은 작업 이벤트로 남는다."""
     opened = sql(f"select string_agg('#' || id, ', ') from app.incidents where tenant_id = '{tenant}' "
-                 f"and started_at >= '{since.isoformat()}'")
+                 f"and service = '{incident.get('service')}' and started_at >= '{since.isoformat()}'")
     r.check(opened == f"#{incident['id']}", f"인시던트가 하나만 열렸다 ({opened or '없음'})")
     alerts = sql(f"select count(*) from app.incident_alerts where incident_id = {incident['id']}")
     added = sum(1 for e in Session("engineer").get(f"/api/ai/tasks/{task_id}/events") if e["type"] == "ALERT_ADDED")
     r.notes.append(f"인시던트 #{incident['id']}에 묶인 알림 {alerts}개, 작업에 남은 알림 추가 {added}건")
 
 
-def reject_stray_tasks(tenant: str, since: datetime, task_id: str) -> None:
-    """작업이 끝난 뒤 울린 알림은 새 인시던트·작업이 된다. 승인 대기로 남지 않게 거절해 끝낸다."""
+def reject_stray_tasks(tenant: str, service: str, since: datetime, task_id: str) -> None:
+    """작업이 끝난 뒤 울린 알림은 새 인시던트·작업이 된다. 승인 대기로 남지 않게 거절해 끝낸다.
+    같은 고객사의 다른 서비스 묶음 작업은 건드리지 않는다."""
     engineer = Session("engineer")
+    mine = set(sql(f"select coalesce(string_agg(id::text, ','), '') from app.incidents "
+                   f"where tenant_id = '{tenant}' and service = '{service}'").split(","))
     for task in engineer.get("/api/ai/tasks"):
         if task["id"] == task_id or task.get("tenantId") != tenant or task.get("status") != "WAITING_APPROVAL":
+            continue
+        if str(task.get("incidentId")) not in mine:
             continue
         if datetime.fromisoformat(task["createdAt"]) < since:
             continue
@@ -1042,11 +1060,13 @@ def compound_scenario(args, title: str, tenant: str, kind: str, steps: Steps, ch
                       **inject_args) -> Result:
     """겹친 장애를 넣고 작업을 끝까지 진행한 뒤 checks(r, task, summary, incident, since)로 판정한다."""
     r = Result(title)
+    service = current_service()
+    prepare(service)
     started, since = time.time(), datetime.now(timezone.utc)
     task_id = None
     try:
-        inject(tenant, kind, **inject_args)
-        incident, task = wait_for_incident_task(Session("admin"), tenant, since, args.timeout)
+        inject(tenant, kind, service, **inject_args)
+        incident, task = wait_for_incident_task(Session("admin"), tenant, service, since, args.timeout)
         task_id = task["id"]
         task = drive(task_id, steps, r, args.timeout, merge=merge)
         summary = summarize(task, r)
@@ -1054,27 +1074,30 @@ def compound_scenario(args, title: str, tenant: str, kind: str, steps: Steps, ch
         check_one_incident(r, tenant, since, incident, task_id)
     finally:
         if task_id:
-            reject_stray_tasks(tenant, since, task_id)
-        reset(tenant)
+            reject_stray_tasks(tenant, service, since, task_id)
+        reset(tenant, service)
     r.seconds = time.time() - started
     return r
 
 
-RESTART_A = Expect("business_execute_runbook_action", "restart_pods", "order-api")
 NOTICE = Expect("business_send_customer_notice")
 
 
-def scenario_a_hang_latency(args) -> Result:
+def scenario_b_hang_latency(args) -> Result:
+    service = SERVICE_OF["b-hang-latency"]
+    restart = Expect("business_execute_runbook_action", "restart_pods", service)
+
     def checks(r, task, summary, incident, since):
-        # 파드 멈춤이 결제 지연을 가린다. 재시작한 뒤 남은 결제 지연을 다시 진단해 공지한다 (외부 장애는 재시작해도 남는다)
-        check_steps(r, task["id"], [RESTART_A, NOTICE], ["RB-STD-02", "RB-STD-04"], {"RB-STD-02", "RB-STD-04"})
+        # 파드 멈춤이 결제 지연을 가린다. 재시작한 뒤 남은 결제 지연을 다시 진단해 공지한다 (외부 장애는 재시작해도 남는다).
+        # B사는 결제 API가 의존 대상이라 로그 신호와 의존 대상 상태(DEGRADED)가 모두 근거다 (SPEC-e2e-speed ③)
+        check_steps(r, task["id"], [restart, NOTICE], ["RB-STD-02", "RB-STD-04"], {"RB-STD-02", "RB-STD-04"})
         check_notice(r, summary)
         r.check(summary.get("recovered") is False, "재시작 뒤 결제 지연이 남아 회복되지 않았다고 판정했다")
-        left = faults.dependency_faults("tenant-a")
+        left = faults.dependency_faults("tenant-b", service)
         r.check("PAYMENT_LATENCY" in left, f"재시작한 새 파드도 결제 지연을 이어받았다 (ConfigMap {sorted(left)})")
 
-    return compound_scenario(args, "A-hang+latency. 파드 멈춤 + 결제 지연 → 재시작 후 공지 (A사)", "tenant-a",
-                             "hang+latency", Steps([RESTART_A, NOTICE]), checks)
+    return compound_scenario(args, "B-hang+latency. 파드 멈춤 + 결제 지연 → 재시작 후 공지 (B사)", "tenant-b",
+                             "hang+latency", Steps([restart, NOTICE]), checks)
 
 
 def scenario_b_pool_dbslow(args) -> Result:
@@ -1094,7 +1117,8 @@ def scenario_b_pool_dbslow(args) -> Result:
 
 
 def scenario_a_dbslow_backlog(args) -> Result:
-    raise_max = Expect("business_execute_runbook_action", "adjust_autoscaler", "order-api", args={"max_replicas": 4})
+    raise_max = Expect("business_execute_runbook_action", "adjust_autoscaler", SERVICE_OF["a-dbslow-backlog"],
+                       args={"max_replicas": 4})
     dba = Expect("business_escalate_incident", args={"category": "DEPENDENCY"})
 
     def checks(r, task, summary, incident, since):
@@ -1116,29 +1140,45 @@ def scenario_a_dbslow_backlog(args) -> Result:
                              "dbslow+surge", Steps([raise_max, dba]), checks, merge=not args.no_merge)
 
 
-def wait_for_a_normal(timeout: float = 300) -> None:
-    """A사가 평소 크기로 돌아오기를 기다린다: 최대치 복원 커밋이 동기화되고(HPA 최대 3), 부하가 빠져 HPA가
+def hpa_normal(service: str) -> tuple[bool, str]:
+    state = kubectl("-n", "tenant-a", "get", "hpa", service, "-o",
+                    "jsonpath={.spec.maxReplicas} {.status.currentReplicas}", check=False)
+    ready = kubectl("-n", "tenant-a", "get", "deploy", service, "-o", "jsonpath={.status.readyReplicas}", check=False)
+    return state == f"{faults.HPA_MAX_NORMAL} 2" and ready == "2", f"최대 현재: {state}, 준비 {ready}"
+
+
+def wait_for_a_normal(service: str, timeout: float = 300) -> bool:
+    """A사 HPA 서비스가 평소 크기로 돌아오기를 기다린다: 최대치 복원 커밋이 동기화되고(HPA 최대 3), 부하가 빠져 HPA가
     스스로 레플리카 2로 줄인다 (축소 안정화 60초). 확장 원복 PR은 없다 (결정 8)."""
-    deadline = time.time() + timeout
+    deadline, said = time.time() + timeout, False
     while time.time() < deadline:
-        state = kubectl("-n", "tenant-a", "get", "hpa", "order-api", "-o",
-                        "jsonpath={.spec.maxReplicas} {.status.currentReplicas}", check=False)
-        ready = kubectl("-n", "tenant-a", "get", "deploy", "order-api", "-o", "jsonpath={.status.readyReplicas}",
-                        check=False)
-        if state == f"{faults.HPA_MAX_NORMAL} 2" and ready == "2":
-            return
+        ok, state = hpa_normal(service)
+        if ok:
+            return True
+        if not said:
+            say(f"{service}가 HPA 최대 3·레플리카 2로 돌아오기를 기다린다 ({state})")
+            said = True
         time.sleep(5)
-    say(f"⚠️  {timeout:.0f}초 안에 A사가 HPA 최대 3·레플리카 2로 돌아오지 않았다 (최대 현재: {state}, 준비 {ready})")
+    say(f"⚠️  {timeout:.0f}초 안에 {service}가 HPA 최대 3·레플리카 2로 돌아오지 않았다 ({state})")
+    return False
 
 
-def reset(tenant: str) -> None:
-    """고객사 장애를 정리한다. 남은 장애가 다음 시나리오에 섞이지 않게 한다."""
+# 평소 크기에서 시작해야 하는 시나리오 (SPEC-e2e-speed ④). HPA가 최대에 닿아야 최대치 조정을 제안하고,
+# guard는 거부 전후의 레플리카를 비교한다. 나머지는 앞 시나리오의 축소를 기다리지 않는다
+NEEDS_NORMAL = {"a-surge", "a-surge-max", "a-dbslow-backlog", "guard"}
+
+
+def prepare(service: str) -> None:
+    if _scenario.get() in NEEDS_NORMAL and service in faults.HPA_SERVICES:
+        wait_for_a_normal(service)
+
+
+def reset(tenant: str, service: str) -> None:
+    """서비스의 장애를 정리한다. 설정만 되돌리고, HPA 축소는 필요한 다음 시나리오가 기다린다 (prepare)."""
     try:
-        inject(tenant, None)
-        if tenant == "tenant-a":
-            wait_for_a_normal()
+        inject(tenant, None, service)
     except RuntimeError as e:
-        say(f"⚠️  {tenant} 장애 해제 실패: {e}")
+        say(f"⚠️  {tenant} {service} 장애 해제 실패: {e}")
 
 
 SCENARIOS = {
@@ -1157,25 +1197,31 @@ SCENARIOS = {
     "b-latency": ("B사 외부 결제 지연 → 고객 공지", scenario_b_latency),
     "b-pool": ("B사 잘못된 배포 → 롤백 계약상 불가 → 에스컬레이션", scenario_b_pool),
     "b-surge": ("B사 트래픽 급증 → 확장 계약상 불가 → 에스컬레이션", scenario_b_surge),
-    "a-hang-latency": ("A사 파드 멈춤 + 결제 지연 → 재시작 후 고객 공지 (겹친 장애)", scenario_a_hang_latency),
+    "b-hang-latency": ("B사 파드 멈춤 + 결제 지연 → 재시작 후 고객 공지 (겹친 장애)", scenario_b_hang_latency),
     "a-dbslow-backlog": ("A사 DB 지연 + 트래픽 급증 → 판단 기준대로 처리 (겹친 장애)", scenario_a_dbslow_backlog),
     "b-pool-dbslow": ("B사 잘못된 배포 + DB 지연 → 롤백 불가 에스컬레이션 (겹친 장애)", scenario_b_pool_dbslow),
 }
-ALIASES = {"a": "a-pool", "b": "b-hang", "b2": "b-latency"}   # 매트릭스 전 키
+ALIASES = {"a": "a-pool", "b": "b-hang", "b2": "b-latency", "a-hang-latency": "b-hang-latency"}   # 예전 키
 QUICK = ["guard", "a-hang", "a-dbslow", "b-surge"]              # PR이 없는 빠른 확인 (6.3)
-GITHUB_SCENARIOS = {"a-pool", "a-surge", "a-surge-max"}         # PR을 만들고 병합한다
+GITHUB_SCENARIOS = {"a-pool", "a-surge", "a-surge-max", "a-dbslow-backlog"}   # PR을 만들고 병합한다
 
 
-# 같은 묶음은 순서대로, 묶음끼리는 동시에 돈다. 확장 시나리오는 PR 병합과 원복 대기가 길어 뒤에 둔다.
-# guard는 앞 시나리오가 만든 A사·B사 인시던트 번호로 요청하므로 A사 묶음 끝에 둔다 (빈 DB에서도 돌게).
-# A사 장애를 정리하고 레플리카 2로 돌아온 뒤라 거부 전후 레플리카 비교도 흔들리지 않는다
+# 묶음은 (고객사, 서비스)다 (SPEC-e2e-speed 8.3). 같은 묶음은 순서대로, 묶음끼리는 동시에 돈다.
+# 서비스가 다르면 인시던트·관측·회복 확인·설정 이력이 모두 따로라 같은 고객사 안에서도 동시에 돌 수 있다.
+# HPA 최대치 PR이 필요한 시나리오는 HPA가 있는 order-api·cart-api에 나눈다. guard는 앞 시나리오가 만든 A사·B사
+# 인시던트 번호로 요청하므로 A1 끝에 둔다 (빈 DB에서도 돌게)
 LANES = {
     "공통": ["isolation", "question", "no-issue", "documents"],
-    "tenant-a": ["a-hang", "a-latency", "a-dbslow", "a-pool", "a-surge", "a-surge-max", "a-hang-latency",
-                 "a-dbslow-backlog", "guard"],
-    "tenant-b": ["b-hang", "b-latency", "b-pool", "b-surge", "b-pool-dbslow"],
+    "A1": ["a-surge", "a-surge-max", "guard"],
+    "A2": ["a-pool", "a-dbslow-backlog"],
+    "A3": ["a-hang", "a-latency", "a-dbslow"],
+    "B1": ["b-hang", "b-pool", "b-surge", "b-pool-dbslow"],
+    "B2": ["b-latency", "b-hang-latency"],
 }
+LANE_TARGET = {"A1": ("tenant-a", "order-api"), "A2": ("tenant-a", "cart-api"), "A3": ("tenant-a", "inventory-api"),
+               "B1": ("tenant-b", "reservation-api"), "B2": ("tenant-b", "checkin-api")}
 LANE_OF = {key: lane for lane, keys in LANES.items() for key in keys}
+SERVICE_OF = {key: LANE_TARGET[lane][1] for lane, keys in LANES.items() if lane in LANE_TARGET for key in keys}
 
 
 # ── 실행 ──────────────────────────────────────────────────────
@@ -1258,6 +1304,7 @@ def run_lane(run: Run, keys: list[str], args) -> None:
     for key in keys:
         title, scenario = SCENARIOS[key]
         token = _log.set((key, run.dir / f"{key}.log"))
+        scenario_token = _scenario.set(key)
         run.start(key)
         say(f"▶ {title}")
         begin = time.time()
@@ -1269,6 +1316,7 @@ def run_lane(run: Run, keys: list[str], args) -> None:
         result.seconds = result.seconds or time.time() - begin
         say(f"■ {'통과' if result.passed else '실패'} ({result.seconds:.0f}초)")
         run.finish(key, result)
+        _scenario.reset(scenario_token)
         _log.reset(token)
 
 
@@ -1291,8 +1339,9 @@ def run_all(args) -> int:
     try:
         if not args.no_branch:
             branch = start_branch()
-        lanes = [[k for k in keys if k in args.scenarios] for keys in LANES.values()]
-        common, parallel = lanes[0], [lane for lane in lanes[1:] if lane]
+        lanes = {name: [k for k in keys if k in args.scenarios] for name, keys in LANES.items()}
+        common = lanes.pop("공통")
+        parallel = [keys for keys in lanes.values() if keys]
         run_lane(run, common, args)          # 장애가 없을 때 돌려야 하는 시나리오
         if args.serial:
             for lane in parallel:
@@ -1339,17 +1388,23 @@ def main() -> int:
     parser.add_argument("--cleanup", action="store_true")
     parser.add_argument("--serial", action="store_true")
     parser.add_argument("--quick", action="store_true")
+    parser.add_argument("--lane", action="append", choices=list(LANES),
+                        help="그 묶음만 돈다. 여러 번 줄 수 있다 (SPEC-e2e-speed ⑥)")
     args = parser.parse_args()
     if args.list:
         for key, (title, _) in SCENARIOS.items():
             alias = next((a for a, k in ALIASES.items() if k == key), "")
-            print(f"  {key:12} {LANE_OF[key]:9} {title}" + (f" (예전 키 {alias})" if alias else ""))
+            lane = LANE_OF[key]
+            target = " ".join(LANE_TARGET.get(lane, ("", "")))
+            print(f"  {key:16} {lane:4} {target:26} {title}" + (f" (예전 키 {alias})" if alias else ""))
         return 0
     if args.cleanup:
         end_branch(None)
         print(f"정리 완료: backend·ArgoCD {gitops_state()}, 남은 임시 브랜치 {leftover_branches() or '없음'}")
         return 0
     args.scenarios = [ALIASES.get(s, s) for s in args.scenarios] or (QUICK if args.quick else list(SCENARIOS))
+    if args.lane:
+        args.scenarios = [k for k in args.scenarios if LANE_OF[k] in args.lane]
     unknown = [s for s in args.scenarios if s not in SCENARIOS]
     if unknown:
         parser.error(f"알 수 없는 시나리오: {', '.join(unknown)} (--list로 확인)")
