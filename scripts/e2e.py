@@ -33,6 +33,7 @@ A사는 HPA가 레플리카 2로 줄 때까지 기다린다.
 """
 
 import argparse
+import contextlib
 import contextvars
 import threading
 import hashlib
@@ -44,6 +45,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -113,12 +115,30 @@ def compose(*args: str, check: bool = True) -> str:
 
 
 def in_backend(script: str) -> str:
-    """backend 컨테이너 안에서 셸을 실행한다. SERVICE_TOKEN·GITHUB_TOKEN은 컨테이너 환경변수로만 쓴다."""
+    """backend 컨테이너 안에서 셸을 실행한다. 내부 호출 토큰·GITHUB_TOKEN은 컨테이너 환경변수로만 쓴다."""
     return compose("exec", "-T", "backend", "sh", "-c", script)
 
 
 def sql(query: str) -> str:
     return compose("exec", "-T", "postgres", "psql", "-U", "postgres", "-d", "opslens", "-tAc", query)
+
+
+@contextlib.contextmanager
+def probe_task(tenant: str):
+    """Agent를 거치지 않는 내부 API 검사(방어선·격리)에 쓸 작업 토큰. (작업 ID, 토큰)
+
+    backend는 실행 중인 작업에만 작업 토큰을 준다 (SPEC-limitations-fixes 3단계). 실행 중 상태의 검사용 작업을
+    DB에 직접 만들고(전달 대기열에 넣지 않아 Agent는 실행하지 않는다) 토큰을 받은 뒤, 끝나면 지운다.
+    """
+    task_id = str(uuid.uuid4())
+    sql(f"insert into app.ai_tasks (id, tenant_id, type, question, status) "
+        f"values ('{task_id}', '{tenant}', 'QUESTION', 'E2E 내부 API 검사', 'RUNNING')")
+    try:
+        out = in_backend('curl -s -X POST -H "Authorization: Bearer $AGENT_BACKEND_TOKEN" '
+                         f'http://localhost:8080/internal/tasks/{task_id}/token')
+        yield task_id, json.loads(out)["token"]
+    finally:
+        sql(f"delete from app.ai_tasks where id = '{task_id}'")
 
 
 def kubectl(*args: str, check: bool = True) -> str:
@@ -453,6 +473,30 @@ def preflight(args) -> Result:
     return r
 
 
+def rag_probe(task_id: str) -> dict:
+    """B사 작업 토큰으로 rag-mcp를 직접 검색한다. 범위별 결과 문서 주소 {all: [...], common: [...]}"""
+    # RAG: B사 작업 컨텍스트로 A사에만 있는 내용을 검색해도 A사 문서는 나오지 않고, 표준 런북은 나온다.
+    # 표준 런북은 범위를 좁혀 따로 찾는다. 전체 범위 상위 10건은 쌓인 B사 회고(postmortem)가 채울 수 있다
+    probe = compose("exec", "-T", "agent", "/app/.venv/bin/python", "-c", """
+import asyncio, json
+from agent.backend import backend
+from agent.toolbox import load_tools, _as_text
+TASK = "%s"
+async def main():
+    # Harness의 결과 길이 제한(4000자)을 거치지 않게 MCP 도구를 직접 부른다. 고객사는 작업 토큰으로만 정해진다
+    token = await backend.task_token(TASK)
+    tools = {t.name: t for t in await load_tools("tenant-b", TASK, "e2e", token)}
+    query = "A사 DBA 연락, GitOps PR 병합, order-api"
+    found = {}
+    for scope in ("all", "common"):
+        out = await tools["rag_search_documents"].ainvoke({"query": query, "top_k": 10, "scope": scope})
+        found[scope] = [d["uri"] for d in json.loads(_as_text(out))]
+    print(json.dumps(found))
+asyncio.run(main())
+""" % task_id)
+    return json.loads(probe.splitlines()[-1]) if probe else {}
+
+
 def scenario_isolation(args) -> Result:
     r = Result("D. 고객사 격리")
     viewer_b = Session("viewer-b")
@@ -462,9 +506,15 @@ def scenario_isolation(args) -> Result:
         r.check(status in (403, 404), f"B사 담당자가 A사 인시던트 조회 → {status}")
     status, _ = viewer_b.call("POST", "/api/ai/tasks", {"tenantId": "tenant-a", "question": "A사 상태 알려줘"})
     r.check(status in (401, 403), f"B사 담당자가 A사 작업 생성 → {status}")
-    code = in_backend('curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $SERVICE_TOKEN" '
-                      '-H "X-Tenant-Id: tenant-b" http://localhost:8080/internal/tenants/tenant-a/services')
-    r.check(code == "403", f"B사 작업 컨텍스트로 A사 내부 API 호출 → {code}")
+    with probe_task("tenant-b") as (probe_id, b_token):
+        code = in_backend('curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $MCP_BACKEND_TOKEN" '
+                          f'-H "X-Task-Token: {b_token}" -H "X-Tenant-Id: tenant-a" '
+                          'http://localhost:8080/internal/tenants/tenant-a/services')
+        r.check(code == "403", f"B사 작업 토큰으로 A사 내부 API 호출 → {code} (헤더에 A사를 적어도)")
+        code = in_backend('curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $MCP_BACKEND_TOKEN" '
+                          '-H "X-Tenant-Id: tenant-a" http://localhost:8080/internal/tenants/tenant-a/services')
+        r.check(code == "401", f"작업 토큰 없이 내부 API 호출 → {code}")
+        rag = rag_probe(probe_id)
     # backend가 쓰는 B사 ServiceAccount 토큰 그대로. kubeconfig의 관리자 인증서가 섞이지 않게 빈 설정으로 호출한다
     server = kubectl("config", "view", "--minify", "-o", "jsonpath={.clusters[0].cluster.server}")
     can = subprocess.run(["kubectl", "--kubeconfig", "/dev/null", "--server", server,
@@ -473,27 +523,10 @@ def scenario_isolation(args) -> Result:
                           "auth", "can-i", "delete", "pods", "-n", "tenant-a"], capture_output=True, text=True)
     answer = can.stdout.strip() or can.stderr.strip()[:80]
     r.check(answer == "no", f"B사 ServiceAccount로 A사 파드 삭제 권한 → {answer}")
-    # RAG: B사 작업 컨텍스트로 A사에만 있는 내용을 검색해도 A사 문서는 나오지 않고, 표준 런북은 나온다.
-    # 표준 런북은 범위를 좁혀 따로 찾는다. 전체 범위 상위 10건은 쌓인 B사 회고(postmortem)가 채울 수 있다
-    probe = compose("exec", "-T", "agent", "/app/.venv/bin/python", "-c", """
-import asyncio, json
-from agent.toolbox import load_tools, _as_text
-async def main():
-    # Harness의 결과 길이 제한(4000자)을 거치지 않게 MCP 도구를 직접 부른다. 고객사는 연결 헤더로만 정해진다
-    tools = {t.name: t for t in await load_tools("tenant-b", "e2e", "e2e")}
-    query = "A사 DBA 연락, GitOps PR 병합, order-api"
-    found = {}
-    for scope in ("all", "common"):
-        out = await tools["rag_search_documents"].ainvoke({"query": query, "top_k": 10, "scope": scope})
-        found[scope] = [d["uri"] for d in json.loads(_as_text(out))]
-    print(json.dumps(found))
-asyncio.run(main())
-""")
-    found = json.loads(probe.splitlines()[-1]) if probe else {}
-    uris = found.get("all", [])
+    uris = rag.get("all", [])
     r.check(uris and not any("tenant-a" in u for u in uris),
             f"B사 작업의 문서 검색에 A사 문서가 없다 ({len(uris)}건 중 A사 {sum('tenant-a' in u for u in uris)}건)")
-    r.check(any("_common" in u for u in found.get("common", [])), "B사 작업에서도 MSP 표준 런북은 검색된다")
+    r.check(any("_common" in u for u in rag.get("common", [])), "B사 작업에서도 MSP 표준 런북은 검색된다")
     blocked = sql("select count(*) from app.audit_logs where action = 'TENANT_ISOLATION_BLOCKED' "
                   "and created_at > now() - interval '2 minutes'")
     r.check(blocked != "0", f"격리 차단이 감사 로그에 남았다 ({blocked}건)")
@@ -503,9 +536,10 @@ asyncio.run(main())
 def internal_action(tenant: str, body: dict) -> tuple[int, str]:
     """business-mcp가 부르는 backend 내부 조치 API를 직접 부른다. Agent·승인을 거치지 않는 방어선 검사용."""
     payload = json.dumps(body).replace("'", "")
-    out = in_backend(f'curl -s -w "\\n%{{http_code}}" -H "Authorization: Bearer $SERVICE_TOKEN" '
-                     f'-H "X-Tenant-Id: {tenant}" -H "Content-Type: application/json" '
-                     f"-d '{payload}' http://localhost:8080/internal/tenants/{tenant}/actions")
+    with probe_task(tenant) as (_, token):
+        out = in_backend(f'curl -s -w "\\n%{{http_code}}" -H "Authorization: Bearer $MCP_BACKEND_TOKEN" '
+                         f'-H "X-Task-Token: {token}" -H "X-Tenant-Id: {tenant}" -H "Content-Type: application/json" '
+                         f"-d '{payload}' http://localhost:8080/internal/tenants/{tenant}/actions")
     text, _, code = out.rpartition("\n")
     try:
         message = json.loads(text).get("message") or text

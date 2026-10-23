@@ -8,8 +8,8 @@
 
 name: opslens
 
-x-service-token: &service-token
-  SERVICE_TOKEN: ${SERVICE_TOKEN:?SERVICE_TOKEN is required}
+# 내부 호출 토큰은 호출마다 따로 둔다 (docs/specs/SPEC-limitations-fixes.md 3단계). 서비스마다 필요한 것만 받는다.
+# 모두 필수이고, 값이 서로 같으면 backend가 기동하지 않는다.
 
 services:
   # ── 공개 tier ───────────────────────────────────────────────
@@ -25,7 +25,12 @@ services:
     ports:
       - "8080:8080"
     environment:
-      <<: *service-token
+      # 보내는 토큰: backend → agent. 나머지는 backend가 받아서 경로별로 검사한다 (ServiceTokenFilter)
+      BACKEND_AGENT_TOKEN: ${BACKEND_AGENT_TOKEN:?}
+      AGENT_BACKEND_TOKEN: ${AGENT_BACKEND_TOKEN:?}
+      MCP_BACKEND_TOKEN: ${MCP_BACKEND_TOKEN:?}
+      INDEXER_BACKEND_TOKEN: ${INDEXER_BACKEND_TOKEN:?}
+      GITOPS_WEBHOOK_TOKEN: ${GITOPS_WEBHOOK_TOKEN:?}
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/opslens
       SPRING_DATASOURCE_USERNAME: opslens_app
       SPRING_DATASOURCE_PASSWORD: ${APP_DB_PASSWORD:?}
@@ -66,7 +71,9 @@ services:
   agent:
     build: ./server/python/agent
     environment:
-      <<: *service-token
+      BACKEND_AGENT_TOKEN: ${BACKEND_AGENT_TOKEN:?}   # backend → agent 요청 검사
+      AGENT_BACKEND_TOKEN: ${AGENT_BACKEND_TOKEN:?}   # agent → backend
+      AGENT_MCP_TOKEN: ${AGENT_MCP_TOKEN:?}           # agent → MCP Server
       BACKEND_URL: http://backend:8080
       DATABASE_URL: postgresql://opslens_agent:${AGENT_DB_PASSWORD:?}@postgres:5432/opslens
       BUSINESS_MCP_URL: http://business-mcp:9101/mcp
@@ -103,14 +110,17 @@ services:
   business-mcp:
     build: ./server/python/business-mcp
     environment:
-      <<: *service-token
+      AGENT_MCP_TOKEN: ${AGENT_MCP_TOKEN:?}       # agent → business-mcp 요청 검사
+      MCP_BACKEND_TOKEN: ${MCP_BACKEND_TOKEN:?}   # business-mcp → backend
       BACKEND_URL: http://backend:8080
       PORT: "9101"
 
   rag-mcp:
     build: ./server/python/rag-mcp
     environment:
-      <<: *service-token
+      AGENT_MCP_TOKEN: ${AGENT_MCP_TOKEN:?}       # agent → rag-mcp 요청 검사
+      MCP_BACKEND_TOKEN: ${MCP_BACKEND_TOKEN:?}   # 작업 토큰 공개키 조회 (backend)
+      BACKEND_URL: http://backend:8080
       DATABASE_URL: postgresql://opslens_rag:${RAG_DB_PASSWORD:?}@postgres:5432/opslens
       OPENAI_API_KEY: ${OPENAI_API_KEY:?}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
@@ -138,8 +148,8 @@ services:
       - --disable-admin
       - --disable-sql
     environment:
-      # 호출자 인증: agent가 Authorization: Bearer <SERVICE_TOKEN>을 실어야 도구를 쓸 수 있다
-      MCP_GRAFANA_SERVER_TOKEN: ${SERVICE_TOKEN}
+      # 호출자 인증: agent가 Authorization: Bearer <AGENT_MCP_TOKEN>을 실어야 도구를 쓸 수 있다
+      MCP_GRAFANA_SERVER_TOKEN: ${AGENT_MCP_TOKEN:?}
       GRAFANA_URL: http://grafana:3000
       # TODO: Viewer 권한 서비스 계정 토큰(GRAFANA_SERVICE_ACCOUNT_TOKEN)으로 바꾼다
       GRAFANA_USERNAME: admin
@@ -168,7 +178,7 @@ services:
     command: ["/app/.venv/bin/python", "-m", "indexer.postmortems", "--watch"]
     restart: unless-stopped
     environment:
-      <<: *service-token
+      INDEXER_BACKEND_TOKEN: ${INDEXER_BACKEND_TOKEN:?}   # 회고 경로에만 통한다
       BACKEND_URL: http://backend:8080
       DATABASE_URL: postgresql://opslens_indexer:${INDEXER_DB_PASSWORD:?}@postgres:5432/opslens
       OPENAI_API_KEY: ${OPENAI_API_KEY:?}
