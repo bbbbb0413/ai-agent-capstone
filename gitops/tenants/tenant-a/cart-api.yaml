@@ -31,7 +31,7 @@ spec:
               value: http://loki:3100/loki/api/v1/push
             # 커넥션 풀 크기. 20보다 작으면 커넥션 풀이 고갈된다 (시나리오 A: 잘못된 설정 배포)
             - name: DEMO_POOL_SIZE
-              value: "20"
+              value: "5"
             - name: SERVICE_TOKEN
               valueFrom:
                 secretKeyRef:
