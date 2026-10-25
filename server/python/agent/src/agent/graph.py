@@ -159,7 +159,7 @@ def _needs_document_lookup(state: State) -> bool:
 
 
 _SYMPTOM_MARKERS = (
-    "느려", "지연", "오류", "에러", "실패", "장애", "안 돼", "안되", "먹통", "timeout", "error", "slow",
+    "느려", "느리", "느린", "느림", "지연", "오류", "에러", "실패", "장애", "안 돼", "안되", "먹통", "timeout", "error", "slow",
 )
 
 
