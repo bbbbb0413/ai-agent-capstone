@@ -8,7 +8,7 @@ from indexer.parse import ParseError, PdfLine, infer_pdf_headings, parse_documen
 
 from samples import blank_pdf, docx_file, pdf
 
-SEED = Path(__file__).resolve().parents[3] / "data" / "documents"
+SEED = Path(__file__).resolve().parents[4] / "data" / "documents"
 HEADER = ChunkHeader("문서", "A사", "runbook")
 
 
