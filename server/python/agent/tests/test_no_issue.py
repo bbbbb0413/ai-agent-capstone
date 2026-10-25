@@ -39,6 +39,12 @@ class NoIssueRouteTests(unittest.TestCase):
         state = question("A사 order-api가 지금 너무 느려", open_incidents=[], services=[{"name": "order-api"}])
         self.assertEqual(graph.route_triage(state), "register_incident")
 
+    def test_t7_4_symptom_in_other_inflections_requires_incident_registration_approval(self):
+        for text in ("order-api가 가끔 느린 것 같아", "order-api 응답이 느림", "order-api가 좀 느리다"):
+            with self.subTest(text=text):
+                state = question(text, open_incidents=[], services=[{"name": "order-api"}])
+                self.assertEqual(graph.route_triage(state), "register_incident")
+
     def test_t7_5_ambiguous_symptom_does_not_guess_a_service(self):
         state = question("A사 지금 너무 느려", open_incidents=[], services=[{"name": "order-api"}])
         self.assertEqual(graph.route_triage(state), "no_issue")
