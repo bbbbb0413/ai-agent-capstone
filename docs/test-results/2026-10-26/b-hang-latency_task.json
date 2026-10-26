@@ -1,0 +1,95 @@
+{
+  "id": "4f36fbe2-23c3-4fd4-b13f-06855423db67",
+  "tenantId": "tenant-b",
+  "incidentId": 3,
+  "type": "DIAGNOSE",
+  "question": "tenant-b checkin-api 에러율 20% 초과",
+  "status": "DONE",
+  "requestedBy": null,
+  "pendingAction": null,
+  "answer": "## 요약\ntenant-b checkin-api에서 에러율이 20% 초과 이슈가 발생했고, 외부 의존(payment-gateway)의 지연이 확인되어 먼저 외부 의존 지연(RB-STD-04)을 치료하는 방향으로 진행했습니다. 현재 정상화 여부는 확인되지 않았으며, 남은 신호는 RB-STD-02의 워커 풀 포화 신호와 외부 의존 지연의 지속으로 보입니다.\n\n## 근거\n- 메트릭: 에러율 0.94% → 최근 회복 수치 0.00% (기준 0.20%), p95 지연 1.796초에서 재확인 시 2.451초(조치 직후 15초 창 기준)로 확인\n- 로그: ERROR/ WARN 다수. 503 worker pool saturated, oldest worker blocked 등\n- 의존 대상 상태: payment-gateway DEGRADED, p95 지연 2.127초, callsPerSecond 0.153\n- 최근 변경 이력: RB-STD-02 조치 이후 남은 신호 49건, RB-STD-04 외부 의존 지연 신호 11건 새로 포착\n- 문서: RB-STD-02, RB-STD-04 런북 참조 및 SLA 문구\n\n## 원인 후보\n1) RB-STD-02 - worker_pool_saturated — signal_count=49, first_seen=2026-10-26T00:24:30+00:00, 증상: RB-STD-02 (근거: 여전히 신호 존재, 증상 지속) (evidence: true)\n2) RB-STD-04 - external_api_timeout — signal_count=11, first_seen=2026-10-26T00:24:40+00:00, 의존: payment-gateway, 상태 DEGRADED, 의존 지연 신호 지속 (evidence: true)\n3) RB-STD-01 - connection_pool_exhausted — signal_count=0 (근거 없음)\n4) RB-STD-03 - request_queue_backlog — signal_count=0 (근거 없음)\n5) RB-STD-05 - slow_query — signal_count=0 (근거 없음)\n\n- 최우선 원인: RB-STD-04 외부 의존 지연\n- 보완 후보: RB-STD-02 워커 풀 포화 (내부 처리 대기)\n\n## 조치와 결과\n- 승인 및 조치 이력\n  - RB-STD-02 조치 수행: restart_pods(checkin-api) — 실행 EXECUTED, 대상 파드 여러 대를 한 번에 재시작(ALL_AT_ONCE)\n  - 외부 의존(DEGRADED) 이슈는 해결되지 않음으로 간주되며, RB-STD-04 개선을 병행 제안\n- 실행 결과\n  - 조치 상태: RB-STD-02 관련 신호 감소 확인(신호 개수 404→ 49로 감소)되었으나 여전히 남아있음\n  - 회복 여부: NOT_RECOVERED (에러율 0.00, p95 지연 2.45초)로 남아 있음\n- 고객 공지 발송 시도\n  - 메시지 전송 시 검증 오류로 실패(Sent 자체 실패). 에스컬레이션 기록 QUEUED로 남아 있으며 Slack 통보는 별도 승인 필요\n\n참고: 실행 로그에서 payment-gateway 의 DEGRADED 상태와 신호 11건의 외부 의존 지연이 재현되었고, 내부 워커 풀 포화로 인한 503 신호가 남아 있습니다.\n\n## SLA 영향\n- 도구가 준 응답 기한 및 남은 시간 값을 그대로 사용합니다.\n- 현재 회신 지연 및 에러율 유지로 SILVER 등급 SLA의 목표 달성에 도전 중으로 판단됩니다.\n\n## 권장 다음 행동\n- 사람의 확인 필요: 외부 의존(payment-gateway) 관리 강화 및 재시도 정책 재점검\n  - 결제 게이트웨이 회복 여부 모니터링 강화 및 상태 공유 채널 확보\n  - 필요 시 고객/대행사 공지 절차 점검 및 실행\n- 앱 측 조치 논의: RB-STD-02 대응으로 워커 풀 확장(HPA 조정) 여부 및 큐 관리 개선\n- 재현 로그 분석: oldest worker blocked 원인 파악 및 특정 쿼리/경합 여부 확인\n- 조치 승인 시 실행: RB-STD-04 외부 의존 지연 대응 및 RB-STD-02 워커 풀 재조정\n\n## 조사 과정\n- grafana_query_loki_logs: checkin-api ERROR/WARN 로그 분석(실행 창: 00:21:32~00:25:04 UTC) — 503, oldest worker blocked 다수\n- grafana_query_prometheus: 에러율, p95, RPS 등 메트릭 확인 — 에러율 0.94%, p95 1.796초(조치 직전), 조치 직후 0.94% 유지 및 p95 2.45초 확인\n- business_get_dependency_health: payment-gateway 의존 상태 확인 — DEGRADED, p95 2.127초, callsPerSecond 0.153\n- business_execute_runbook_action: restart_pods 실행 — EXECUTED\n- business_send_customer_notice: 공지 발송 시도 실패(SDK/유효성 검사 에러)\n- past_incidents: 유사 레시던트 참조 및 원인 후보\n- approvals: 에스컬레이션 및 실행 승인 이력 포함",
+  "sources": [
+    {
+      "doc": "docs://_common/runbook-standard",
+      "section": "RB-STD-02 작업 스레드 고갈 (파드 멈춤)"
+    },
+    {
+      "doc": "docs://_common/runbook-standard",
+      "section": "RB-STD-04 외부 의존 서비스 지연"
+    },
+    {
+      "doc": "docs://tenant-b/runbook-reservation-api",
+      "section": "RB-B-03 외부 결제 연동과 고객 공지"
+    },
+    {
+      "doc": "docs://tenant-b/runbook-reservation-api",
+      "section": "RB-B-02 재시작 시 주의"
+    },
+    {
+      "doc": "docs://tenant-b/sla-contract",
+      "section": "제3조 허용 조치"
+    },
+    {
+      "doc": "docs://tenant-b/postmortem-incident-2",
+      "section": "원인 후보"
+    },
+    {
+      "doc": "docs://tenant-b/postmortem-incident-2",
+      "section": "근거"
+    }
+  ],
+  "summary": {
+    "cause": "외부 의존(payment-gateway) 지연(DEGRADED)로 확인",
+    "action": {
+      "args": {
+        "message": "checkin-api 서비스에서 오늘 09:23부터 이용 지연 또는 오류가 발생해 복구 작업을 진행하고 있습니다. 30분 안에 진행 상황을 다시 안내드리겠습니다.",
+        "service": null,
+        "incident_id": 3
+      },
+      "tool": "business_send_customer_notice",
+      "result": {
+        "error": "1 validation error for call[send_customer_notice]\nservice\n  Unexpected keyword argument [type=unexpected_keyword_argument, input_value=None, input_type=NoneType]\n    For further information visit https://errors.pydantic.dev/2.14/v/unexpected_keyword_argument",
+        "status": "FAILED"
+      },
+      "decision": "APPROVE"
+    },
+    "change": null,
+    "notice": "APPROVE",
+    "service": "checkin-api",
+    "severity": "P1",
+    "recovered": false,
+    "error_type": "외부 API 지연",
+    "escalation": "APPROVE",
+    "other_causes": [
+      "RB-STD-02 worker_pool_saturated (signal_count=49, 남아)",
+      "RB-STD-01 connection_pool_exhausted(근거 없음)"
+    ],
+    "notice_result": {
+      "error": "1 validation error for call[send_customer_notice]\nservice\n  Unexpected keyword argument [type=unexpected_keyword_argument, input_value=None, input_type=NoneType]\n    For further information visit https://errors.pydantic.dev/2.14/v/unexpected_keyword_argument",
+      "status": "FAILED"
+    },
+    "runbook_clause": "RB-STD-04 외부 의존 서비스 지연",
+    "escalation_result": {
+      "status": "QUEUED",
+      "category": "P1",
+      "recipients": [
+        {
+          "kind": "MSP_ONCALL",
+          "name": "engineer",
+          "role": "MSP_ENGINEER"
+        },
+        {
+          "kind": "MSP_ONCALL",
+          "name": "admin",
+          "role": "MSP_ADMIN"
+        }
+      ],
+      "escalationId": 4
+    }
+  },
+  "traceUrl": null,
+  "createdAt": "2026-10-26T00:23:32.314635Z",
+  "updatedAt": "2026-10-26T00:25:51.379642Z",
+  "retryOf": null,
+  "retriedBy": null
+}

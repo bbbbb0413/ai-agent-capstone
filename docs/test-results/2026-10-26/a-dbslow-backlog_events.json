@@ -1,0 +1,877 @@
+[
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {},
+      "node": "load_context",
+      "tool": "business_get_tenant_profile",
+      "callId": "39ae000e6cea4cc789e1aa33339c402e"
+    },
+    "createdAt": "2026-10-26T00:23:33.468234Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "load_context",
+      "tool": "business_get_tenant_profile",
+      "callId": "39ae000e6cea4cc789e1aa33339c402e",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T00:23:33.599534Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {},
+      "node": "load_context",
+      "tool": "business_get_service_inventory",
+      "callId": "8746b3e9a9c440c482234fcd86f391aa"
+    },
+    "createdAt": "2026-10-26T00:23:33.607451Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "load_context",
+      "tool": "business_get_service_inventory",
+      "callId": "8746b3e9a9c440c482234fcd86f391aa",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T00:23:33.894599Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "incident_id": 5
+      },
+      "node": "load_context",
+      "tool": "business_get_sla_terms",
+      "callId": "c30671697d4f4f27a113fe624cdcc2d0"
+    },
+    "createdAt": "2026-10-26T00:23:33.897908Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "load_context",
+      "tool": "business_get_sla_terms",
+      "callId": "c30671697d4f4f27a113fe624cdcc2d0",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T00:23:33.932248Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "status": "OPEN"
+      },
+      "node": "load_context",
+      "tool": "business_list_incidents",
+      "callId": "83f133d28d6a465da158b21fc1e3e34f"
+    },
+    "createdAt": "2026-10-26T00:23:33.935Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "load_context",
+      "tool": "business_list_incidents",
+      "callId": "83f133d28d6a465da158b21fc1e3e34f",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T00:23:33.97972Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "status": "RESOLVED"
+      },
+      "node": "load_context",
+      "tool": "business_list_incidents",
+      "callId": "06087cf5c1b941d683416a1505a5130f"
+    },
+    "createdAt": "2026-10-26T00:23:33.984061Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "load_context",
+      "tool": "business_list_incidents",
+      "callId": "06087cf5c1b941d683416a1505a5130f",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T00:23:34.023296Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "limit": 200,
+        "logql": "{app=\"demo-app\", service=\"cart-api\", level=~\"ERROR|WARN\"}",
+        "direction": "backward",
+        "endRfc3339": "2026-10-26T00:23:34+00:00",
+        "startRfc3339": "2026-10-26T00:21:32+00:00",
+        "datasourceUid": "loki-tenant-a"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "00632487540c48b584d5fb78526b869f"
+    },
+    "createdAt": "2026-10-26T00:23:34.028455Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "00632487540c48b584d5fb78526b869f",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T00:23:34.135804Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "expr": "(sum(rate(demo_orders_seconds_count{service=\"cart-api\", outcome=\"error\"}[1m])) or vector(0)) / sum(rate(demo_orders_seconds_count{service=\"cart-api\"}[1m]))",
+        "endTime": "now",
+        "queryType": "instant",
+        "datasourceUid": "prom-tenant-a"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "4494da460b1b4bd5a1484d6b01e30300"
+    },
+    "createdAt": "2026-10-26T00:23:34.138773Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "4494da460b1b4bd5a1484d6b01e30300",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T00:23:34.214883Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "expr": "histogram_quantile(0.95, sum by (le) (rate(demo_orders_seconds_bucket{service=\"cart-api\"}[1m])))",
+        "endTime": "now",
+        "queryType": "instant",
+        "datasourceUid": "prom-tenant-a"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "1e14dab6aa8c4a9e8b01e89ef610fb2c"
+    },
+    "createdAt": "2026-10-26T00:23:34.221945Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "1e14dab6aa8c4a9e8b01e89ef610fb2c",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T00:23:34.263645Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "expr": "sum(rate(demo_orders_seconds_count{service=\"cart-api\"}[1m]))",
+        "endTime": "now",
+        "queryType": "instant",
+        "datasourceUid": "prom-tenant-a"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "6b06cfb8b4d942faa1a191f97450663c"
+    },
+    "createdAt": "2026-10-26T00:23:34.270373Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "6b06cfb8b4d942faa1a191f97450663c",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T00:23:34.300644Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "service": "cart-api"
+      },
+      "node": "diagnose",
+      "tool": "business_list_recent_changes",
+      "callId": "79329412a3b7404fa45ad9de79053469"
+    },
+    "createdAt": "2026-10-26T00:23:34.306667Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "business_list_recent_changes",
+      "callId": "79329412a3b7404fa45ad9de79053469",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T00:23:35.05855Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "query": "cart-api tenant-a cart-api p95 응답시간 1초 초과 로그 신호: {\"connection_pool_exhausted\": 0, \"worker_pool_saturated\": 0, \"request_queue_backlog\": 0, \"external_api_timeout\": 0, \"slow_query\": 100}",
+        "scope": "tenant",
+        "top_k": 2,
+        "doc_type": "postmortem",
+        "exclude_doc_id": "postmortem-incident-5"
+      },
+      "node": "retrieve_history",
+      "tool": "rag_search_documents",
+      "callId": "b499d4ccfa114c158b5932b36a206fe0"
+    },
+    "createdAt": "2026-10-26T00:23:35.060702Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "retrieve_history",
+      "tool": "rag_search_documents",
+      "callId": "b499d4ccfa114c158b5932b36a206fe0",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T00:23:35.606194Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"cart-api\", level=~\"ERROR|WARN\"} |= \"Connection is not available\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T00:23:35+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T00:21:32+00:00",
+        "datasourceUid": "loki-tenant-a"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "045d1f4b130f419ab0a7620ef1aba105"
+    },
+    "createdAt": "2026-10-26T00:23:35.608612Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "045d1f4b130f419ab0a7620ef1aba105",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T00:23:35.638318Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"cart-api\", level=~\"ERROR|WARN\"} |= \"503 worker pool saturated\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T00:23:35+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T00:21:32+00:00",
+        "datasourceUid": "loki-tenant-a"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "42b3eefb37154c748c74554f4a30154f"
+    },
+    "createdAt": "2026-10-26T00:23:35.64141Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "42b3eefb37154c748c74554f4a30154f",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T00:23:35.667269Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"cart-api\", level=~\"ERROR|WARN\"} |= \"request queue backlog\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T00:23:35+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T00:21:32+00:00",
+        "datasourceUid": "loki-tenant-a"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "94744bdcc6004a00a967a2277cb1d5de"
+    },
+    "createdAt": "2026-10-26T00:23:35.669754Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "94744bdcc6004a00a967a2277cb1d5de",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T00:23:35.701437Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"cart-api\", level=~\"ERROR|WARN\"} |= \"payment API timeout\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T00:23:35+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T00:21:32+00:00",
+        "datasourceUid": "loki-tenant-a"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "f10fe07dac874bed8aedee4644bc2235"
+    },
+    "createdAt": "2026-10-26T00:23:35.704525Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "f10fe07dac874bed8aedee4644bc2235",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T00:23:35.729823Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"cart-api\", level=~\"ERROR|WARN\"} |= \"slow query\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T00:23:35+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T00:21:32+00:00",
+        "datasourceUid": "loki-tenant-a"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "e01a0c24965f4d929823ba7af01ce47f"
+    },
+    "createdAt": "2026-10-26T00:23:35.731832Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "e01a0c24965f4d929823ba7af01ce47f",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T00:23:35.760376Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "dependency": "postgres"
+      },
+      "node": "diagnose",
+      "tool": "business_get_dependency_health",
+      "callId": "a0bd0e014a4e47b3a958e42d87161d64"
+    },
+    "createdAt": "2026-10-26T00:23:35.76372Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "business_get_dependency_health",
+      "callId": "a0bd0e014a4e47b3a958e42d87161d64",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T00:23:35.86243Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "dependency": "postgres"
+      },
+      "node": "diagnose",
+      "tool": "business_get_dependency_health",
+      "callId": "call_4RbRtY0wksgVw3lc3dd6JG2t"
+    },
+    "createdAt": "2026-10-26T00:23:39.188081Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "business_get_dependency_health",
+      "callId": "call_4RbRtY0wksgVw3lc3dd6JG2t",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T00:23:39.221308Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "query": "이상 시작: 2026-10-26T00:23:32.277108Z\n근거: p95=1.61s(데이터베이스 의존 대상 DEGRADED), slow_query 누적 5686건, DB 의존 상태 DEGRADED, postgres p95 1.611s, request_queue_backlog 52건 로그 신호\n직전 변경: 2026-10-23T05:47:44Z — gitops/tenants/tenant-a/cart-api.yaml에 장애용 데모 서비스 추가 및 fault 주입 구성 반영\n\n원인 후보:\n1) RB-STD-05 slow_query — 5686건, dependency=postgres, dependency_status=DEGRADED, dependency_share=0.65 (증상: RB-STD-03)\n   - first_seen: 2026-10-26T00:22:55+00:00\n   - evidence: true\n2) RB-STD-03 요청 대기열(backlog) — signal_count=52, first_seen=2026-10-26T00:23:00+00:00\n   - signal: request_queue_backlog\n   - evidence: true\n3) RB-STD-01 연결 풀 고갈 — signal_count=0, first_seen=null\n   - evidence: false\n4) RB-STD-02 작업 스레드 포화 — signal_count=0, first_seen=null\n   - evidence: false\n5) RB-STD-04 외부 의존 지연 — external_api_timeout 0건, first_seen=null\n   - evidence: false\n\n처리할 원인: RB-STD-05 slow_query\n병목: DB\n\n추가 메모\n- 현재 에러율은 0.0으로 비정상 에러 없음이 확인되었고, p95 응답시간은 1.61초대로 DB 의 slow_query와 DEGRADED 상태가 주된 원인으로 보인다.\n- 의존 대상의 최근 1분 p95는 1.611초, callsPerSecond는 111.0으로 측정되어 DB 쿼리 지연이 트래픽 대비 비중이 높다.\n- 직전 변경 시점의 구성 변경으로 cart-api가 데모 환경에 배포되었고 HPA 구성이 포함되어 있다. 현재 상황에서 DB 지연이 처리 대기열 증가로 이어진 것으로 보인다.",
+        "scope": "common",
+        "top_k": 2,
+        "doc_type": "runbook"
+      },
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "fdaee86d6bfc40ccb57f6e369517be4c"
+    },
+    "createdAt": "2026-10-26T00:23:46.551776Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "fdaee86d6bfc40ccb57f6e369517be4c",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T00:23:46.713145Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "query": "이상 시작: 2026-10-26T00:23:32.277108Z\n근거: p95=1.61s(데이터베이스 의존 대상 DEGRADED), slow_query 누적 5686건, DB 의존 상태 DEGRADED, postgres p95 1.611s, request_queue_backlog 52건 로그 신호\n직전 변경: 2026-10-23T05:47:44Z — gitops/tenants/tenant-a/cart-api.yaml에 장애용 데모 서비스 추가 및 fault 주입 구성 반영\n\n원인 후보:\n1) RB-STD-05 slow_query — 5686건, dependency=postgres, dependency_status=DEGRADED, dependency_share=0.65 (증상: RB-STD-03)\n   - first_seen: 2026-10-26T00:22:55+00:00\n   - evidence: true\n2) RB-STD-03 요청 대기열(backlog) — signal_count=52, first_seen=2026-10-26T00:23:00+00:00\n   - signal: request_queue_backlog\n   - evidence: true\n3) RB-STD-01 연결 풀 고갈 — signal_count=0, first_seen=null\n   - evidence: false\n4) RB-STD-02 작업 스레드 포화 — signal_count=0, first_seen=null\n   - evidence: false\n5) RB-STD-04 외부 의존 지연 — external_api_timeout 0건, first_seen=null\n   - evidence: false\n\n처리할 원인: RB-STD-05 slow_query\n병목: DB\n\n추가 메모\n- 현재 에러율은 0.0으로 비정상 에러 없음이 확인되었고, p95 응답시간은 1.61초대로 DB 의 slow_query와 DEGRADED 상태가 주된 원인으로 보인다.\n- 의존 대상의 최근 1분 p95는 1.611초, callsPerSecond는 111.0으로 측정되어 DB 쿼리 지연이 트래픽 대비 비중이 높다.\n- 직전 변경 시점의 구성 변경으로 cart-api가 데모 환경에 배포되었고 HPA 구성이 포함되어 있다. 현재 상황에서 DB 지연이 처리 대기열 증가로 이어진 것으로 보인다.",
+        "scope": "tenant",
+        "top_k": 2,
+        "doc_type": "runbook"
+      },
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "e7ba8f1068a346f984d7c4712a8dd88f"
+    },
+    "createdAt": "2026-10-26T00:23:46.715506Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "e7ba8f1068a346f984d7c4712a8dd88f",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T00:23:46.909691Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "query": "MSP가 사전 동의 없이 수행할 수 있는 허용 조치와 고객사 승인이 필요한 조치",
+        "scope": "tenant",
+        "top_k": 1,
+        "doc_type": "sla"
+      },
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "609ffc72debe4112bf2c714a490acccd"
+    },
+    "createdAt": "2026-10-26T00:23:46.911883Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "609ffc72debe4112bf2c714a490acccd",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T00:23:47.092334Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {},
+      "node": "propose_action",
+      "tool": "business_get_service_inventory",
+      "callId": "18992b780f2145bb89a279399b4ff287"
+    },
+    "createdAt": "2026-10-26T00:23:47.096063Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "propose_action",
+      "tool": "business_get_service_inventory",
+      "callId": "18992b780f2145bb89a279399b4ff287",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T00:23:47.174533Z"
+  },
+  {
+    "type": "STEP",
+    "data": {
+      "node": "propose_action",
+      "facts": [
+        {
+          "clause": "RB-STD-01",
+          "signal": "connection_pool_exhausted",
+          "evidence": false,
+          "dependency": null,
+          "first_seen": null,
+          "signal_count": 0,
+          "dependency_share": null,
+          "dependency_status": null
+        },
+        {
+          "clause": "RB-STD-02",
+          "signal": "worker_pool_saturated",
+          "evidence": false,
+          "dependency": null,
+          "first_seen": null,
+          "signal_count": 0,
+          "dependency_share": null,
+          "dependency_status": null
+        },
+        {
+          "clause": "RB-STD-03",
+          "signal": "request_queue_backlog",
+          "evidence": true,
+          "dependency": null,
+          "first_seen": "2026-10-26T00:23:00+00:00",
+          "signal_count": 52,
+          "dependency_share": null,
+          "dependency_status": null
+        },
+        {
+          "clause": "RB-STD-04",
+          "signal": "external_api_timeout",
+          "evidence": false,
+          "dependency": null,
+          "first_seen": null,
+          "signal_count": 0,
+          "dependency_share": null,
+          "dependency_status": null
+        },
+        {
+          "clause": "RB-STD-05",
+          "signal": "slow_query",
+          "evidence": true,
+          "dependency": "postgres",
+          "first_seen": "2026-10-26T00:22:55+00:00",
+          "signal_count": 5686,
+          "dependency_share": 0.65,
+          "dependency_status": "DEGRADED"
+        }
+      ],
+      "causes": [
+        "RB-STD-05",
+        "RB-STD-03",
+        "RB-STD-01",
+        "RB-STD-02",
+        "RB-STD-04"
+      ],
+      "target": "RB-STD-05"
+    },
+    "createdAt": "2026-10-26T00:23:47.176404Z"
+  },
+  {
+    "type": "APPROVAL_REQUIRED",
+    "data": {
+      "args": {
+        "reason": "RB-STD-05에 따른 의존 대상(Postgres)가 DEGRADED 상태로 확인되어 slow_query가 지속되며, DB 소유자(A사 DBA팀)와의 협업 및 조치 필요.",
+        "category": "DEPENDENCY",
+        "dependency": "postgres",
+        "incident_id": 5
+      },
+      "tool": "business_escalate_incident",
+      "reason": "",
+      "runbook": [
+        {
+          "uri": "docs://_common/runbook-standard",
+          "scope": "common",
+          "score": 0.592,
+          "title": "MSP 표준 장애 대응 런북",
+          "doc_id": "runbook-standard",
+          "content": "[문서] MSP 표준 장애 대응 런북 | MSP 공통 | 런북 | 절 MSP 표준 장애 대응 런북 > RB-STD-03 트래픽 급증 (앱 처리 용량 부족)\n\n## RB-STD-03 트래픽 급증 (앱 처리 용량 부족)\n\n- 증상: 에러율은 정상인데 p95 응답시간 상승, 로그에 `request queue backlog` 경고 반복\n- 구분: 5xx 에러가 늘지 않는다(늘면 RB-STD-02). 외부 API timeout 로그와 DB `slow query` 로그가 없다. 지연이 앱의 처리 대기에서 생긴다\n- 구조 검토: 서비스 목록의 `autoscaling`(HPA)을 먼저 본다. 안전 상한(`safe_max_replicas`)은 DB 최대 연결 수와 계약 상한으로 정해지며, 넘으면 확장 때문에 DB 장애가 날 수 있다\n  - HPA가 있고 최대치에 닿지 않았다(`atMax` false): HPA가 늘리는 중이다. 레플리카를 직접 바꾸지 않고 조치하지 않는다\n  - HPA가 최대치에 닿았고 최대치가 안전 상한보다 작다(`canRaiseMax` true): HPA 최대치를 안전 상한까지 올린다\n  - HPA가 최대치에 닿았고 최대치가 이미 안전 상한이다: 더 늘릴 수 없다. RB-STD-06을 따른다\n  - HPA가 없다: 목표 레플리카는 현재의 2배이고, 안전 상한을 넘으면 상한까지만 늘린다. 이미 상한이면 RB-STD-06\n- 재시작(`restart_pods`)은 처리 용량을 늘리지 않으므로 급증에 효과가 없다. 확장할 수 없으면 재시작으로 대신하지 않고 RB-STD-06을 따른다\n- 조치: HPA가 있으면 `adjust_autoscaler`(`max_replicas`=안전 상한). HPA가 없으면 `scale_deployment`(`replicas`=목표 레플리카). HPA가 관리하는 서비스의 레플리카는 직접 바꾸지 않는다(HPA가 곧 덮어쓴다)",
+          "section": "RB-STD-03 트래픽 급증 (앱 처리 용량 부족)",
+          "version": "81501068c9b4",
+          "doc_type": "runbook",
+          "section_path": "MSP 표준 장애 대응 런북 > RB-STD-03 트래픽 급증 (앱 처리 용량 부족)",
+          "source_format": "md",
+          "document_version": 3
+        },
+        {
+          "uri": "docs://_common/runbook-standard",
+          "scope": "common",
+          "score": 0.549,
+          "title": "MSP 표준 장애 대응 런북",
+          "doc_id": "runbook-standard",
+          "content": "[문서] MSP 표준 장애 대응 런북 | MSP 공통 | 런북 | 절 MSP 표준 장애 대응 런북 > RB-STD-01 설정 변경으로 인한 DB 커넥션 풀 고갈\n\n## RB-STD-01 설정 변경으로 인한 DB 커넥션 풀 고갈\n\n- 증상: 5xx 에러율 급증, 로그에 `HikariPool-1 - Connection is not available, request timed out` 반복\n- 구분: 최근 변경 이력에서 이상 시작 직전에 커넥션 풀 설정(`DEMO_POOL_SIZE`)이 줄었다. DB 자체 지연 로그(`slow query`)는 없다\n- 구조 검토: DB 의존 대상의 상태가 정상인지 확인한다. DB가 지연·장애 상태면 RB-STD-05를 따른다\n- 조치: 직전 배포로 롤백한다 (`rollback_deployment`)\n- 직전 변경이 없으면 RB-STD-02의 재시작을 검토한다",
+          "section": "RB-STD-01 설정 변경으로 인한 DB 커넥션 풀 고갈",
+          "version": "81501068c9b4",
+          "doc_type": "runbook",
+          "section_path": "MSP 표준 장애 대응 런북 > RB-STD-01 설정 변경으로 인한 DB 커넥션 풀 고갈",
+          "source_format": "md",
+          "document_version": 3
+        },
+        {
+          "uri": "docs://tenant-a/runbook-order-api",
+          "scope": "tenant",
+          "score": 0.493,
+          "title": "A사 order-api 서비스 런북",
+          "doc_id": "runbook-order-api",
+          "content": "[문서] A사 order-api 서비스 런북 | tenant-a | 런북 | 절 A사 order-api 서비스 런북 > RB-A-02 DB 관련 연락과 주의\n\n## RB-A-02 DB 관련 연락과 주의\n\n- order-api의 DB(postgres)는 A사 DBA가 소유한다. DB 자체가 느리거나 장애면 앱 조치 전에 A사 DBA에게 먼저 연락한다\n- 확장할 때는 레플리카 수에 커넥션 풀 크기를 곱한 값이 DB 연결 한도를 넘지 않게 한다\n- 레플리카 수는 HPA(`hpa.yaml`, 평소 최대 3)가 정한다. 레플리카를 직접 바꾸지 않고, 최대치가 모자랄 때만 최대치를 올리는 PR을 만든다",
+          "section": "RB-A-02 DB 관련 연락과 주의",
+          "version": "be56622a31c6",
+          "doc_type": "runbook",
+          "section_path": "A사 order-api 서비스 런북 > RB-A-02 DB 관련 연락과 주의",
+          "source_format": "md",
+          "document_version": 1
+        }
+      ],
+      "evidence": [
+        {
+          "args": {
+            "limit": 200,
+            "logql": "{app=\"demo-app\", service=\"cart-api\", level=~\"ERROR|WARN\"}",
+            "direction": "backward",
+            "endRfc3339": "2026-10-26T00:23:34+00:00",
+            "startRfc3339": "2026-10-26T00:21:32+00:00"
+          },
+          "tool": "grafana_query_loki_logs",
+          "status": "success",
+          "signals": {
+            "slow_query": 100,
+            "external_api_timeout": 0,
+            "request_queue_backlog": 0,
+            "worker_pool_saturated": 0,
+            "connection_pool_exhausted": 0
+          },
+          "summary": "[{\"count\": 99, \"level\": \"WARN\", \"example\": \"WARN  [virtual-2317] o.hibernate.SQL_SLOW - slow query: SELECT * FROM orders WHERE customer_id = ? FOR UPDATE took 1452ms (db=postgres)\"}, {\"count\": 1, \"level\": \"WARN\", \"example\": \"WARN  [scheduling-1] o.hibernate.SQL_SLOW - slow query: SELECT * FROM orders WHERE customer_id = ? FOR UPDATE took 1017ms (db=postgres)\"}]"
+        },
+        {
+          "args": {
+            "error_rate": "(sum(rate(demo_orders_seconds_count{service=\"cart-api\", outcome=\"error\"}[1m])) or vector(0)) / sum(rate(demo_orders_seconds_count{service=\"cart-api\"}[1m]))",
+            "p95_seconds": "histogram_quantile(0.95, sum by (le) (rate(demo_orders_seconds_bucket{service=\"cart-api\"}[1m])))",
+            "requests_per_second": "sum(rate(demo_orders_seconds_count{service=\"cart-api\"}[1m]))"
+          },
+          "tool": "grafana_query_prometheus",
+          "summary": "{\"error_rate\": 0.0, \"p95_seconds\": 2.460490952000803, \"requests_per_second\": 91.58117644472227}"
+        },
+        {
+          "args": {
+            "service": "cart-api"
+          },
+          "tool": "business_list_recent_changes",
+          "summary": "{\"service\": \"cart-api\", \"changeMode\": \"GITOPS\", \"source\": \"설정 저장소 gitops/tenants/tenant-a/cart-api.yaml\", \"commits\": [{\"sha\": \"2a4d729\", \"message\": \"Deploy more demo services and inject faults per service\\n\\nTenant A gains cart-api (with its own HPA) and inventory-api, tenant B gains checkin-api, each with a load generator and its own dependency-faults ConfigMap. inject.sh takes --service, clear without it cleans every service of the tenant, and concurrent commits retry on conflicts. The agent r"
+        },
+        {
+          "tool": "cause_facts",
+          "summary": "[{\"clause\": \"RB-STD-01\", \"signal\": \"connection_pool_exhausted\", \"signal_count\": 0, \"first_seen\": null, \"dependency\": null, \"dependency_status\": null, \"dependency_share\": null, \"evidence\": false}, {\"clause\": \"RB-STD-02\", \"signal\": \"worker_pool_saturated\", \"signal_count\": 0, \"first_seen\": null, \"dependency\": null, \"dependency_status\": null, \"dependency_share\": null, \"evidence\": false}, {\"clause\": \"RB-STD-03\", \"signal\": \"request_queue_backlog\", \"signal_count\": 52, \"first_seen\": \"2026-10-26T00:23:00"
+        },
+        {
+          "args": {
+            "dependency": "postgres"
+          },
+          "tool": "business_get_dependency_health",
+          "status": "success",
+          "summary": "<tool_output>\n{\"dependency\":\"postgres\",\"service\":\"cart-api\",\"kind\":\"database\",\"owner\":\"tenant\",\"ownerContact\":\"A사 DBA팀\",\"status\":\"DEGRADED\",\"p95Seconds\":1.611,\"callsPerSecond\":111.037,\"window\":\"최근 1분\",\"thresholds\":{\"degradedSeconds\":0.3,\"downSeconds\":3.0}}\n</tool_output>"
+        }
+      ],
+      "approvalId": "1d42a61f-e424-5f02-8b48-5665a0496eca"
+    },
+    "createdAt": "2026-10-26T00:24:05.481846Z"
+  },
+  {
+    "type": "APPROVAL_DECIDED",
+    "data": {
+      "by": "engineer",
+      "tool": "business_escalate_incident",
+      "decision": "APPROVE"
+    },
+    "createdAt": "2026-10-26T00:24:07.420958Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "reason": "RB-STD-05에 따른 의존 대상(Postgres)가 DEGRADED 상태로 확인되어 slow_query가 지속되며, DB 소유자(A사 DBA팀)와의 협업 및 조치 필요.",
+        "category": "DEPENDENCY",
+        "dependency": "postgres",
+        "incident_id": 5
+      },
+      "node": "propose_action",
+      "tool": "business_escalate_incident",
+      "callId": "79413b04012e4134800d3265017cb828"
+    },
+    "createdAt": "2026-10-26T00:24:07.502747Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "propose_action",
+      "tool": "business_escalate_incident",
+      "callId": "79413b04012e4134800d3265017cb828",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T00:24:07.542775Z"
+  },
+  {
+    "type": "STEP",
+    "data": {
+      "node": "report"
+    },
+    "createdAt": "2026-10-26T00:24:07.545778Z"
+  },
+  {
+    "type": "APPROVAL_REQUIRED",
+    "data": {
+      "args": {
+        "message": "cart-api 서비스의 장애가 09:23(KST) 시작되었으며 현재 응답 지연이 발생하고 있습니다. 느린 쿼리로 인한 데이터베이스 의존성 지연이 주요 원인으로 확인되어 관련 팀과 협업해 원인 분석 및 해결 방안을 모색 중입니다. 조치 진행 중이며 다음 안내 시각은 30분 안에 드리겠습니다.",
+        "incident_id": 5
+      },
+      "tool": "business_send_customer_notice",
+      "reason": "고객 공지 발송",
+      "runbook": [
+        {
+          "uri": "docs://_common/runbook-standard",
+          "scope": "common",
+          "score": 0.592,
+          "title": "MSP 표준 장애 대응 런북",
+          "doc_id": "runbook-standard",
+          "content": "[문서] MSP 표준 장애 대응 런북 | MSP 공통 | 런북 | 절 MSP 표준 장애 대응 런북 > RB-STD-03 트래픽 급증 (앱 처리 용량 부족)\n\n## RB-STD-03 트래픽 급증 (앱 처리 용량 부족)\n\n- 증상: 에러율은 정상인데 p95 응답시간 상승, 로그에 `request queue backlog` 경고 반복\n- 구분: 5xx 에러가 늘지 않는다(늘면 RB-STD-02). 외부 API timeout 로그와 DB `slow query` 로그가 없다. 지연이 앱의 처리 대기에서 생긴다\n- 구조 검토: 서비스 목록의 `autoscaling`(HPA)을 먼저 본다. 안전 상한(`safe_max_replicas`)은 DB 최대 연결 수와 계약 상한으로 정해지며, 넘으면 확장 때문에 DB 장애가 날 수 있다\n  - HPA가 있고 최대치에 닿지 않았다(`atMax` false): HPA가 늘리는 중이다. 레플리카를 직접 바꾸지 않고 조치하지 않는다\n  - HPA가 최대치에 닿았고 최대치가 안전 상한보다 작다(`canRaiseMax` true): HPA 최대치를 안전 상한까지 올린다\n  - HPA가 최대치에 닿았고 최대치가 이미 안전 상한이다: 더 늘릴 수 없다. RB-STD-06을 따른다\n  - HPA가 없다: 목표 레플리카는 현재의 2배이고, 안전 상한을 넘으면 상한까지만 늘린다. 이미 상한이면 RB-STD-06\n- 재시작(`restart_pods`)은 처리 용량을 늘리지 않으므로 급증에 효과가 없다. 확장할 수 없으면 재시작으로 대신하지 않고 RB-STD-06을 따른다\n- 조치: HPA가 있으면 `adjust_autoscaler`(`max_replicas`=안전 상한). HPA가 없으면 `scale_deployment`(`replicas`=목표 레플리카). HPA가 관리하는 서비스의 레플리카는 직접 바꾸지 않는다(HPA가 곧 덮어쓴다)",
+          "section": "RB-STD-03 트래픽 급증 (앱 처리 용량 부족)",
+          "version": "81501068c9b4",
+          "doc_type": "runbook",
+          "section_path": "MSP 표준 장애 대응 런북 > RB-STD-03 트래픽 급증 (앱 처리 용량 부족)",
+          "source_format": "md",
+          "document_version": 3
+        },
+        {
+          "uri": "docs://_common/runbook-standard",
+          "scope": "common",
+          "score": 0.549,
+          "title": "MSP 표준 장애 대응 런북",
+          "doc_id": "runbook-standard",
+          "content": "[문서] MSP 표준 장애 대응 런북 | MSP 공통 | 런북 | 절 MSP 표준 장애 대응 런북 > RB-STD-01 설정 변경으로 인한 DB 커넥션 풀 고갈\n\n## RB-STD-01 설정 변경으로 인한 DB 커넥션 풀 고갈\n\n- 증상: 5xx 에러율 급증, 로그에 `HikariPool-1 - Connection is not available, request timed out` 반복\n- 구분: 최근 변경 이력에서 이상 시작 직전에 커넥션 풀 설정(`DEMO_POOL_SIZE`)이 줄었다. DB 자체 지연 로그(`slow query`)는 없다\n- 구조 검토: DB 의존 대상의 상태가 정상인지 확인한다. DB가 지연·장애 상태면 RB-STD-05를 따른다\n- 조치: 직전 배포로 롤백한다 (`rollback_deployment`)\n- 직전 변경이 없으면 RB-STD-02의 재시작을 검토한다",
+          "section": "RB-STD-01 설정 변경으로 인한 DB 커넥션 풀 고갈",
+          "version": "81501068c9b4",
+          "doc_type": "runbook",
+          "section_path": "MSP 표준 장애 대응 런북 > RB-STD-01 설정 변경으로 인한 DB 커넥션 풀 고갈",
+          "source_format": "md",
+          "document_version": 3
+        },
+        {
+          "uri": "docs://tenant-a/runbook-order-api",
+          "scope": "tenant",
+          "score": 0.493,
+          "title": "A사 order-api 서비스 런북",
+          "doc_id": "runbook-order-api",
+          "content": "[문서] A사 order-api 서비스 런북 | tenant-a | 런북 | 절 A사 order-api 서비스 런북 > RB-A-02 DB 관련 연락과 주의\n\n## RB-A-02 DB 관련 연락과 주의\n\n- order-api의 DB(postgres)는 A사 DBA가 소유한다. DB 자체가 느리거나 장애면 앱 조치 전에 A사 DBA에게 먼저 연락한다\n- 확장할 때는 레플리카 수에 커넥션 풀 크기를 곱한 값이 DB 연결 한도를 넘지 않게 한다\n- 레플리카 수는 HPA(`hpa.yaml`, 평소 최대 3)가 정한다. 레플리카를 직접 바꾸지 않고, 최대치가 모자랄 때만 최대치를 올리는 PR을 만든다",
+          "section": "RB-A-02 DB 관련 연락과 주의",
+          "version": "be56622a31c6",
+          "doc_type": "runbook",
+          "section_path": "A사 order-api 서비스 런북 > RB-A-02 DB 관련 연락과 주의",
+          "source_format": "md",
+          "document_version": 1
+        }
+      ],
+      "evidence": [
+        {
+          "args": {
+            "error_rate": "(sum(rate(demo_orders_seconds_count{service=\"cart-api\", outcome=\"error\"}[1m])) or vector(0)) / sum(rate(demo_orders_seconds_count{service=\"cart-api\"}[1m]))",
+            "p95_seconds": "histogram_quantile(0.95, sum by (le) (rate(demo_orders_seconds_bucket{service=\"cart-api\"}[1m])))",
+            "requests_per_second": "sum(rate(demo_orders_seconds_count{service=\"cart-api\"}[1m]))"
+          },
+          "tool": "grafana_query_prometheus",
+          "summary": "{\"error_rate\": 0.0, \"p95_seconds\": 2.460490952000803, \"requests_per_second\": 91.58117644472227}"
+        },
+        {
+          "args": {
+            "service": "cart-api"
+          },
+          "tool": "business_list_recent_changes",
+          "summary": "{\"service\": \"cart-api\", \"changeMode\": \"GITOPS\", \"source\": \"설정 저장소 gitops/tenants/tenant-a/cart-api.yaml\", \"commits\": [{\"sha\": \"2a4d729\", \"message\": \"Deploy more demo services and inject faults per service\\n\\nTenant A gains cart-api (with its own HPA) and inventory-api, tenant B gains checkin-api, each with a load generator and its own dependency-faults ConfigMap. inject.sh takes --service, clear without it cleans every service of the tenant, and concurrent commits retry on conflicts. The agent r"
+        },
+        {
+          "tool": "cause_facts",
+          "summary": "[{\"clause\": \"RB-STD-01\", \"signal\": \"connection_pool_exhausted\", \"signal_count\": 0, \"first_seen\": null, \"dependency\": null, \"dependency_status\": null, \"dependency_share\": null, \"evidence\": false}, {\"clause\": \"RB-STD-02\", \"signal\": \"worker_pool_saturated\", \"signal_count\": 0, \"first_seen\": null, \"dependency\": null, \"dependency_status\": null, \"dependency_share\": null, \"evidence\": false}, {\"clause\": \"RB-STD-03\", \"signal\": \"request_queue_backlog\", \"signal_count\": 52, \"first_seen\": \"2026-10-26T00:23:00"
+        },
+        {
+          "args": {
+            "dependency": "postgres"
+          },
+          "tool": "business_get_dependency_health",
+          "status": "success",
+          "summary": "<tool_output>\n{\"dependency\":\"postgres\",\"service\":\"cart-api\",\"kind\":\"database\",\"owner\":\"tenant\",\"ownerContact\":\"A사 DBA팀\",\"status\":\"DEGRADED\",\"p95Seconds\":1.611,\"callsPerSecond\":111.037,\"window\":\"최근 1분\",\"thresholds\":{\"degradedSeconds\":0.3,\"downSeconds\":3.0}}\n</tool_output>"
+        },
+        {
+          "tool": "business_escalate_incident",
+          "status": "success",
+          "summary": "<tool_output>\n{\"escalationId\":3,\"status\":\"QUEUED\",\"duplicate\":false,\"category\":\"DEPENDENCY\",\"recipients\":[{\"kind\":\"MSP_ONCALL\",\"name\":\"engineer\",\"role\":\"MSP_ENGINEER\"},{\"kind\":\"MSP_ONCALL\",\"name\":\"admin\",\"role\":\"MSP_ADMIN\"},{\"kind\":\"DEPENDENCY_OWNER\",\"name\":\"A사 DBA팀\",\"role\":\"postgres\"}],\"message\":\"[OpsLens 에스컬레이션] A사 온라인 쇼핑몰 인시던트 #5 (P2, cart-api)\\n장애: tenant-a cart-api p95 응답시간 1초 초과\\n분류: 원인이 다른 팀 소유의 의존 대상\\n이유: RB-STD-05에 따른 의존 대상(Postgres)가 DEGRADED 상태로 확인되어 slow_query가 지속되며, DB 소유자(A사 DBA팀)와"
+        }
+      ],
+      "approvalId": "04ce1309-0514-563b-9c0d-955ea6f1fb16"
+    },
+    "createdAt": "2026-10-26T00:24:26.303987Z"
+  },
+  {
+    "type": "APPROVAL_DECIDED",
+    "data": {
+      "by": "admin",
+      "tool": "business_send_customer_notice",
+      "decision": "APPROVE"
+    },
+    "createdAt": "2026-10-26T00:24:27.499527Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "message": "cart-api 서비스의 장애가 09:23(KST) 시작되었으며 현재 응답 지연이 발생하고 있습니다. 느린 쿼리로 인한 데이터베이스 의존성 지연이 주요 원인으로 확인되어 관련 팀과 협업해 원인 분석 및 해결 방안을 모색 중입니다. 조치 진행 중이며 다음 안내 시각은 30분 안에 드리겠습니다.",
+        "incident_id": 5
+      },
+      "node": "notice",
+      "tool": "business_send_customer_notice",
+      "callId": "8982f01296ce4e1cbd80b9a2896bcbed"
+    },
+    "createdAt": "2026-10-26T00:24:27.632572Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "notice",
+      "tool": "business_send_customer_notice",
+      "callId": "8982f01296ce4e1cbd80b9a2896bcbed",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T00:24:27.713384Z"
+  },
+  {
+    "type": "DONE",
+    "data": {},
+    "createdAt": "2026-10-26T00:24:27.729699Z"
+  }
+]

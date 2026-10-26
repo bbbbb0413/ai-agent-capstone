@@ -1,0 +1,112 @@
+{
+  "id": "d6700c6f-ec20-4b0c-8018-23c65e8fbf8f",
+  "tenantId": "tenant-a",
+  "incidentId": 5,
+  "type": "DIAGNOSE",
+  "question": "tenant-a cart-api p95 응답시간 1초 초과",
+  "status": "DONE",
+  "requestedBy": null,
+  "pendingAction": null,
+  "answer": "## 요약\ntenant-a cart-api의 p95 응답시간이 1초대를 초과하는 장애가 발생했고, DB 의 Slow Query로 인한 지연이 주된 원인으로 확인되었습니다. 현재는 의존 대상(Postgres)의 상태가 DEGRADED로 확인되어 Slow Query가 지속되고 있으며, DB 쿼리 대기열(backlog) 증가가 관측됩니다. 에스컬레이션이 QUEUED 상태이며, 고객사 DBA팀과의 협업이 필요합니다.\n\n## 근거\n- 메트릭: 최근 1분 p95Seconds 1.611초, callsPerSecond 약 111.04, 종합 p95 1.611s (postgres 의 DEGRADED 상태)\n- 로그: slow_query 로그 다수 — 예시: \"slow query: SELECT * FROM orders WHERE customer_id = ? FOR UPDATE took 1452ms (db=postgres)\" (WARN 레벨)\n- 변경 이력: 직전 변경 시점에 장애용 데모 서비스 추가 및 fault 주입 구성 반영 (2026-10-23T05:47:44Z)\n- 문서: MSP 표준 장애 대응 런북 RB-STD-05, RB-STD-03, RB-STD-01 참고\n- 증거 종합: 의존 대상(Postgres)의 DEGRADED 상태로 인해 slow_query가 지속되고, request_queue_backlog 52건으로 확인\n- 증거 도구 요약\n  - grafana_query_loki_logs: slow query 다수 로그 확인\n  - grafana_query_prometheus: p95Seconds 1.611s, requests_per_second 약 91–111대\n  - business_get_dependency_health: postgres 의 상태 DEGRADED, p95Seconds 1.611, callsPerSecond 111.037\n  - 함께 제공된 변경 이력/런북: RB-STD-05(의존 대상), RB-STD-03(트래픽 급증 대응), RB-A-02/RB-A-03(고객 공지/DB 관련 주의사항)\n\n## 원인 후보\n1) RB-STD-05 slow_query — 5686건, dependency=postgres, dependency_status=DEGRADED, dependency_share=0.65 (증상: RB-STD-03)\n   - first_seen: 2026-10-26T00:22:55+00:00\n   - evidence: true\n2) RB-STD-03 요청 대기열(backlog) — signal_count=52, first_seen=2026-10-26T00:23:00+00:00\n   - signal: request_queue_backlog\n   - evidence: true\n3) RB-STD-01 연결 풀 고갈 — signal_count=0, first_seen=null\n   - evidence: false\n4) RB-STD-02 작업 스레드 포화 — signal_count=0, first_seen=null\n   - evidence: false\n5) RB-STD-04 외부 의존 지연 — external_api_timeout 0건, first_seen=null\n   - evidence: false\n\n- 최종 진단: RB-STD-05 slow_query가 주된 원인이며, DB(포스트그래스) 의 DEGRADED 상태로 인해 slow_query가 지속되고 있습니다. RB-STD-03의 대기열(backlog)도 동반 관측되어 시스템 처리 여력이 부족해진 상황입니다.\n\n## 조치와 결과\n- 승인자: 엔지니어\n- 실행 내용: 에스컬레이션 등록 및 의존 대상 소유자(A사 DBA팀)와의 협업 필요성 공지\n- 채널/방식: 정책상 PR 반영은 SLA 문서에 따라 진행 예정(변경은 PR로 반영, 필요 시 롤백 포함)\n- 회복 확인 수치: 현재 recovered 여부 미확정(N/A). p95 지연 지속 여부에 대한 추가 확인 필요\n- 현재 상태: escalated to 의존 대상(데이터베이스) 소유팀과 협업 중인 상태\n\n에스컬레이션 상세: \n- 에스컬레이션 ID 3, 상태 QUEUED\n- 수신자: MSP_ONCALL 엔지니어, MSP_ONCALL 관리자, DEPENDENCY_OWNER A사 DBA팀\n- 메시지 요지: cart-api p95 응답시간 1초 초과 및 의존 대상(Postgres) DEGRADED 사유로 협업 필요\n- 고객사 공지 여부: 별도 확인 및 Slack 발송은 추후 승인 필요\n\nSLA 영향:\n- SLA 계약상 남은 응답 기한(remainingMinutes) 값: 59분\n- 응답 마감 시각: 2026-10-26T01:23:32.277108Z\n\n## 권장 다음 행동\n- 사람의 확인이 필요한 항목\n  - A사 DBA팀과 협력하여 Postgres의 DEGRADED 원인 분석 및 Slow Query의 구체적 원인 확인(예: 인덱스, 쿼리 플랜, 실행 시간 분포)\n  - Slow Query 상위 5개 쿼리의 실행 계획 및 실행 시간 분석 후 필요 시 쿼리 최적화 또는 지연 구간 완화를 위한 보완 조치\n  - 현재 DB 의 p95 1.611s를 개선하기 위한 초단기 방안(캐시 경로 점검, 쿼리 재작성, 인덱스 여부 확인)과 중기 방안(쿼리 프로파일링, 인덱스 추가 여부)\n  - 의존 대상의 지연이 장기화될 경우 RB-STD-03에 따라 HPA 조정 및 필요 시 롤백/스케일링 정책 재평가\n  - 고객 공지 RB-A-03에 따라 15분 내 초기사용 공지 여부 및 이후 업데이트 시각 확정\n\n- MSP 내부 조치\n  - DB 의존 관계를 최소화할 수 있는 임시 우회 경로 검토 여부 확인\n  - Cart-API의 HPA 구성 및 최대치 조정 여부를 RB-STD-03의 Runbook에 따라 검토\n  - 필요한 경우 PR 변경으로 HPA 설정 및 서비스 구성을 업데이트하는 절차 실시\n\n## 조사 과정\n- grafana_query_loki_logs: cart-api 로그에서 WARN/ERROR 필터로 slow_query 및 관련 경고 확인 (start 2026-10-26T00:21:32Z ~ 00:23:34Z)\n- grafana_query_prometheus: p95Seconds 및 rps 확인 (최근 1분간 p95Seconds 1.611s, rps 약 91–111)\n- business_get_dependency_health: Postgres 의 상태 DEGRADED 확인 및 p95 1.611s, callsPerSecond 111.037\n- business_escalate_incident: incident 5의 에스컬레이션 QUEUED 상태로 기록\n- change 로그: 최근 변경이 DEMO 환경 배포 및 fault 주입 구성으로 기록\n- Runbook 및 SLA 문서: RB-STD 계열 및 RB-A-XX 고객 공지 규정 확인",
+  "sources": [
+    {
+      "doc": "docs://_common/runbook-standard",
+      "section": "RB-STD-03 트래픽 급증 (앱 처리 용량 부족)"
+    },
+    {
+      "doc": "docs://_common/runbook-standard",
+      "section": "RB-STD-01 설정 변경으로 인한 DB 커넥션 풀 고갈"
+    },
+    {
+      "doc": "docs://tenant-a/runbook-order-api",
+      "section": "RB-A-02 DB 관련 연락과 주의"
+    },
+    {
+      "doc": "docs://tenant-a/runbook-order-api",
+      "section": "RB-A-03 고객 공지 기준"
+    },
+    {
+      "doc": "docs://tenant-a/sla-contract",
+      "section": "제3조 허용 조치"
+    }
+  ],
+  "summary": {
+    "cause": "RB-STD-05 slow_query로 DB가 DEGRADED 상태에 있음",
+    "action": {
+      "args": {
+        "reason": "RB-STD-05에 따른 의존 대상(Postgres)가 DEGRADED 상태로 확인되어 slow_query가 지속되며, DB 소유자(A사 DBA팀)와의 협업 및 조치 필요.",
+        "category": "DEPENDENCY",
+        "dependency": "postgres",
+        "incident_id": 5
+      },
+      "tool": "business_escalate_incident",
+      "result": {
+        "status": "QUEUED",
+        "message": "[OpsLens 에스컬레이션] A사 온라인 쇼핑몰 인시던트 #5 (P2, cart-api)\n장애: tenant-a cart-api p95 응답시간 1초 초과\n분류: 원인이 다른 팀 소유의 의존 대상\n이유: RB-STD-05에 따른 의존 대상(Postgres)가 DEGRADED 상태로 확인되어 slow_query가 지속되며, DB 소유자(A사 DBA팀)와의 협업 및 조치 필요.\n원인 의존 대상: postgres\nOpsLens에서 인시던트 #5의 작업과 보고서를 확인한다",
+        "category": "DEPENDENCY",
+        "delivery": "호출 기록을 저장했다. Slack 발송은 작업 상세에서 문안·채널을 검토한 뒤 별도로 승인한다",
+        "duplicate": false,
+        "recipients": [
+          {
+            "kind": "MSP_ONCALL",
+            "name": "engineer",
+            "role": "MSP_ENGINEER"
+          },
+          {
+            "kind": "MSP_ONCALL",
+            "name": "admin",
+            "role": "MSP_ADMIN"
+          },
+          {
+            "kind": "DEPENDENCY_OWNER",
+            "name": "A사 DBA팀",
+            "role": "postgres"
+          }
+        ],
+        "escalationId": 3
+      },
+      "decision": "APPROVE"
+    },
+    "change": null,
+    "notice": "APPROVE",
+    "service": "cart-api",
+    "severity": "P2",
+    "recovered": null,
+    "error_type": "DB 자체 지연",
+    "escalation": "APPROVE",
+    "other_causes": [
+      "RB-STD-03 요청 대기열(backlog) 신호로 부하 증가 가능성"
+    ],
+    "notice_result": {
+      "status": "SENT"
+    },
+    "runbook_clause": "RB-STD-05",
+    "escalation_result": {
+      "status": "QUEUED",
+      "category": "DEPENDENCY",
+      "recipients": [
+        {
+          "kind": "MSP_ONCALL",
+          "name": "engineer",
+          "role": "MSP_ENGINEER"
+        },
+        {
+          "kind": "MSP_ONCALL",
+          "name": "admin",
+          "role": "MSP_ADMIN"
+        },
+        {
+          "kind": "DEPENDENCY_OWNER",
+          "name": "A사 DBA팀",
+          "role": "postgres"
+        }
+      ],
+      "escalationId": 3
+    }
+  },
+  "traceUrl": null,
+  "createdAt": "2026-10-26T00:23:32.314485Z",
+  "updatedAt": "2026-10-26T00:24:27.729699Z",
+  "retryOf": null,
+  "retriedBy": null
+}

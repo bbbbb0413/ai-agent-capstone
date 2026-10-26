@@ -1,0 +1,61 @@
+{
+  "date": "2026-10-26",
+  "scenarios": [
+    {
+      "scenario": "b-hang-latency",
+      "passed": false,
+      "checks_passed": 8,
+      "checks_failed": 1,
+      "seconds": 175
+    },
+    {
+      "scenario": "a-dbslow-backlog",
+      "passed": true,
+      "checks_passed": 8,
+      "checks_failed": 0,
+      "seconds": 95
+    },
+    {
+      "scenario": "b-pool-dbslow",
+      "passed": true,
+      "checks_passed": 9,
+      "checks_failed": 0,
+      "seconds": 103
+    }
+  ],
+  "passed": 2,
+  "failed": 1,
+  "failure": {
+    "scenario": "b-hang-latency",
+    "stage": "customer notice MCP invocation",
+    "unexpected_argument": {
+      "service": null
+    },
+    "tool_signature": "send_customer_notice(incident_id, message)",
+    "notice_result": "FAILED",
+    "task_status": "DONE",
+    "notice_audit_for_incident_3": false,
+    "code_locations": [
+      "server/python/business-mcp/src/business_mcp/server.py:179",
+      "server/python/agent/src/agent/graph.py:591",
+      "server/python/agent/src/agent/graph.py:776"
+    ]
+  },
+  "limitations": [
+    "A사 dependency_share=0.65로 DBA 이관 분기 실행. HPA 확대 PR 분기는 이번 실행에서 미실행.",
+    "전체 18개를 현재 버전에서 일괄 실행한 결과가 아님."
+  ],
+  "cleanup": {
+    "argocd": "main Synced/Healthy",
+    "load_generators": "loadgen-tenant-a=0 loadgen-tenant-a-cart-api=0 loadgen-tenant-b=0 loadgen-tenant-b-checkin-api=0",
+    "dependency_faults": {
+      "cart-api": "",
+      "checkin-api": "",
+      "reservation-api": ""
+    },
+    "incidents": "4|reservation-api|RESOLVED\n5|cart-api|RESOLVED\n3|checkin-api|RESOLVED",
+    "pending_tasks": "0",
+    "remaining_e2e_branches": []
+  },
+  "source_unchanged": true
+}

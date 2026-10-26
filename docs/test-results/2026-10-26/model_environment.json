@@ -1,0 +1,11 @@
+{
+  "checked_at": "2026-10-26",
+  "primary_model": "gpt-5-mini",
+  "primary_probe_status": 403,
+  "primary_probe_reason": "model access denied for current API project",
+  "fallback_model": "gpt-5-nano",
+  "fallback_probe_status": 200,
+  "fallback_probe_response_model": "gpt-5-nano-2025-08-07",
+  "run_model_attribution": "Fallback is inferred from configuration and 403/success logs; per-call response model metadata was not retained.",
+  "jev_enabled": false
+}
