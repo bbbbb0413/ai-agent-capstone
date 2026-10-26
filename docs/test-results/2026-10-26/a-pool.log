@@ -1,0 +1,30 @@
+10:10:30  ▶ A사 잘못된 설정 배포 → 롤백 PR → 병합 → 동기화 (GITOPS)
+10:10:32  e2e/20261026-101005에 커밋 602649b (Tune cart-api DB connection pool to 5. ArgoCD가 30초 안에 반영한다)
+10:10:32  tenant-a cart-api 알림 → 인시던트·작업 생성을 기다린다 (알림 규칙 for 15s + 평가 주기)
+10:11:47  인시던트 #10 (P1) · 작업 1f944ddf · http://127.0.0.1:18000/tasks/1f944ddf-43ed-4a94-b6a5-a2eba9059fc0
+10:11:47  상태: WAITING_APPROVAL
+10:11:47  승인 요청: business_escalate_incident P1
+10:11:47  → engineer가 승인
+10:11:51  상태: RUNNING
+10:12:11  상태: WAITING_APPROVAL
+10:12:11  승인 요청: business_execute_runbook_action rollback_deployment cart-api
+10:12:12  → engineer가 승인
+10:12:16  상태: RUNNING
+10:12:20  상태: CHANGE_PENDING
+10:12:20  ✅ PR #95이 A사 설정 경로만 바꾼다 (gitops/tenants/tenant-a/cart-api.yaml)
+10:12:22  ✅ PR #95 병합 (Pull Request successfully merged)
+10:12:24  PR 브랜치 opslens/tenant-a/rollback-cart-api-1792977133를 지웠다
+10:13:08  상태: RUNNING
+10:14:16  상태: WAITING_APPROVAL
+10:14:16  승인 요청: business_send_customer_notice
+10:14:16  → admin가 승인
+10:14:20  상태: DONE
+10:14:20  ✅ 작업 완료 (상태 DONE)
+10:14:20  ✅ 기대한 조치를 제안했다 (business_execute_runbook_action rollback_deployment cart-api)
+10:14:20  ✅ 조치 제안이 한 번이다 (1번. 두 번 이상이면 회복 판단을 의심한다)
+10:14:20  ✅ 기대하지 않은 승인 요청이 없다
+10:14:20  ✅ PR 병합 후 ArgoCD 동기화 알림으로 재개됐다
+10:14:20  ✅ 회복 확인: RECOVERED
+10:14:20  ✅ 클러스터의 풀 크기가 20으로 돌아왔다 (현재 20)
+10:14:21  tenant-a cart-api 장애 해제
+10:14:21  ■ 통과 (231초)

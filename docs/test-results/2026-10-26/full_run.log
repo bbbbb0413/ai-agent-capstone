@@ -1,0 +1,434 @@
+
+결과 폴더: .local/e2e/20261026-101003/summary.md (실행 중에도 갱신된다)
+
+▶ 사전 점검
+  10:10:04  ✅ compose 서비스 실행 중 (12/12)
+  10:10:04  ✅ kind 고객사 서비스 (cart-api=2/2 inventory-api=2/2 order-api=2/2 checkin-api=1/1 reservation-api=1/1)
+  10:10:04  ✅ ArgoCD tenant-a Synced/Healthy
+  10:10:04  ✅ 공통 표준 런북의 검색 버전이 색인됐다 (RAG)
+  10:10:05  ✅ 지난 실행의 임시 브랜치가 남지 않았다 (backend main, ArgoCD main)
+  10:10:05  ✅ backend에 GITHUB_TOKEN이 있다 (A사 PR)
+  10:10:05  ✅ 부하 발생기가 꺼져 있다 (loadgen-tenant-a=0 loadgen-tenant-a-cart-api=0 loadgen-tenant-b=0 loadgen-tenant-b-checkin-api=0)
+  10:10:05  ✅ A사 cart-api HPA가 평소 상태다 (최소~최대 목표: 2~3 2, 기대 2~3 2)
+  10:10:05  ✅ A사 order-api HPA가 평소 상태다 (최소~최대 목표: 2~3 2, 기대 2~3 2)
+  10:10:05  ✅ 진행 중인 작업이 없다
+  10:10:05  ✅ 열린 인시던트가 없다
+  10:10:08  A사 설정 저장소 기준을 임시 브랜치 e2e/20261026-101005로 바꿨다 (main 1e3be40에서 시작)
+  [isolation   ] 10:10:08  ▶ D. 고객사 격리 (권한·감사 로그)
+  [isolation   ] 10:10:08  ✅ B사 담당자가 A사 인시던트 조회 → 403
+  [isolation   ] 10:10:08  ✅ B사 담당자가 A사 작업 생성 → 403
+  [isolation   ] 10:10:09  ✅ B사 작업 토큰으로 A사 내부 API 호출 → 403 (헤더에 A사를 적어도)
+  [isolation   ] 10:10:09  ✅ 작업 토큰 없이 내부 API 호출 → 401
+  [isolation   ] 10:10:11  ✅ B사 ServiceAccount로 A사 파드 삭제 권한 → no
+  [isolation   ] 10:10:11  ✅ B사 작업의 문서 검색에 A사 문서가 없다 (10건 중 A사 0건)
+  [isolation   ] 10:10:11  ✅ B사 작업에서도 MSP 표준 런북은 검색된다
+  [isolation   ] 10:10:11  ✅ 격리 차단이 감사 로그에 남았다 (1건)
+  [isolation   ] 10:10:11  ■ 통과 (3초)
+  [question    ] 10:10:11  ▶ 문서 질문 → RAG 답변
+  [question    ] 10:10:11  ✅ 질문 접수 → 202
+  [question    ] 10:10:11  상태: QUEUED
+  [question    ] 10:10:15  상태: DONE
+  [question    ] 10:10:15  ✅ 작업 완료 (상태 DONE)
+  [question    ] 10:10:15  ✅ 답변에 계약 기한(15분)이 있다
+  [question    ] 10:10:15  ✅ 출처에 SLA 계약서가 있다
+  [question    ] 10:10:15  ■ 통과 (4초)
+  [no-issue    ] 10:10:15  ▶ 열린 인시던트가 없는 질문 → 이상 없음
+  [no-issue    ] 10:10:15  ✅ 열린 인시던트가 없는 고객사가 있다
+  [no-issue    ] 10:10:15  A사 온라인 쇼핑몰(tenant-a)에 질문한다
+  [no-issue    ] 10:10:15  ✅ 질문 접수 → 202
+  [no-issue    ] 10:10:15  상태: QUEUED
+  [no-issue    ] 10:10:19  상태: DONE
+  [no-issue    ] 10:10:19  ✅ 작업 완료 (상태 DONE)
+  [no-issue    ] 10:10:19  ✅ 답변이 '## 이상 없음'으로 시작하고 고객사 이름을 담는다 ('## 이상 없음\n\n현재 A사 온라인 쇼핑몰에 인식된 장애(처리 중인 인시')
+  [no-issue    ] 10:10:19  ✅ 승인 요청이 없다 (0건)
+  [no-issue    ] 10:10:19  ✅ 컨텍스트 수집 도구만 불렀다 (Node: load_context)
+  [no-issue    ] 10:10:19  ✅ 30초 안에 끝났다 (4초)
+  [no-issue    ] 10:10:19  ■ 통과 (4초)
+  [documents   ] 10:10:19  ▶ 근거 문서 업로드 → 색인 → 검색 반영 → 되돌리기, 권한, 표준 런북 검사
+  [documents   ] 10:10:19  ✅ B사 SLA 계약서가 문서 저장소에 있다 (시드)
+  [documents   ] 10:10:20  ✅ 엔지니어가 B사 SLA 계약서 새 버전(docx) 업로드 → 201
+  [documents   ] 10:10:22  ✅ 30초 안에 색인됐다 (v4 INDEXED, 2초)
+  [documents   ] 10:10:23  ✅ B사 작업의 문서 검색 1위가 새 조항이다 (docs://tenant-b/sla-contract, B사 운영 대행 SLA 계약서 (E2E) > 제9조 E2E 확인 조항)
+  [documents   ] 10:10:23  ✅ 검색 결과에 Word 제목 경로가 있다
+  [documents   ] 10:10:23  ✅ v3으로 되돌리기 → 201 (새 버전 v5)
+  [documents   ] 10:10:25  ✅ 되돌린 버전이 검색 버전이다 (v5)
+  [documents   ] 10:10:26  ✅ 되돌린 뒤 검색에 새 조항이 없다
+  [documents   ] 10:10:26  ✅ 공통 표준 런북이 문서 저장소에 있다 (시드)
+  [documents   ] 10:10:26  ✅ 엔지니어가 공통 표준 런북 업로드 → 403
+  [documents   ] 10:10:26  ✅ 고객사 담당자는 문서 관리 API를 쓰지 않는다 → 403
+  [documents   ] 10:10:26  ✅ 관리자가 조항 번호를 뺀 표준 런북 PDF 업로드 → 201
+  [documents   ] 10:10:28  ✅ 색인 거부: FAILED [VALIDATE] 공통 표준 런북의 조항 번호가 바뀌었다: 빠짐 RB-STD-04. agent의 조치 검사가 조항 번호에 묶여
+  [documents   ] 10:10:28  ✅ 검색은 이전 버전 v3 그대로다 (v3)
+  [documents   ] 10:10:30  ■ 통과 (11초)
+  [a-surge     ] 10:10:30  ▶ A사 트래픽 급증 → HPA 최대치 4 PR → 병합 → 확장
+  [a-pool      ] 10:10:30  ▶ A사 잘못된 설정 배포 → 롤백 PR → 병합 → 동기화 (GITOPS)
+  [a-hang      ] 10:10:30  ▶ A사 파드 멈춤 → 순차 재시작
+  [b-latency   ] 10:10:30  ▶ B사 외부 결제 지연 → 고객 공지
+  [b-hang      ] 10:10:30  ▶ B사 파드 멈춤 → 재시작 (전체 중단 영향 표시)
+  [a-surge     ] 10:10:30  tenant-a order-api 부하 발생기 켬 (초당 250건)
+  [a-surge     ] 10:10:30  tenant-a order-api 알림 → 인시던트·작업 생성을 기다린다 (알림 규칙 for 15s + 평가 주기)
+  [b-latency   ] 10:10:30  tenant-b checkin-api에 PAYMENT_LATENCY 주입
+  [b-latency   ] 10:10:30  tenant-b checkin-api 알림 → 인시던트·작업 생성을 기다린다 (알림 규칙 for 15s + 평가 주기)
+  [b-hang      ] 10:10:30  tenant-b reservation-api에 WORKER_HANG 주입
+  [b-hang      ] 10:10:30  tenant-b reservation-api 알림 → 인시던트·작업 생성을 기다린다 (알림 규칙 for 15s + 평가 주기)
+  [a-hang      ] 10:10:31  tenant-a inventory-api에 WORKER_HANG 주입
+  [a-hang      ] 10:10:31  tenant-a inventory-api 알림 → 인시던트·작업 생성을 기다린다 (알림 규칙 for 15s + 평가 주기)
+  [a-pool      ] 10:10:32  e2e/20261026-101005에 커밋 602649b (Tune cart-api DB connection pool to 5. ArgoCD가 30초 안에 반영한다)
+  [a-pool      ] 10:10:32  tenant-a cart-api 알림 → 인시던트·작업 생성을 기다린다 (알림 규칙 for 15s + 평가 주기)
+  [a-surge     ] 10:11:03  인시던트 #6 (P2) · 작업 4abf9ab1 · http://127.0.0.1:18000/tasks/4abf9ab1-27df-401b-bfe4-ce393c88164a
+  [a-surge     ] 10:11:04  상태: QUEUED
+  [a-hang      ] 10:11:04  인시던트 #7 (P1) · 작업 72522467 · http://127.0.0.1:18000/tasks/72522467-2915-4276-abbd-753eeffaea6f
+  [a-hang      ] 10:11:04  상태: WAITING_APPROVAL
+  [a-hang      ] 10:11:04  승인 요청: business_escalate_incident P1
+  [a-hang      ] 10:11:04  → engineer가 승인
+  [b-hang      ] 10:11:07  인시던트 #8 (P1) · 작업 8278bbbb · http://127.0.0.1:18000/tasks/8278bbbb-7a57-4f8d-8f53-35496194a62f
+  [b-hang      ] 10:11:07  상태: QUEUED
+  [a-surge     ] 10:11:08  상태: RUNNING
+  [a-hang      ] 10:11:08  상태: RUNNING
+  [b-latency   ] 10:11:10  인시던트 #9 (P2) · 작업 a0d788b8 · http://127.0.0.1:18000/tasks/a0d788b8-5b98-463c-af5f-408041611b02
+  [b-latency   ] 10:11:10  상태: RUNNING
+  [a-surge     ] 10:11:28  상태: WAITING_APPROVAL
+  [a-surge     ] 10:11:28  승인 요청: business_execute_runbook_action adjust_autoscaler order-api 4
+  [a-surge     ] 10:11:28  → engineer가 승인
+  [a-surge     ] 10:11:32  상태: RUNNING
+  [a-surge     ] 10:11:36  상태: CHANGE_PENDING
+  [a-surge     ] 10:11:36  ✅ PR #94이 A사 설정 경로만 바꾼다 (gitops/tenants/tenant-a/hpa.yaml)
+  [a-surge     ] 10:11:39  ✅ PR #94 병합 (Pull Request successfully merged)
+  [a-hang      ] 10:11:40  상태: WAITING_APPROVAL
+  [a-hang      ] 10:11:40  승인 요청: business_execute_runbook_action restart_pods inventory-api
+  [a-hang      ] 10:11:40  → engineer가 승인
+  [a-surge     ] 10:11:40  PR 브랜치 opslens/tenant-a/autoscaler-order-api-1792977088를 지웠다
+  [b-latency   ] 10:11:42  상태: WAITING_APPROVAL
+  [b-latency   ] 10:11:42  승인 요청: business_send_customer_notice
+  [b-latency   ] 10:11:42  → admin가 승인
+  [b-hang      ] 10:11:43  상태: WAITING_APPROVAL
+  [b-hang      ] 10:11:43  승인 요청: business_escalate_incident P1
+  [b-hang      ] 10:11:43  → engineer가 승인
+  [a-hang      ] 10:11:44  상태: RUNNING
+  [b-latency   ] 10:11:46  상태: RUNNING
+  [b-hang      ] 10:11:47  상태: RUNNING
+  [a-pool      ] 10:11:47  인시던트 #10 (P1) · 작업 1f944ddf · http://127.0.0.1:18000/tasks/1f944ddf-43ed-4a94-b6a5-a2eba9059fc0
+  [a-pool      ] 10:11:47  상태: WAITING_APPROVAL
+  [a-pool      ] 10:11:47  승인 요청: business_escalate_incident P1
+  [a-pool      ] 10:11:47  → engineer가 승인
+  [a-pool      ] 10:11:51  상태: RUNNING
+  [b-latency   ] 10:11:54  상태: DONE
+  [b-latency   ] 10:11:54  ✅ 작업 완료 (상태 DONE)
+  [b-latency   ] 10:11:54  ✅ 기대한 조치를 제안했다 (business_send_customer_notice)
+  [b-latency   ] 10:11:54  ✅ 조치 제안이 한 번이다 (1번. 두 번 이상이면 회복 판단을 의심한다)
+  [b-latency   ] 10:11:54  ✅ 기대하지 않은 승인 요청이 없다
+  [b-latency   ] 10:11:54  ✅ 고객 공지가 발송됐다
+  [b-latency   ] 10:11:54  ✅ 외부 원인이라 앱 조치를 실행하지 않았다 (0건)
+  [b-latency   ] 10:11:54  tenant-b checkin-api 장애 해제
+  [b-latency   ] 10:11:54  ■ 통과 (84초)
+  [b-hang-latency] 10:11:54  ▶ B사 파드 멈춤 + 결제 지연 → 재시작 후 고객 공지 (겹친 장애)
+  [b-hang-latency] 10:11:54  앞 장애의 인시던트(#9)가 닫히기를 기다린다 (알림 해제 반영)
+  [a-surge     ] 10:12:04  상태: RUNNING
+  [b-hang      ] 10:12:11  상태: WAITING_APPROVAL
+  [b-hang      ] 10:12:11  승인 요청: business_execute_runbook_action restart_pods reservation-api
+  [b-hang      ] 10:12:11  → engineer가 승인
+  [a-pool      ] 10:12:11  상태: WAITING_APPROVAL
+  [a-pool      ] 10:12:11  승인 요청: business_execute_runbook_action rollback_deployment cart-api
+  [a-pool      ] 10:12:12  → engineer가 승인
+  [b-hang      ] 10:12:15  상태: RUNNING
+  [a-pool      ] 10:12:16  상태: RUNNING
+  [a-pool      ] 10:12:20  상태: CHANGE_PENDING
+  [a-pool      ] 10:12:20  ✅ PR #95이 A사 설정 경로만 바꾼다 (gitops/tenants/tenant-a/cart-api.yaml)
+  [a-pool      ] 10:12:22  ✅ PR #95 병합 (Pull Request successfully merged)
+  [a-pool      ] 10:12:24  PR 브랜치 opslens/tenant-a/rollback-cart-api-1792977133를 지웠다
+  [b-hang-latency] 10:12:29  tenant-b checkin-api에 WORKER_HANG 주입; tenant-b checkin-api에 PAYMENT_LATENCY 주입
+  [b-hang-latency] 10:12:29  tenant-b checkin-api 알림 → 인시던트·작업 생성을 기다린다 (알림 규칙 for 15s + 평가 주기)
+  [b-hang-latency] 10:12:59  인시던트 #11 (P1) · 작업 2a0f64ac · http://127.0.0.1:18000/tasks/2a0f64ac-3124-4bce-aa9e-cd5d265d6843
+  [b-hang-latency] 10:12:59  상태: WAITING_APPROVAL
+  [b-hang-latency] 10:12:59  승인 요청: business_escalate_incident P1
+  [b-hang-latency] 10:12:59  → engineer가 승인
+  [b-hang-latency] 10:13:03  상태: RUNNING
+  [a-pool      ] 10:13:08  상태: RUNNING
+  [a-hang      ] 10:13:08  상태: WAITING_APPROVAL
+  [a-hang      ] 10:13:08  승인 요청: business_send_customer_notice
+  [a-hang      ] 10:13:08  → admin가 승인
+  [a-surge     ] 10:13:08  상태: WAITING_APPROVAL
+  [a-surge     ] 10:13:08  승인 요청: business_send_customer_notice
+  [a-surge     ] 10:13:08  → admin가 승인
+  [a-hang      ] 10:13:12  상태: DONE
+  [a-hang      ] 10:13:12  ✅ 작업 완료 (상태 DONE)
+  [a-hang      ] 10:13:12  ✅ 기대한 조치를 제안했다 (business_execute_runbook_action restart_pods inventory-api)
+  [a-hang      ] 10:13:12  ✅ 조치 제안이 한 번이다 (1번. 두 번 이상이면 회복 판단을 의심한다)
+  [a-hang      ] 10:13:12  ✅ 기대하지 않은 승인 요청이 없다
+  [a-hang      ] 10:13:12  ✅ 승인 카드가 순차 재시작임을 알린다
+  [a-hang      ] 10:13:12  ✅ 승인 카드가 전체 서비스 중단 없음을 알린다
+  [a-hang      ] 10:13:12  ✅ 승인 카드에 현재 레플리카가 표시된다
+  [a-hang      ] 10:13:12  ✅ 재시작이 Kubernetes API로 실행됐다
+  [a-hang      ] 10:13:12  ✅ 실제 조치도 파드를 하나씩 재시작했다
+  [a-hang      ] 10:13:12  ✅ 회복 확인: RECOVERED
+  [a-hang      ] 10:13:12  ✅ 파드가 새로 만들어졌다
+  [a-surge     ] 10:13:12  상태: DONE
+  [a-surge     ] 10:13:12  ✅ 작업 완료 (상태 DONE)
+  [a-surge     ] 10:13:12  ✅ 기대한 조치를 제안했다 (business_execute_runbook_action adjust_autoscaler order-api 4)
+  [a-surge     ] 10:13:12  ✅ 조치 제안이 한 번이다 (1번. 두 번 이상이면 회복 판단을 의심한다)
+  [a-surge     ] 10:13:12  ✅ 기대하지 않은 승인 요청이 없다
+  [a-surge     ] 10:13:12  ✅ 안전 상한 4을 넘는 최대치를 제안하지 않았다
+  [a-surge     ] 10:13:12  ✅ PR 병합·동기화 후 HPA 최대치가 4다 (현재 4)
+  [a-surge     ] 10:13:12  ✅ 회복 확인: RECOVERED
+  [a-hang      ] 10:13:13  tenant-a inventory-api 장애 해제
+  [a-hang      ] 10:13:13  ■ 통과 (162초)
+  [a-latency   ] 10:13:13  ▶ A사 외부 결제 지연 → 고객 공지
+  [a-latency   ] 10:13:13  tenant-a inventory-api에 PAYMENT_LATENCY 주입
+  [a-latency   ] 10:13:13  tenant-a inventory-api 알림 → 인시던트·작업 생성을 기다린다 (알림 규칙 for 15s + 평가 주기)
+  [a-surge     ] 10:13:15  tenant-a order-api 장애 해제 (e2e/20261026-101005에 커밋 57c2b9f (Restore order-api autoscaler max to 3. ArgoCD가 30초 안에 반영한다))
+  [a-surge     ] 10:13:15  ■ 통과 (164초)
+  [a-surge-max ] 10:13:15  ▶ A사 트래픽 급증(안전 상한 초과) → 최대치 4 후 미회복 → 에스컬레이션
+  [a-surge-max ] 10:13:15  order-api가 HPA 최대 3·레플리카 2로 돌아오기를 기다린다 (최대 현재: 4 4, 준비 4)
+  [b-hang      ] 10:13:19  상태: WAITING_APPROVAL
+  [b-hang      ] 10:13:19  승인 요청: business_send_customer_notice
+  [b-hang-latency] 10:13:19  상태: WAITING_APPROVAL
+  [b-hang-latency] 10:13:19  승인 요청: business_execute_runbook_action restart_pods checkin-api
+  [b-hang      ] 10:13:19  → admin가 승인
+  [b-hang-latency] 10:13:19  → engineer가 승인
+  [b-hang-latency] 10:13:23  상태: RUNNING
+  [b-hang      ] 10:13:23  상태: DONE
+  [b-hang      ] 10:13:23  ✅ 작업 완료 (상태 DONE)
+  [b-hang      ] 10:13:23  ✅ 기대한 조치를 제안했다 (business_execute_runbook_action restart_pods reservation-api)
+  [b-hang      ] 10:13:23  ✅ 조치 제안이 한 번이다 (1번. 두 번 이상이면 회복 판단을 의심한다)
+  [b-hang      ] 10:13:23  ✅ 기대하지 않은 승인 요청이 없다
+  [b-hang      ] 10:13:23  ✅ 승인 카드가 재시작 중 전체 서비스 중단을 알린다 (레플리카 1)
+  [b-hang      ] 10:13:23  ✅ 재시작이 Kubernetes API로 실행됐다
+  [b-hang      ] 10:13:23  ✅ 회복 확인: RECOVERED
+  [b-hang      ] 10:13:23  ✅ 파드가 새로 만들어졌다
+  [b-hang      ] 10:13:23  tenant-b reservation-api 장애 해제
+  [b-hang      ] 10:13:23  ■ 통과 (173초)
+  [b-pool      ] 10:13:23  ▶ B사 잘못된 배포 → 롤백 계약상 불가 → 에스컬레이션
+  [b-pool      ] 10:13:23  B사 reservation-api에 DEMO_POOL_SIZE=5 배포
+  [b-pool      ] 10:13:23  tenant-b reservation-api 알림 → 인시던트·작업 생성을 기다린다 (알림 규칙 for 15s + 평가 주기)
+  [a-latency   ] 10:13:52  인시던트 #12 (P2) · 작업 6e8d7aae · http://127.0.0.1:18000/tasks/6e8d7aae-3651-492f-97f5-4c5a426e29ba
+  [a-latency   ] 10:13:52  상태: RUNNING
+  [b-pool      ] 10:14:09  인시던트 #13 (P1) · 작업 e652faba · http://127.0.0.1:18000/tasks/e652faba-3755-4964-8a8b-bfaa85e8aa82
+  [b-pool      ] 10:14:09  상태: WAITING_APPROVAL
+  [b-pool      ] 10:14:09  승인 요청: business_escalate_incident P1
+  [b-pool      ] 10:14:09  → engineer가 승인
+  [b-pool      ] 10:14:13  상태: RUNNING
+  [a-pool      ] 10:14:16  상태: WAITING_APPROVAL
+  [a-pool      ] 10:14:16  승인 요청: business_send_customer_notice
+  [a-pool      ] 10:14:16  → admin가 승인
+  [a-latency   ] 10:14:20  상태: WAITING_APPROVAL
+  [a-latency   ] 10:14:20  승인 요청: business_send_customer_notice
+  [a-latency   ] 10:14:20  → admin가 승인
+  [a-pool      ] 10:14:20  상태: DONE
+  [a-pool      ] 10:14:20  ✅ 작업 완료 (상태 DONE)
+  [a-pool      ] 10:14:20  ✅ 기대한 조치를 제안했다 (business_execute_runbook_action rollback_deployment cart-api)
+  [a-pool      ] 10:14:20  ✅ 조치 제안이 한 번이다 (1번. 두 번 이상이면 회복 판단을 의심한다)
+  [a-pool      ] 10:14:20  ✅ 기대하지 않은 승인 요청이 없다
+  [a-pool      ] 10:14:20  ✅ PR 병합 후 ArgoCD 동기화 알림으로 재개됐다
+  [a-pool      ] 10:14:20  ✅ 회복 확인: RECOVERED
+  [a-pool      ] 10:14:20  ✅ 클러스터의 풀 크기가 20으로 돌아왔다 (현재 20)
+  [a-pool      ] 10:14:21  tenant-a cart-api 장애 해제
+  [a-pool      ] 10:14:21  ■ 통과 (231초)
+  [a-dbslow-backlog] 10:14:21  ▶ A사 DB 지연 + 트래픽 급증 → 판단 기준대로 처리 (겹친 장애)
+  [a-dbslow-backlog] 10:14:21  tenant-a cart-api에 DB_SLOW 주입; tenant-a cart-api 부하 발생기 켬 (초당 250건)
+  [a-dbslow-backlog] 10:14:21  tenant-a cart-api 알림 → 인시던트·작업 생성을 기다린다 (알림 규칙 for 15s + 평가 주기)
+  [a-latency   ] 10:14:24  상태: RUNNING
+  [b-hang-latency] 10:14:27  상태: WAITING_APPROVAL
+  [b-hang-latency] 10:14:27  승인 요청: business_send_customer_notice
+  [b-hang-latency] 10:14:27  → admin가 승인
+  [a-latency   ] 10:14:28  상태: DONE
+  [a-latency   ] 10:14:28  ✅ 작업 완료 (상태 DONE)
+  [a-latency   ] 10:14:28  ✅ 기대한 조치를 제안했다 (business_send_customer_notice)
+  [a-latency   ] 10:14:28  ✅ 조치 제안이 한 번이다 (1번. 두 번 이상이면 회복 판단을 의심한다)
+  [a-latency   ] 10:14:28  ✅ 기대하지 않은 승인 요청이 없다
+  [a-latency   ] 10:14:28  ✅ 고객 공지가 발송됐다
+  [a-latency   ] 10:14:28  ✅ 외부 원인이라 앱 조치를 실행하지 않았다 (0건)
+  [a-latency   ] 10:14:29  tenant-a inventory-api 장애 해제
+  [a-latency   ] 10:14:29  ■ 통과 (76초)
+  [a-dbslow    ] 10:14:29  ▶ A사 DB 자체 지연 → DBA 에스컬레이션
+  [a-dbslow    ] 10:14:29  앞 장애의 인시던트(#12)가 닫히기를 기다린다 (알림 해제 반영)
+  [b-hang-latency] 10:14:31  상태: RUNNING
+  [b-hang-latency] 10:14:39  상태: DONE
+  [b-hang-latency] 10:14:39  ✅ 작업 완료 (상태 DONE)
+  [b-hang-latency] 10:14:39  ✅ 진단마다 처리할 원인이 기대와 같다 (기대 RB-STD-02 → RB-STD-04, 실제 RB-STD-02 → RB-STD-04)
+  [b-hang-latency] 10:14:39  ✅ 원인 후보에 RB-STD-02, RB-STD-04가 있다 (적힌 후보: RB-STD-01, RB-STD-02, RB-STD-03, RB-STD-04, RB-STD-05)
+  [b-hang-latency] 10:14:39  ✅ 조치를 기대한 순서로 제안했다 (business_execute_runbook_action restart_pods checkin-api → business_send_customer_notice)
+  [b-hang-latency] 10:14:39  ✅ 같은 앱 조치를 두 번 하지 않았다 (restart_pods)
+  [b-hang-latency] 10:14:39  ✅ 고객 공지가 발송됐다
+  [b-hang-latency] 10:14:39  ✅ 재시작 뒤 결제 지연이 남아 회복되지 않았다고 판정했다
+  [b-hang-latency] 10:14:39  ✅ 재시작한 새 파드도 결제 지연을 이어받았다 (ConfigMap ['PAYMENT_LATENCY'])
+  [b-hang-latency] 10:14:39  ✅ 인시던트가 하나만 열렸다 (#11)
+  [b-hang-latency] 10:14:40  tenant-b checkin-api 장애 해제
+  [b-hang-latency] 10:14:40  ■ 통과 (165초)
+  [a-surge-max ] 10:14:47  tenant-a order-api 부하 발생기 켬 (초당 400건)
+  [a-surge-max ] 10:14:47  tenant-a order-api 알림 → 인시던트·작업 생성을 기다린다 (알림 규칙 for 15s + 평가 주기)
+  [b-pool      ] 10:14:49  상태: WAITING_APPROVAL
+  [b-pool      ] 10:14:49  승인 요청: business_escalate_incident reservation-api ACTION_BLOCKED rollback_deployment CONTRACT
+  [b-pool      ] 10:14:49  → engineer가 승인
+  [b-pool      ] 10:14:53  상태: RUNNING
+  [a-dbslow    ] 10:14:54  tenant-a inventory-api에 DB_SLOW 주입
+  [a-dbslow    ] 10:14:54  tenant-a inventory-api 알림 → 인시던트·작업 생성을 기다린다 (알림 규칙 for 15s + 평가 주기)
+  [a-dbslow-backlog] 10:14:54  인시던트 #14 (P2) · 작업 7f934b32 · http://127.0.0.1:18000/tasks/7f934b32-eef3-411e-862f-8d995580b2a7
+  [a-dbslow-backlog] 10:14:54  상태: RUNNING
+  [b-pool      ] 10:15:01  상태: WAITING_APPROVAL
+  [b-pool      ] 10:15:01  승인 요청: business_send_customer_notice
+  [b-pool      ] 10:15:01  → admin가 승인
+  [b-pool      ] 10:15:05  상태: DONE
+  [b-pool      ] 10:15:05  ✅ 작업 완료 (상태 DONE)
+  [b-pool      ] 10:15:05  ✅ 기대한 조치를 제안했다 (business_escalate_incident reservation-api ACTION_BLOCKED rollback_deployment CONTRACT)
+  [b-pool      ] 10:15:05  ✅ 조치 제안이 한 번이다 (1번. 두 번 이상이면 회복 판단을 의심한다)
+  [b-pool      ] 10:15:05  ✅ 기대하지 않은 승인 요청이 없다
+  [b-pool      ] 10:15:05  ✅ 에스컬레이션 ACTION_BLOCKED rollback_deployment CONTRACT 대기열 등록 (있음: P1, ACTION_BLOCKED CONTRACT rollback_deployment)
+  [b-pool      ] 10:15:05  ✅ 받는 사람에 B사 운영 승인 담당이 있다 (engineer, admin, B사 운영 승인 담당)
+  [b-pool      ] 10:15:05  ✅ 고객 공지가 발송됐다
+  [b-pool      ] 10:15:05  ✅ 롤백이 계약상 불가라 앱 조치를 실행하지 않았다 (0건)
+  [b-pool      ] 10:15:05  tenant-b reservation-api 장애 해제 (B사 reservation-api에 DEMO_POOL_SIZE=20 배포)
+  [b-pool      ] 10:15:05  ■ 통과 (102초)
+  [b-surge     ] 10:15:06  ▶ B사 트래픽 급증 → 확장 계약상 불가 → 에스컬레이션
+  [b-surge     ] 10:15:06  앞 장애의 인시던트(#13)가 닫히기를 기다린다 (알림 해제 반영)
+  [a-surge-max ] 10:15:17  인시던트 #15 (P2) · 작업 02f96685 · http://127.0.0.1:18000/tasks/02f96685-1bfd-4fb6-8e7c-f00ce1fc4d93
+  [a-surge-max ] 10:15:17  상태: QUEUED
+  [a-dbslow-backlog] 10:15:26  상태: WAITING_APPROVAL
+  [a-dbslow-backlog] 10:15:26  승인 요청: business_escalate_incident cart-api DEPENDENCY postgres
+  [a-dbslow-backlog] 10:15:26  → engineer가 승인
+  [a-surge-max ] 10:15:29  상태: RUNNING
+  [a-dbslow-backlog] 10:15:30  상태: RUNNING
+  [a-dbslow    ] 10:15:33  인시던트 #16 (P2) · 작업 ed3ac873 · http://127.0.0.1:18000/tasks/ed3ac873-aded-49fe-8f66-888e9ba7fa59
+  [a-dbslow    ] 10:15:33  상태: QUEUED
+  [a-dbslow-backlog] 10:15:38  상태: WAITING_APPROVAL
+  [a-dbslow-backlog] 10:15:38  승인 요청: business_send_customer_notice
+  [a-dbslow-backlog] 10:15:38  → admin가 승인
+  [a-dbslow-backlog] 10:15:42  상태: DONE
+  [a-dbslow-backlog] 10:15:42  ✅ 작업 완료 (상태 DONE)
+  [a-dbslow-backlog] 10:15:42  ✅ 진단마다 처리할 원인이 기대와 같다 (기대 RB-STD-05, 실제 RB-STD-05)
+  [a-dbslow-backlog] 10:15:42  ✅ 원인 후보에 RB-STD-05가 있다 (적힌 후보: RB-STD-03, RB-STD-04, RB-STD-05)
+  [a-dbslow-backlog] 10:15:42  ✅ 조치를 기대한 순서로 제안했다 (business_escalate_incident cart-api DEPENDENCY postgres)
+  [a-dbslow-backlog] 10:15:42  ✅ 같은 앱 조치를 두 번 하지 않았다 (앱 조치 없음)
+  [a-dbslow-backlog] 10:15:43  ✅ 에스컬레이션 DEPENDENCY postgres 대기열 등록 (있음: DEPENDENCY postgres)
+  [a-dbslow-backlog] 10:15:43  ✅ 받는 사람에 A사 DBA팀이 있다 (engineer, admin, A사 DBA팀)
+  [a-dbslow-backlog] 10:15:43  ✅ 인시던트가 하나만 열렸다 (#14)
+  [a-dbslow-backlog] 10:15:44  tenant-a cart-api 장애 해제
+  [a-dbslow-backlog] 10:15:44  ■ 통과 (84초)
+  [a-dbslow    ] 10:15:49  상태: RUNNING
+  [a-surge-max ] 10:15:49  상태: WAITING_APPROVAL
+  [a-surge-max ] 10:15:49  승인 요청: business_execute_runbook_action adjust_autoscaler order-api 4
+  [a-surge-max ] 10:15:49  → engineer가 승인
+  [b-surge     ] 10:15:50  tenant-b reservation-api 부하 발생기 켬 (초당 120건)
+  [b-surge     ] 10:15:50  tenant-b reservation-api 알림 → 인시던트·작업 생성을 기다린다 (알림 규칙 for 15s + 평가 주기)
+  [a-surge-max ] 10:15:53  상태: RUNNING
+  [a-surge-max ] 10:15:57  상태: CHANGE_PENDING
+  [a-surge-max ] 10:15:57  ✅ PR #96이 A사 설정 경로만 바꾼다 (gitops/tenants/tenant-a/hpa.yaml)
+  [a-surge-max ] 10:16:00  ✅ PR #96 병합 (Pull Request successfully merged)
+  [a-surge-max ] 10:16:01  PR 브랜치 opslens/tenant-a/autoscaler-order-api-1792977349를 지웠다
+  [a-dbslow    ] 10:16:05  상태: WAITING_APPROVAL
+  [a-dbslow    ] 10:16:05  승인 요청: business_escalate_incident inventory-api DEPENDENCY postgres
+  [a-dbslow    ] 10:16:05  → engineer가 승인
+  [a-dbslow    ] 10:16:09  상태: RUNNING
+  [a-dbslow    ] 10:16:17  상태: WAITING_APPROVAL
+  [a-dbslow    ] 10:16:17  승인 요청: business_send_customer_notice
+  [a-dbslow    ] 10:16:17  → admin가 승인
+  [a-dbslow    ] 10:16:21  상태: DONE
+  [a-dbslow    ] 10:16:21  ✅ 작업 완료 (상태 DONE)
+  [a-dbslow    ] 10:16:21  ✅ 기대한 조치를 제안했다 (business_escalate_incident inventory-api DEPENDENCY postgres)
+  [a-dbslow    ] 10:16:21  ✅ 조치 제안이 한 번이다 (1번. 두 번 이상이면 회복 판단을 의심한다)
+  [a-dbslow    ] 10:16:21  ✅ 기대하지 않은 승인 요청이 없다
+  [a-dbslow    ] 10:16:21  ✅ 에스컬레이션 DEPENDENCY postgres 대기열 등록 (있음: DEPENDENCY postgres)
+  [a-dbslow    ] 10:16:21  ✅ 받는 사람에 A사 DBA팀이 있다 (engineer, admin, A사 DBA팀)
+  [a-dbslow    ] 10:16:21  ✅ 고객 공지가 발송됐다
+  [a-dbslow    ] 10:16:22  ✅ DB 자체 지연이라 앱 조치를 실행하지 않았다 (0건)
+  [b-surge     ] 10:16:23  인시던트 #17 (P2) · 작업 ed116936 · http://127.0.0.1:18000/tasks/ed116936-a717-4ec9-bf21-308587e6460e
+  [b-surge     ] 10:16:23  상태: RUNNING
+  [a-dbslow    ] 10:16:24  tenant-a inventory-api 장애 해제
+  [a-dbslow    ] 10:16:24  ■ 통과 (115초)
+  [a-surge-max ] 10:16:25  상태: RUNNING
+  [a-surge-max ] 10:17:19  상태: WAITING_APPROVAL
+  [a-surge-max ] 10:17:19  승인 요청: business_escalate_incident order-api ACTION_BLOCKED adjust_autoscaler STRUCTURE
+  [a-surge-max ] 10:17:19  → engineer가 승인
+  [b-surge     ] 10:17:21  상태: WAITING_APPROVAL
+  [b-surge     ] 10:17:21  승인 요청: business_escalate_incident reservation-api ACTION_BLOCKED scale_deployment CONTRACT
+  [b-surge     ] 10:17:21  → engineer가 승인
+  [a-surge-max ] 10:17:23  상태: RUNNING
+  [b-surge     ] 10:17:25  상태: RUNNING
+  [b-surge     ] 10:17:44  상태: WAITING_APPROVAL
+  [b-surge     ] 10:17:44  승인 요청: business_send_customer_notice
+  [b-surge     ] 10:17:44  → admin가 승인
+  [a-surge-max ] 10:17:44  상태: WAITING_APPROVAL
+  [a-surge-max ] 10:17:44  승인 요청: business_send_customer_notice
+  [a-surge-max ] 10:17:45  → admin가 승인
+  [b-surge     ] 10:17:48  상태: RUNNING
+  [a-surge-max ] 10:17:50  상태: RUNNING
+  [b-surge     ] 10:17:52  상태: DONE
+  [b-surge     ] 10:17:52  ✅ 작업 완료 (상태 DONE)
+  [b-surge     ] 10:17:52  ✅ 기대한 조치를 제안했다 (business_escalate_incident reservation-api ACTION_BLOCKED scale_deployment CONTRACT)
+  [b-surge     ] 10:17:52  ✅ 조치 제안이 한 번이다 (1번. 두 번 이상이면 회복 판단을 의심한다)
+  [b-surge     ] 10:17:52  ✅ 기대하지 않은 승인 요청이 없다
+  [b-surge     ] 10:17:52  ✅ 에스컬레이션 ACTION_BLOCKED scale_deployment CONTRACT 대기열 등록 (있음: ACTION_BLOCKED CONTRACT scale_deployment)
+  [b-surge     ] 10:17:52  ✅ 받는 사람에 B사 운영 승인 담당이 있다 (engineer, admin, B사 운영 승인 담당)
+  [b-surge     ] 10:17:52  ✅ 고객 공지가 발송됐다
+  [b-surge     ] 10:17:52  ✅ 확장이 계약상 불가라 앱 조치를 실행하지 않았다 (0건)
+  [b-surge     ] 10:17:53  tenant-b reservation-api 장애 해제
+  [b-surge     ] 10:17:53  ■ 통과 (167초)
+  [b-pool-dbslow] 10:17:53  ▶ B사 잘못된 배포 + DB 지연 → 롤백 불가 에스컬레이션 (겹친 장애)
+  [b-pool-dbslow] 10:17:53  앞 장애의 인시던트(#17)가 닫히기를 기다린다 (알림 해제 반영)
+  [a-surge-max ] 10:17:54  상태: DONE
+  [a-surge-max ] 10:17:54  ✅ 작업 완료 (상태 DONE)
+  [a-surge-max ] 10:17:54  ✅ 기대한 조치를 제안했다 (business_execute_runbook_action adjust_autoscaler order-api 4)
+  [a-surge-max ] 10:17:54  ✅ 조치 제안이 한 번이다 (1번. 두 번 이상이면 회복 판단을 의심한다)
+  [a-surge-max ] 10:17:54  ✅ 기대하지 않은 승인 요청이 없다
+  [a-surge-max ] 10:17:54  ✅ 안전 상한 4을 넘는 최대치를 제안하지 않았다
+  [a-surge-max ] 10:17:54  ✅ 최대치 4로도 회복되지 않았다고 판정했다
+  [a-surge-max ] 10:17:54  ✅ 에스컬레이션 ACTION_BLOCKED STRUCTURE 대기열 등록 (있음: ACTION_BLOCKED STRUCTURE adjust_autoscaler)
+  [a-surge-max ] 10:17:54  ✅ 받는 사람에 A사 운영 담당이 있다 (engineer, admin, A사 운영 담당)
+  [a-surge-max ] 10:17:54  ✅ 고객 공지가 발송됐다
+  [a-surge-max ] 10:17:56  tenant-a order-api 장애 해제 (관리 API 장애 해제 실패: kubectl --context kind-opslens-tenants -n … 실패: command terminated with exit code 7; e2e/20261026-101005에 커밋 27eb618 (Restore order-api autoscaler max to 3. ArgoCD가 30초 안에 반영한다))
+  [a-surge-max ] 10:17:56  ■ 통과 (190초)
+  [guard       ] 10:17:56  ▶ backend 방어선 (안전 상한·실행 환경·계약)
+  [guard       ] 10:17:56  order-api가 HPA 최대 3·레플리카 2로 돌아오기를 기다린다 (최대 현재: 4 4, 준비 3)
+  [b-pool-dbslow] 10:18:43  tenant-b reservation-api에 DB_SLOW 주입; B사 reservation-api에 DEMO_POOL_SIZE=5 배포
+  [b-pool-dbslow] 10:18:43  tenant-b reservation-api 알림 → 인시던트·작업 생성을 기다린다 (알림 규칙 for 15s + 평가 주기)
+  [b-pool-dbslow] 10:19:22  인시던트 #18 (P2) · 작업 83b19373 · http://127.0.0.1:18000/tasks/83b19373-5f1e-4982-9eaf-2e1cc5dd1552
+  [b-pool-dbslow] 10:19:22  상태: RUNNING
+  [b-pool-dbslow] 10:19:54  상태: WAITING_APPROVAL
+  [b-pool-dbslow] 10:19:54  승인 요청: business_escalate_incident reservation-api ACTION_BLOCKED rollback_deployment CONTRACT
+  [b-pool-dbslow] 10:19:54  → engineer가 승인
+  [b-pool-dbslow] 10:19:58  상태: RUNNING
+  [guard       ] 10:20:10  ✅ A사 HPA 서비스 직접 확장 → HPA 충돌 방지를 위해 거부 (422: order-api의 레플리카는 HPA(order-api, 2~3)가 관리해 직접 바꾸지 않는다. HPA 최대치가 모자라면 ad)
+  [guard       ] 10:20:10  ✅ A사 HPA 최대치 5 → 안전 상한 4로 거부 (422: adjust_autoscaler의 최대치는 3보다 크고 안전 상한 4 이하여야 한다 (요청 5))
+  [guard       ] 10:20:10  ✅ B사 Docker 서비스 재시작 → 지원하지 않는 실행 환경으로 거부 (422: settlement-batch의 실행 환경(docker)은 OpsLens가 지원하지 않아 조치할 수 없다. 지원: [kuber)
+  [guard       ] 10:20:10  ✅ B사 롤백 → 계약상 불가로 거부 (422: 'rollback_deployment'는 B사 예약 플랫폼 계약상 허용되지 않는다. 허용 조치: [restart_pods, n)
+  [guard       ] 10:20:10  ✅ 거부된 요청은 HPA가 관리하는 레플리카를 바꾸지 않았다 (2 → 2)
+  [guard       ] 10:20:10  ■ 통과 (134초)
+  [b-pool-dbslow] 10:20:10  상태: WAITING_APPROVAL
+  [b-pool-dbslow] 10:20:10  승인 요청: business_send_customer_notice
+  [b-pool-dbslow] 10:20:10  → admin가 승인
+  [b-pool-dbslow] 10:20:14  상태: DONE
+  [b-pool-dbslow] 10:20:14  ✅ 작업 완료 (상태 DONE)
+  [b-pool-dbslow] 10:20:14  ✅ 진단마다 처리할 원인이 기대와 같다 (기대 RB-STD-01, 실제 RB-STD-01)
+  [b-pool-dbslow] 10:20:14  ✅ 원인 후보에 RB-STD-01, RB-STD-05가 있다 (적힌 후보: RB-STD-01, RB-STD-02, RB-STD-03, RB-STD-04, RB-STD-05)
+  [b-pool-dbslow] 10:20:14  ✅ 조치를 기대한 순서로 제안했다 (business_escalate_incident reservation-api ACTION_BLOCKED rollback_deployment CONTRACT)
+  [b-pool-dbslow] 10:20:14  ✅ 같은 앱 조치를 두 번 하지 않았다 (앱 조치 없음)
+  [b-pool-dbslow] 10:20:14  ✅ 에스컬레이션 ACTION_BLOCKED rollback_deployment CONTRACT 대기열 등록 (있음: ACTION_BLOCKED CONTRACT rollback_deployment)
+  [b-pool-dbslow] 10:20:14  ✅ 받는 사람에 B사 운영 승인 담당이 있다 (engineer, admin, B사 운영 승인 담당)
+  [b-pool-dbslow] 10:20:15  ✅ 롤백이 계약상 불가라 앱 조치를 실행하지 않았다 (0건)
+  [b-pool-dbslow] 10:20:15  ✅ 인시던트가 하나만 열렸다 (#18)
+  [b-pool-dbslow] 10:20:15  tenant-b reservation-api 장애 해제 (B사 reservation-api에 DEMO_POOL_SIZE=20 배포)
+  [b-pool-dbslow] 10:20:15  ■ 통과 (142초)
+  10:20:16  A사 설정 저장소 기준을 main으로 되돌렸다 (ArgoCD 동기화 확인)
+  10:20:17  임시 브랜치 e2e/20261026-101005을 지웠다
+
+━━ 결과 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PASS  사전 점검                                                    0s
+  PASS  D. 고객사 격리                                                3s
+  PASS  backend 방어선 (계약·구조 제약)                                 134s
+  PASS  문서 질문 (RAG)                                              4s
+  PASS  이상 없음 (열린 인시던트가 없는 질문)                                   4s
+  PASS  근거 문서 업로드·색인·되돌리기                                       11s
+  PASS  A-pool. 잘못된 설정 배포 → 롤백 PR (A사, GITOPS)                 231s
+  PASS  A-hang. 파드 멈춤 → 순차 재시작 (A사, GITOPS)                    162s
+  PASS  A-surge. 트래픽 급증 → HPA 최대치 4 PR (A사, GITOPS)            164s
+  PASS  A-surge-max. 안전 상한으로도 부족 → 에스컬레이션 (A사)                 190s
+  PASS  A-latency. 외부 결제 API 지연 → 고객 공지 (A사)                    76s
+  PASS  A-dbslow. DB 자체 지연 → DBA 에스컬레이션 (A사)                   115s
+  PASS  B-hang. 파드 멈춤 → 재시작 (B사, DIRECT)                       173s
+  PASS  B-latency. 외부 결제 API 지연 → 고객 공지 (B사)                    84s
+  PASS  B-pool. 잘못된 배포 → 롤백 불가 에스컬레이션 (B사)                     102s
+  PASS  B-surge. 트래픽 급증 → 확장 불가 에스컬레이션 (B사)                    167s
+  PASS  B-hang+latency. 파드 멈춤 + 결제 지연 → 재시작 후 공지 (B사)          165s
+  PASS  A-dbslow+surge. DB 지연 + 트래픽 급증 → 판단 기준대로 처리 (A사)        84s
+  PASS  B-pool+dbslow. 잘못된 배포 + DB 지연 → 롤백 불가 에스컬레이션 (B사)      142s
+
+  상세: .local/e2e/20261026-101003/summary.md

@@ -1,0 +1,28 @@
+10:10:30  ▶ A사 트래픽 급증 → HPA 최대치 4 PR → 병합 → 확장
+10:10:30  tenant-a order-api 부하 발생기 켬 (초당 250건)
+10:10:30  tenant-a order-api 알림 → 인시던트·작업 생성을 기다린다 (알림 규칙 for 15s + 평가 주기)
+10:11:03  인시던트 #6 (P2) · 작업 4abf9ab1 · http://127.0.0.1:18000/tasks/4abf9ab1-27df-401b-bfe4-ce393c88164a
+10:11:04  상태: QUEUED
+10:11:08  상태: RUNNING
+10:11:28  상태: WAITING_APPROVAL
+10:11:28  승인 요청: business_execute_runbook_action adjust_autoscaler order-api 4
+10:11:28  → engineer가 승인
+10:11:32  상태: RUNNING
+10:11:36  상태: CHANGE_PENDING
+10:11:36  ✅ PR #94이 A사 설정 경로만 바꾼다 (gitops/tenants/tenant-a/hpa.yaml)
+10:11:39  ✅ PR #94 병합 (Pull Request successfully merged)
+10:11:40  PR 브랜치 opslens/tenant-a/autoscaler-order-api-1792977088를 지웠다
+10:12:04  상태: RUNNING
+10:13:08  상태: WAITING_APPROVAL
+10:13:08  승인 요청: business_send_customer_notice
+10:13:08  → admin가 승인
+10:13:12  상태: DONE
+10:13:12  ✅ 작업 완료 (상태 DONE)
+10:13:12  ✅ 기대한 조치를 제안했다 (business_execute_runbook_action adjust_autoscaler order-api 4)
+10:13:12  ✅ 조치 제안이 한 번이다 (1번. 두 번 이상이면 회복 판단을 의심한다)
+10:13:12  ✅ 기대하지 않은 승인 요청이 없다
+10:13:12  ✅ 안전 상한 4을 넘는 최대치를 제안하지 않았다
+10:13:12  ✅ PR 병합·동기화 후 HPA 최대치가 4다 (현재 4)
+10:13:12  ✅ 회복 확인: RECOVERED
+10:13:15  tenant-a order-api 장애 해제 (e2e/20261026-101005에 커밋 57c2b9f (Restore order-api autoscaler max to 3. ArgoCD가 30초 안에 반영한다))
+10:13:15  ■ 통과 (164초)

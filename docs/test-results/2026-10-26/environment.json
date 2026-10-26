@@ -1,0 +1,22 @@
+{
+  "source_folder": "<source checkout>",
+  "api": "http://127.0.0.1:18080",
+  "web": "http://127.0.0.1:18000",
+  "execution": "One complete default run: common scenarios, then five concurrent service lanes",
+  "product_code_modified": false,
+  "assertions_modified": false,
+  "stack_reused": true,
+  "source_comparison": "All product sources and e2e.py/inject.py match running stack source folder",
+  "primary_model": "gpt-5-mini",
+  "fallback_model": "gpt-5-nano",
+  "per_call_model_attribution": "Not retained by product; configured models are not proof of per-call selection",
+  "slack_external_send": false,
+  "started_at": "2026-10-26T01:10:03.940590+00:00",
+  "main_sha_at_start": "1e3be406823451c38f49d2e5ab26ed11b9b31967",
+  "jev_enabled": false,
+  "finished_at": "2026-10-26T01:20:17Z",
+  "runtime_artifacts": {
+    "server/spring/backend/build/libs/opslens-backend-0.1.0.jar": "b560ca1d4ce0536cef3cead31d9d664ac97834d8feae88f143637ad65607a98b"
+  },
+  "routing": "Existing Compose containers via docker exec; API 127.0.0.1:18080, web 127.0.0.1:18000"
+}

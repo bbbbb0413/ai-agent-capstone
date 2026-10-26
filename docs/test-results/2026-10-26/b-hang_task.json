@@ -1,0 +1,101 @@
+{
+  "id": "8278bbbb-7a57-4f8d-8f53-35496194a62f",
+  "tenantId": "tenant-b",
+  "incidentId": 8,
+  "type": "DIAGNOSE",
+  "question": "tenant-b reservation-api 에러율 20% 초과",
+  "status": "DONE",
+  "requestedBy": null,
+  "pendingAction": null,
+  "answer": "## 요약\n tenant-b의 reservation-api에서 에러율이 20%를 초과하는 장애가 발생했다가 재시작 조치로 회복되었다. 현재 에러율은 0.00%, p95는 0.14초로 정상화되었다.\n\n## 근거\n- 메트릭: 에러율 1.0으로 상승하다 회복 수치 0.00%(기준 0.20%), p95 0.14초(기준 1초)로 확인\n- 로그: 503 worker pool saturated, oldest worker blocked 관련 메시지 다수\n  예시 로그: “order rejected: 503 worker pool saturated (active=200/200, queued=1000/1000), oldest worker blocked 245s waiting for internal lock ReservationCache.refreshLock (deadlock suspected)”\n- 의존 상태: payment-gateway 상태_DEGRADED, dependency_share 25.06\n- 변경 이력: reservation-api 배포 이력 opSlens/demo-app:0.1.0, deployedAt 2026-10-23T07:34:28Z\n- 실행 이력: restart_pods(reservation-api) — 단일 파드 재시작(ALL_AT_ONCE)\n- 회복 확인: 에러율 0.00, p95 0.14초\n- 런북 참조: RB-STD-02 작업 스레드 고갈, RB-STD-03 트래픽 급증, RB-B-02 재시작 주의\n- 과거 장애: 장애 #2와 동일한 서비스에서의 유사 이력 존재(참고 목적, 현재 원인 확정 아님)\n- 실행 승인: APPROVE(두 명의 엔지니어 승인)\n\n## 원인 후보\n1) RB-STD-02 — worker_pool_saturated — 363건 신호( first_seen 2026-10-26T01:10:30+00:00 ) (증상: RB-STD-02) → 처리 원인으로 확인하고 조치 수행. (처리 순서: 1)\n2) RB-STD-04 — external_api_timeout(의존: payment-gateway, 상태_DEGRADED, dependency_share 25.06) → 의존 상태를 고려한 보조 원인 후보. (처리 순서: 2)\n3) RB-STD-03 — request_queue_backlog(신호_count 0) → 증상으로 확인되지 않음. (처리 순서: 3)\n\n조치 결정: RB-STD-02를 주된 원인 후보로 판단하고 조치 실행.\n\n## 조치와 결과\n- 승인자: 엔지니어 (APPROVE 및 실행 승인ID 포함)\n- 실행 내용: restart_pods, reservation-api, runtime Kubernetes, DIRECT 방식으로 ALL_AT_ONCE로 재시작\n- 반영 방식: 실행 즉시 수행\n- 회복 확인 수치: 에러율 0.00, p95 0.14초\n- 조치 결과: EXECUTED (reservation-api 파드 재시작 완료)\n- 에스컬레이션: QUEUED 상태로 Slack 전달 예정(별도 검토 필요)\n\n참고: restart_pods 조치는 RB-STD-02의 1차 조치로 간주되나, 재시작은 레플리카 1개 환경에서 전면 중단을 유발하므로 동반된 공지 및 영향 고지 필요했음. 이에 따라 이후 공지 및 추가 조치가 필요할 수 있음.\n\n## SLA 영향\n- 도구가 제공한 잔여 시간 및 기한 값을 그대로 사용합니다: 남은 시간은 59분(remainingMinutes). 응답 기한은 2026-10-26T02:11:07.072329Z.\n\n## 권장 다음 행동\n- 외부 의존(payment-gateway)의 DEGRADED 상태를 지속 모니터링하고, 필요 시 결제 대행사와의 콜백/재연결 전략을 점검\n- RB-STD-02 재발 가능성에 대비한 자동 확장(HPA) 설정 및 안전 상한(safeMaxReplicas) 재검토\n- 이번 장애로 인해 사용자 영향이 있었을 경우 고객 공지를 준비하고, 1시간 이내 첫 공지 준수를 확인\n- 동일 서비스의 과거 장애(postmortem-incident-2)와의 연관성 분석 및 재발 방지 대책 수립\n\n## 조사 과정\n- grafana_query_loki_logs 확인: 503 에러 로그 다수 확인, worker_pool_saturated 신호 100건 확인\n- grafana_query_prometheus 확인: 에러율 및 p95 측정값 확인 (에러율 1.0에서 회복, p95 0.085→ 0.14초)\n- business_get_dependency_health 확인: payment-gateway 의 상태_DEGRADED 확인, p95Seconds 2.11초\n- business_get_service_inventory 확인: 의존성 및 레플레이카 구성 확인\n- 실행 이력: restart_pods 실행 실행 로그 확인\n- 런북 참조: RB-STD-02, RB-STD-03, RB-B-02 문서 확인\n- 과거 장애(postmortem-incident-2) 참조: RB-STD-02, RB-STD-03, 배포 이력 및 회복 수치 확인",
+  "sources": [
+    {
+      "doc": "docs://_common/runbook-standard",
+      "section": "RB-STD-02 작업 스레드 고갈 (파드 멈춤)"
+    },
+    {
+      "doc": "docs://_common/runbook-standard",
+      "section": "RB-STD-03 트래픽 급증 (앱 처리 용량 부족)"
+    },
+    {
+      "doc": "docs://tenant-b/runbook-reservation-api",
+      "section": "RB-B-02 재시작 시 주의"
+    },
+    {
+      "doc": "docs://tenant-b/runbook-reservation-api",
+      "section": "RB-B-03 외부 결제 연동과 고객 공지"
+    },
+    {
+      "doc": "docs://tenant-b/sla-contract",
+      "section": "제3조 허용 조치"
+    },
+    {
+      "doc": "docs://tenant-b/postmortem-incident-2",
+      "section": "원인 후보"
+    },
+    {
+      "doc": "docs://tenant-b/postmortem-incident-2",
+      "section": "근거"
+    }
+  ],
+  "summary": {
+    "cause": "worker_pool_saturated로 파드 응답이 중단·지연되었기 때문",
+    "action": {
+      "args": {
+        "action": "restart_pods",
+        "reason": "RB-STD-02에 따라 worker_pool_saturated 이슈를 완화하기 위한 1차 조치로 reservation-api 파드 재시작을 수행한다(RB-STD-02). 다만 현재 레플리카가 1개여서 재시작 시 전체 서비스가 약 10-20초 중단될 수 있다.",
+        "service": "reservation-api",
+        "incident_id": 8
+      },
+      "tool": "business_execute_runbook_action",
+      "result": {
+        "action": "restart_pods",
+        "status": "EXECUTED",
+        "runtime": "kubernetes",
+        "service": "reservation-api",
+        "changeMode": "DIRECT",
+        "restartMode": "ALL_AT_ONCE",
+        "restartedPods": [
+          "reservation-api-fc8548f58-7grh8"
+        ]
+      },
+      "decision": "APPROVE"
+    },
+    "change": null,
+    "notice": "APPROVE",
+    "service": "reservation-api",
+    "severity": "P1",
+    "recovered": true,
+    "error_type": "파드 응답 불능",
+    "escalation": "APPROVE",
+    "other_causes": [
+      "payment-gateway 상태_DEGRADED로 의존 지연 가능성"
+    ],
+    "notice_result": {
+      "status": "SENT"
+    },
+    "runbook_clause": "RB-STD-02 작업 스레드 고갈 (파드 멈춤)",
+    "escalation_result": {
+      "status": "QUEUED",
+      "category": "P1",
+      "recipients": [
+        {
+          "kind": "MSP_ONCALL",
+          "name": "engineer",
+          "role": "MSP_ENGINEER"
+        },
+        {
+          "kind": "MSP_ONCALL",
+          "name": "admin",
+          "role": "MSP_ADMIN"
+        }
+      ],
+      "escalationId": 7
+    }
+  },
+  "traceUrl": null,
+  "createdAt": "2026-10-26T01:11:07.075514Z",
+  "updatedAt": "2026-10-26T01:13:19.51842Z",
+  "retryOf": null,
+  "retriedBy": null
+}

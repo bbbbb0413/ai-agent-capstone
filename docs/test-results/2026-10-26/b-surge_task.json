@@ -1,0 +1,125 @@
+{
+  "id": "ed116936-a717-4ec9-bf21-308587e6460e",
+  "tenantId": "tenant-b",
+  "incidentId": 17,
+  "type": "DIAGNOSE",
+  "question": "tenant-b reservation-api p95 응답시간 1초 초과",
+  "status": "DONE",
+  "requestedBy": null,
+  "pendingAction": null,
+  "answer": "## 요약\ntenant-b의 reservation-api p95 응답시간이 1초를 초과하는 장애가 발생했고, 현재는 조치 대기 상태입니다. 앱 대기열(backlog)이 주된 병목으로 판단되며, 계약상 승인이 필요한 레플리카 확장이 필요하나 현재 제한으로 에스컬레이션이 진행 중입니다.\n\n## 근거\n- 메트릭: p95 3.914s, 에러율 0.0, 요청당담 45.87 rps\n- 로그: 여러 WARN/ERROR 중 “request queue backlog: 291 requests waiting for a processing slot (4/4 slots busy), queue wait 3627ms” 예시 포함\n- 변경 이력: 직전 배포 시점 2026-10-26T01:15:12Z, 이미지 opslens/demo-app:0.1.0\n- 문서: MSP 표준 런북 RB-STD-03, RB-STD-01, RB-STD-02, RB-STD-04, RB-STD-05; tenant-b 런북 RB-B-02RB-B-01\n- 조치 권고 근거: RB-STD-03에 따른 앱 대기열 문제 해결을 위한 레플리카 확장 필요(현재 HPA 미적용, safeMaxReplicas=1로 확장 불가), 또한 계약상 승인이 필요하여 에스컬레이션 진행 중\n- 과거 참조: 장애 #4 포멀 포스트모템에서 커넥션 풀 고갈 이슈의 유사 맥락 존재\n\n## 원인 후보\n1) RB-STD-03 — 앱 대기열(backlog) 누적으로 인한 처리 지연 (signal_count 37, first_seen 2026-10-26T01:15:50+00:00, evidence: true)  \n   - 현재 우선 해결 대상으로 선정\n\n기타 후보들(참고 수준): RB-STD-01, RB-STD-02, RB-STD-04, RB-STD-05\n\n## 조치와 결과\n- 승인 상태: APPROVE, 엔지니어가 승인\n- 실행 여부: 에스컬레이션 QUEUED 상태, 실행 대기\n- 수행 예정 조치(승인 시): RB-STD-03 우선 순위로 앱 대기열 관리 조치\n  - 필요 시 파드 스케일 아웃 / 풀 사이즈 조정 (현재 poolSize 20)\n  - 필요 시 restart_pods 가능 여부 확인\n  - 1–2분 간격으로 p95 및 backlog 변화 모니터링\n- 현재 상황: HPA가 설정되지 않아 즉시 확장이 어려움. 계약상 레플리카 확장은 고객 승인 필요로 에스컬레이션 진행 중\n- 관련 런북/ 변경 이력:\n  - RB-STD-03 런북 내용 반영 예정\n  - RB-B-02 재시작 주의: Reservation-api 레플리카 1개일 경우 재시작 시 서비스 중단 가능성 고지\n  - SLA 조항에 따른 조치 절차 준수 중\n\naction_result: 에스컬레이션이 QUEUED 상태이며, 시나리오에 따른 조치가 승인 대기 중\nchange: 없음\n\n## SLA 영향\n- 도구가 제공한 남은 시간 값과 기한은 그대로 반영\n- 남은 시간: 239분 (tenant의 SLA 잔여 시간 기준)\n\n## 권장 다음 행동\n- 고객의 승인을 받아 RB-STD-03에 따른 앱 레플리카 확장(scale_deployment) 진행 여부를 확정\n- 필요 시 안전 상한 내에서 최대 복제본 수를 늘리는 조치를 검토하고 실행\n- 대기열 해소를 위한 추가 모니터링 계획 수립(약 1–2분 간격으로 p95/backlog 체크)\n\n- 승인 후 MSP가 직접 실행 가능한지 여부를 확인하고, 실행 시점과 기대 효과를 공유\n\n## 조사 과정\n- 도구 호출 순서 및 주요 수치\n  - grafana_query_loki_logs: reservation-api 로그에서 request_queue_backlog 확인 (backlog 29건, 예시 로그 291건의 백로그 메시지 포함)\n  - grafana_query_prometheus: p95 3.914s, 에러율 0.0, RPS 45.87 확인\n  - business_list_recent_changes: 최근 배포 이력 확인( reservation-api, rev5, 01:15:12Z 배포)\n  - cause_facts: RB-STD-03를 주원인 후보로 표시\n  - business_get_dependency_health: payment-gateway 건강 상태 HEALTHY 확인\n  - business_get_service_inventory: reservation-api의 현재 상태 및 의존성 확인\n  - business_escalate_incident: 인시던트 에스컬레이션 QUEUED 상태 기록\n  - runbook/문서 참고: RB-STD-03 트래픽 급증 대응 절차 등",
+  "sources": [
+    {
+      "doc": "docs://_common/runbook-standard",
+      "section": "RB-STD-03 트래픽 급증 (앱 처리 용량 부족)"
+    },
+    {
+      "doc": "docs://_common/runbook-standard",
+      "section": "RB-STD-02 작업 스레드 고갈 (파드 멈춤)"
+    },
+    {
+      "doc": "docs://tenant-b/runbook-reservation-api",
+      "section": "RB-B-02 재시작 시 주의"
+    },
+    {
+      "doc": "docs://tenant-b/runbook-reservation-api",
+      "section": "RB-B-01 운영 방식과 변경 절차"
+    },
+    {
+      "doc": "docs://tenant-b/sla-contract",
+      "section": "제3조 허용 조치"
+    },
+    {
+      "doc": "docs://tenant-b/postmortem-incident-4",
+      "section": "요약"
+    },
+    {
+      "doc": "docs://tenant-b/postmortem-incident-4",
+      "section": "근거"
+    }
+  ],
+  "summary": {
+    "cause": "RB-STD-03에 따른 애플리케이션 대기열 문제",
+    "action": {
+      "args": {
+        "reason": "RB-STD-03에 따른 앱 대기열 문제 해결을 위해 레플리카 확장(scale_deployment)이 필요하지만, 현재 reservation-api에 HPA가 없고 safeMaxReplicas가 1로 확장이 불가합니다. 또한 레플리카 확장은 계약상 고객사 승인이 필요하므로 에스컬레이션이 필요합니다.",
+        "service": "reservation-api",
+        "category": "ACTION_BLOCKED",
+        "blocked_by": "CONTRACT",
+        "incident_id": 17,
+        "required_action": "scale_deployment"
+      },
+      "tool": "business_escalate_incident",
+      "result": {
+        "status": "QUEUED",
+        "message": "[OpsLens 에스컬레이션] B사 예약 플랫폼 인시던트 #17 (P2, reservation-api)\n장애: tenant-b reservation-api p95 응답시간 1초 초과\n분류: 필요한 조치를 계약·구조상 할 수 없음\n이유: RB-STD-03에 따른 앱 대기열 문제 해결을 위해 레플리카 확장(scale_deployment)이 필요하지만, 현재 reservation-api에 HPA가 없고 safeMaxReplicas가 1로 확장이 불가합니다. 또한 레플리카 확장은 계약상 고객사 승인이 필요하므로 에스컬레이션이 필요합니다.\n필요한 조치: scale_deployment\n할 수 없는 이유: 계약상 허용되지 않는 조치\nOpsLens에서 인시던트 #17의 작업과 보고서를 확인한다",
+        "category": "ACTION_BLOCKED",
+        "delivery": "호출 기록을 저장했다. Slack 발송은 작업 상세에서 문안·채널을 검토한 뒤 별도로 승인한다",
+        "duplicate": false,
+        "recipients": [
+          {
+            "kind": "MSP_ONCALL",
+            "name": "engineer",
+            "role": "MSP_ENGINEER"
+          },
+          {
+            "kind": "MSP_ONCALL",
+            "name": "admin",
+            "role": "MSP_ADMIN"
+          },
+          {
+            "kind": "CUSTOMER",
+            "name": "B사 운영 승인 담당",
+            "role": "B사 예약 플랫폼"
+          }
+        ],
+        "escalationId": 15
+      },
+      "decision": "APPROVE"
+    },
+    "change": null,
+    "notice": "APPROVE",
+    "service": "reservation-api",
+    "severity": "P2",
+    "recovered": null,
+    "error_type": "트래픽 급증",
+    "escalation": "APPROVE",
+    "other_causes": [
+      "RB-STD-01 커넥션 풀 고갈 가능성",
+      "RB-STD-02 작업 스레드 고갈 가능성",
+      "RB-STD-04 외부 API 지연 가능성",
+      "RB-STD-05 느린 쿼리 가능성"
+    ],
+    "notice_result": {
+      "status": "SENT"
+    },
+    "runbook_clause": "RB-STD-03 트래픽 급증 (앱 처리 용량 부족)",
+    "escalation_result": {
+      "status": "QUEUED",
+      "category": "ACTION_BLOCKED",
+      "recipients": [
+        {
+          "kind": "MSP_ONCALL",
+          "name": "engineer",
+          "role": "MSP_ENGINEER"
+        },
+        {
+          "kind": "MSP_ONCALL",
+          "name": "admin",
+          "role": "MSP_ADMIN"
+        },
+        {
+          "kind": "CUSTOMER",
+          "name": "B사 운영 승인 담당",
+          "role": "B사 예약 플랫폼"
+        }
+      ],
+      "escalationId": 15
+    }
+  },
+  "traceUrl": null,
+  "createdAt": "2026-10-26T01:16:22.154475Z",
+  "updatedAt": "2026-10-26T01:17:52.174473Z",
+  "retryOf": null,
+  "retriedBy": null
+}

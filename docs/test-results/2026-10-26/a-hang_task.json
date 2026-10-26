@@ -1,0 +1,105 @@
+{
+  "id": "72522467-2915-4276-abbd-753eeffaea6f",
+  "tenantId": "tenant-a",
+  "incidentId": 7,
+  "type": "DIAGNOSE",
+  "question": "tenant-a inventory-api 에러율 20% 초과",
+  "status": "DONE",
+  "requestedBy": null,
+  "pendingAction": null,
+  "answer": "## 요약\ntenant-a inventory-api의 에러율이 20%를 초과하였으나 조치 후 정상화되었습니다. 현재 에러율 0%, p95 응답시간 0.1316초로 확인되었습니다.\n\n## 근거\n- 메트릭: 에러율 0.543541386992818 (ping: 1m 단위), p95Seconds 0.1253789726651331초, 요청 수(RPS) 9.943370013399472\n- 로그: 100건의 ERROR 예시 중 하나로 “ERROR [scheduling-1] c.o.d.OrderService - order rejected: 503 worker pool saturated (active=200/200, queued=1000/1000)”\n- 변경 이력: 직전 변경 시점에 장애용 데모 서비스 추가 및 fault 주입 구성 반영(CI/CD gitops 변화) (예: 2026-10-23T05:47:44Z)\n- 문서: MSP 표준 장애 대응 런북 RB-STD-02, RB-STD-03, RB-STD-01 참고\n- Runbook/배포 상태: inventory-api의 파드를 재시작하여 워커 풀 포화 상태를 완화\n- 의존 대상 상태: Postgres의 HEALTHY 상태를 확인하였으나 과거 DEGRADED 이슈와 Slow Query 기록 존재\n- 증거 도구: grafana Loki 로그, Prometheus 지표, 변경 이력, 의존 대상 헬스 체크\n\n## 원인 후보\n1) RB-STD-02 — worker_pool_saturated — signal_count=346, first_seen=2026-10-26T01:10:30+00:00, evidence=true\n2) RB-STD-01 — connection_pool_exhausted — signal_count=0, evidence=false\n3) RB-STD-03 — request_queue_backlog — signal_count=0, evidence=false\n4) RB-STD-04 — external_api_timeout — signal_count=0, evidence=false\n5) RB-STD-05 — slow_query — signal_count=0, dependency=postgres, dependency_status=HEALTHY, evidence=false\n\n처리할 원인으로 RB-STD-02를 선택했습니다.\n\n## 조치와 결과\n- 조치: restart_pods(inventory-api) 실행, Kubernetes에서 롤링 재시작\n- 승인/실행: 실행 승인 받음(CHANGE MODE: GITOPS) 후 실행\n- 실행 결과: 재시작된 파드 inventory-api-645dbd655-ghdmc, inventory-api-645dbd655-qxk7가 롤링 방식으로 재시작\n- 회복 확인 수치: 에러율 0.0, p95_seconds 0.1316초\n- 회복 여부: recovered = true\n- 에스컬레이션: 필요 시 Slack 알림 포함, 호출 기록은 별도 문서에 남김\n\n## SLA 영향\n- 남은 시간: remainingMinutes 14 (예시 값: 14)\n- 기준 및 수치: 에러율 0.0(기준 0.20), p95 0.1316초(기준 1초)\n\n## 권장 다음 행동\n- 근본 원인 분석: RB-STD-02의 워커 풀 포화 원인을 재현 가능 여부와 트래픽 급증의 원인(테스트/배포 변경의 영향 여부) 확인\n- 의존성 재확인: Postgres의 DEGRADED 이슈가 재발하는지 모니터링 및 필요 시 관련 파라미터 재조정\n- 추가 조치 가능성 검토: HPA 설정 재검토 및 안전 상한 확인, 필요 시 autoscaler 조정(PR 반영)\n- 고객 공지: 필요 시 고객 공지 반영 및 RB-A-02/RB-A-03 및 SLA 관련 절차 확인\n\n## 조사 과정\n- grafana_query_loki_logs: {app=\"demo-app\", service=\"inventory-api\", level=~\"ERROR|WARN\"} 로그 조회(2026-10-26T01:09:02+00:00 ~ 2026-10-26T01:11:04+00:00), 예시 로그 포함\n- grafana_query_prometheus: 에러율, p95초, RPS 확인\n- business_list_recent_changes: inventory-api 변경 이력 확인\n- cause_facts: 각 원인 후보의 증거 요건 정리\n- business_get_dependency_health: postgres 의 HEALTHY/DEGRADED 상태 확인\n- business_execute_runbook_action: restart_pods 실행 및 결과 확인\n- escalation: OpsLens를 통한 인시던트 에스컬레이션 기록\n- runbook: RB_STD 문서 참조 및 준수 여부 확인\n- past_incidents 확인: 과거 cart-api 장애 기록 참조",
+  "sources": [
+    {
+      "doc": "docs://_common/runbook-standard",
+      "section": "RB-STD-03 트래픽 급증 (앱 처리 용량 부족)"
+    },
+    {
+      "doc": "docs://_common/runbook-standard",
+      "section": "RB-STD-02 작업 스레드 고갈 (파드 멈춤)"
+    },
+    {
+      "doc": "docs://tenant-a/runbook-order-api",
+      "section": "RB-A-03 고객 공지 기준"
+    },
+    {
+      "doc": "docs://tenant-a/runbook-order-api",
+      "section": "RB-A-02 DB 관련 연락과 주의"
+    },
+    {
+      "doc": "docs://tenant-a/sla-contract",
+      "section": "제3조 허용 조치"
+    },
+    {
+      "doc": "docs://tenant-a/postmortem-incident-5",
+      "section": "요약"
+    },
+    {
+      "doc": "docs://tenant-a/postmortem-incident-5",
+      "section": "근거"
+    }
+  ],
+  "summary": {
+    "cause": "RB-STD-02",
+    "action": {
+      "args": {
+        "action": "restart_pods",
+        "reason": "RB-STD-02에 따른 조치로 워커 풀 포화로 인한 앱 처리 용량 부족을 완화하기 위해 inventory-api의 파드를 재시작합니다 (로그 신호: worker_pool_saturated 346건, first_seen 2026-10-26T01:10:30+00:00).",
+        "service": "inventory-api",
+        "incident_id": 7
+      },
+      "tool": "business_execute_runbook_action",
+      "result": {
+        "action": "restart_pods",
+        "status": "EXECUTED",
+        "runtime": "kubernetes",
+        "service": "inventory-api",
+        "changeMode": "GITOPS",
+        "restartMode": "ROLLING",
+        "restartedPods": [
+          "inventory-api-645dbd655-ghdmc",
+          "inventory-api-645dbd655-qxk7l"
+        ]
+      },
+      "decision": "APPROVE"
+    },
+    "change": null,
+    "notice": "APPROVE",
+    "service": "inventory-api",
+    "severity": "P1",
+    "recovered": true,
+    "error_type": "트래픽 급증",
+    "escalation": "APPROVE",
+    "other_causes": [
+      "RB-STD-01",
+      "RB-STD-03",
+      "RB-STD-04",
+      "RB-STD-05"
+    ],
+    "notice_result": {
+      "status": "SENT"
+    },
+    "runbook_clause": "RB-STD-02 작업 스레드 고갈 (파드 멈춤)",
+    "escalation_result": {
+      "status": "QUEUED",
+      "category": "P1",
+      "recipients": [
+        {
+          "kind": "MSP_ONCALL",
+          "name": "engineer",
+          "role": "MSP_ENGINEER"
+        },
+        {
+          "kind": "MSP_ONCALL",
+          "name": "admin",
+          "role": "MSP_ADMIN"
+        }
+      ],
+      "escalationId": 6
+    }
+  },
+  "traceUrl": null,
+  "createdAt": "2026-10-26T01:11:02.136064Z",
+  "updatedAt": "2026-10-26T01:13:08.56549Z",
+  "retryOf": null,
+  "retriedBy": null
+}

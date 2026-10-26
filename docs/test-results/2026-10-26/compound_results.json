@@ -1,61 +1,34 @@
 {
-  "date": "2026-10-26",
+  "run_id": "20261026-101003",
+  "scope": "Subset of the single complete 18-scenario run",
+  "passed": 3,
+  "failed": 0,
+  "checks_passed": 26,
+  "checks_failed": 0,
   "scenarios": [
     {
-      "scenario": "b-hang-latency",
-      "passed": false,
-      "checks_passed": 8,
-      "checks_failed": 1,
-      "seconds": 175
-    },
-    {
-      "scenario": "a-dbslow-backlog",
-      "passed": true,
-      "checks_passed": 8,
-      "checks_failed": 0,
-      "seconds": 95
-    },
-    {
-      "scenario": "b-pool-dbslow",
+      "key": "b-hang-latency",
       "passed": true,
       "checks_passed": 9,
       "checks_failed": 0,
-      "seconds": 103
+      "seconds": 165.33016395568848,
+      "task_id": "2a0f64ac-3124-4bce-aa9e-cd5d265d6843"
+    },
+    {
+      "key": "a-dbslow-backlog",
+      "passed": true,
+      "checks_passed": 8,
+      "checks_failed": 0,
+      "seconds": 83.51060914993286,
+      "task_id": "7f934b32-eef3-411e-862f-8d995580b2a7"
+    },
+    {
+      "key": "b-pool-dbslow",
+      "passed": true,
+      "checks_passed": 9,
+      "checks_failed": 0,
+      "seconds": 142.1775848865509,
+      "task_id": "83b19373-5f1e-4982-9eaf-2e1cc5dd1552"
     }
-  ],
-  "passed": 2,
-  "failed": 1,
-  "failure": {
-    "scenario": "b-hang-latency",
-    "stage": "customer notice MCP invocation",
-    "unexpected_argument": {
-      "service": null
-    },
-    "tool_signature": "send_customer_notice(incident_id, message)",
-    "notice_result": "FAILED",
-    "task_status": "DONE",
-    "notice_audit_for_incident_3": false,
-    "code_locations": [
-      "server/python/business-mcp/src/business_mcp/server.py:179",
-      "server/python/agent/src/agent/graph.py:591",
-      "server/python/agent/src/agent/graph.py:776"
-    ]
-  },
-  "limitations": [
-    "A사 dependency_share=0.65로 DBA 이관 분기 실행. HPA 확대 PR 분기는 이번 실행에서 미실행.",
-    "전체 18개를 현재 버전에서 일괄 실행한 결과가 아님."
-  ],
-  "cleanup": {
-    "argocd": "main Synced/Healthy",
-    "load_generators": "loadgen-tenant-a=0 loadgen-tenant-a-cart-api=0 loadgen-tenant-b=0 loadgen-tenant-b-checkin-api=0",
-    "dependency_faults": {
-      "cart-api": "",
-      "checkin-api": "",
-      "reservation-api": ""
-    },
-    "incidents": "4|reservation-api|RESOLVED\n5|cart-api|RESOLVED\n3|checkin-api|RESOLVED",
-    "pending_tasks": "0",
-    "remaining_e2e_branches": []
-  },
-  "source_unchanged": true
+  ]
 }

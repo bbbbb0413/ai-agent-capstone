@@ -1,0 +1,18 @@
+{
+  "id": "6640390f-b86c-4c84-82a4-a562c6254ac5",
+  "tenantId": "tenant-a",
+  "incidentId": null,
+  "type": "QUESTION",
+  "question": "지금 서비스 상태 괜찮아?",
+  "status": "DONE",
+  "requestedBy": 2,
+  "pendingAction": null,
+  "answer": "## 이상 없음\n\n현재 A사 온라인 쇼핑몰에 인식된 장애(처리 중인 인시던트)가 없다.\n\n알림 기준에 못 미치는 문제는 여기에 나타나지 않는다. 문제가 계속되면 담당 엔지니어에게 확인을 요청한다.",
+  "sources": [],
+  "summary": null,
+  "traceUrl": null,
+  "createdAt": "2026-10-26T01:10:15.835869Z",
+  "updatedAt": "2026-10-26T01:10:15.9738Z",
+  "retryOf": null,
+  "retriedBy": null
+}

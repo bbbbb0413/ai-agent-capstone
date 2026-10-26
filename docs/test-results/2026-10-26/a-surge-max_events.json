@@ -1,0 +1,1714 @@
+[
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {},
+      "node": "load_context",
+      "tool": "business_get_tenant_profile",
+      "callId": "c5bff622ae6f485fa7a9d87823c10669"
+    },
+    "createdAt": "2026-10-26T01:15:26.328342Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "load_context",
+      "tool": "business_get_tenant_profile",
+      "callId": "c5bff622ae6f485fa7a9d87823c10669",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:15:26.382144Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {},
+      "node": "load_context",
+      "tool": "business_get_service_inventory",
+      "callId": "111e40f09e514eff9e75ef9e5d38c303"
+    },
+    "createdAt": "2026-10-26T01:15:26.38385Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "load_context",
+      "tool": "business_get_service_inventory",
+      "callId": "111e40f09e514eff9e75ef9e5d38c303",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:15:26.478437Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "incident_id": 15
+      },
+      "node": "load_context",
+      "tool": "business_get_sla_terms",
+      "callId": "33a547efe84d43eb87ee4f2efa4dc76a"
+    },
+    "createdAt": "2026-10-26T01:15:26.480555Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "load_context",
+      "tool": "business_get_sla_terms",
+      "callId": "33a547efe84d43eb87ee4f2efa4dc76a",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:15:26.93084Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "status": "OPEN"
+      },
+      "node": "load_context",
+      "tool": "business_list_incidents",
+      "callId": "3f823f4ba3c94118bb4a35daebfa252f"
+    },
+    "createdAt": "2026-10-26T01:15:26.941173Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "load_context",
+      "tool": "business_list_incidents",
+      "callId": "3f823f4ba3c94118bb4a35daebfa252f",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:15:26.999047Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "status": "RESOLVED"
+      },
+      "node": "load_context",
+      "tool": "business_list_incidents",
+      "callId": "e65dc48da44f41f5bc35657c0ea7f4a9"
+    },
+    "createdAt": "2026-10-26T01:15:27.003575Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "load_context",
+      "tool": "business_list_incidents",
+      "callId": "e65dc48da44f41f5bc35657c0ea7f4a9",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:15:27.06516Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "limit": 200,
+        "logql": "{app=\"demo-app\", service=\"order-api\", level=~\"ERROR|WARN\"}",
+        "direction": "backward",
+        "endRfc3339": "2026-10-26T01:15:27+00:00",
+        "startRfc3339": "2026-10-26T01:13:17+00:00",
+        "datasourceUid": "loki-tenant-a"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "d878c82ae5d2469e8a032c1c04b0f288"
+    },
+    "createdAt": "2026-10-26T01:15:27.069999Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "d878c82ae5d2469e8a032c1c04b0f288",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:15:27.174914Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "expr": "(sum(rate(demo_orders_seconds_count{service=\"order-api\", outcome=\"error\"}[1m])) or vector(0)) / sum(rate(demo_orders_seconds_count{service=\"order-api\"}[1m]))",
+        "endTime": "now",
+        "queryType": "instant",
+        "datasourceUid": "prom-tenant-a"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "9449a3704143477aaac82c81590267f9"
+    },
+    "createdAt": "2026-10-26T01:15:27.188277Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "9449a3704143477aaac82c81590267f9",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:15:27.26279Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "expr": "histogram_quantile(0.95, sum by (le) (rate(demo_orders_seconds_bucket{service=\"order-api\"}[1m])))",
+        "endTime": "now",
+        "queryType": "instant",
+        "datasourceUid": "prom-tenant-a"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "30bad5f0e2354cad89f901467361ca13"
+    },
+    "createdAt": "2026-10-26T01:15:27.268748Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "30bad5f0e2354cad89f901467361ca13",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:15:27.291772Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "expr": "sum(rate(demo_orders_seconds_count{service=\"order-api\"}[1m]))",
+        "endTime": "now",
+        "queryType": "instant",
+        "datasourceUid": "prom-tenant-a"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "8921b9e663414783871bec1489f23b2c"
+    },
+    "createdAt": "2026-10-26T01:15:27.293199Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "8921b9e663414783871bec1489f23b2c",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:15:27.318236Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "service": "order-api"
+      },
+      "node": "diagnose",
+      "tool": "business_list_recent_changes",
+      "callId": "40e868cfc02848828f9fef86b3b0483c"
+    },
+    "createdAt": "2026-10-26T01:15:27.319495Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "business_list_recent_changes",
+      "callId": "40e868cfc02848828f9fef86b3b0483c",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:15:28.661991Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "query": "order-api tenant-a order-api p95 응답시간 1초 초과 로그 신호: {\"connection_pool_exhausted\": 0, \"worker_pool_saturated\": 0, \"request_queue_backlog\": 78, \"external_api_timeout\": 0, \"slow_query\": 0}",
+        "scope": "tenant",
+        "top_k": 2,
+        "doc_type": "postmortem",
+        "exclude_doc_id": "postmortem-incident-15"
+      },
+      "node": "retrieve_history",
+      "tool": "rag_search_documents",
+      "callId": "dffc6b6db30e45f49dd337fcbae46299"
+    },
+    "createdAt": "2026-10-26T01:15:28.664655Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "retrieve_history",
+      "tool": "rag_search_documents",
+      "callId": "dffc6b6db30e45f49dd337fcbae46299",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:15:28.907333Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"order-api\", level=~\"ERROR|WARN\"} |= \"Connection is not available\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T01:15:28+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T01:13:17+00:00",
+        "datasourceUid": "loki-tenant-a"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "ead56a9aea8546e2ba9a585c8b93f9b2"
+    },
+    "createdAt": "2026-10-26T01:15:28.91121Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "ead56a9aea8546e2ba9a585c8b93f9b2",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:15:28.958627Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"order-api\", level=~\"ERROR|WARN\"} |= \"503 worker pool saturated\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T01:15:28+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T01:13:17+00:00",
+        "datasourceUid": "loki-tenant-a"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "e8b8dbb7c6e54d3180094e88a2159156"
+    },
+    "createdAt": "2026-10-26T01:15:28.962634Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "e8b8dbb7c6e54d3180094e88a2159156",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:15:29.000131Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"order-api\", level=~\"ERROR|WARN\"} |= \"request queue backlog\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T01:15:28+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T01:13:17+00:00",
+        "datasourceUid": "loki-tenant-a"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "9d8d6a6468664aaab5a1d6cff29b4875"
+    },
+    "createdAt": "2026-10-26T01:15:29.002448Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "9d8d6a6468664aaab5a1d6cff29b4875",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:15:29.037804Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"order-api\", level=~\"ERROR|WARN\"} |= \"payment API timeout\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T01:15:28+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T01:13:17+00:00",
+        "datasourceUid": "loki-tenant-a"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "1b442b059c5b439b8c471f6cdb6c68e4"
+    },
+    "createdAt": "2026-10-26T01:15:29.039605Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "1b442b059c5b439b8c471f6cdb6c68e4",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:15:29.073018Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"order-api\", level=~\"ERROR|WARN\"} |= \"slow query\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T01:15:28+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T01:13:17+00:00",
+        "datasourceUid": "loki-tenant-a"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "ef742a9abcf247e886739ff5474999f6"
+    },
+    "createdAt": "2026-10-26T01:15:29.075031Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "ef742a9abcf247e886739ff5474999f6",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:15:29.106289Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "dependency": "postgres"
+      },
+      "node": "diagnose",
+      "tool": "business_get_dependency_health",
+      "callId": "5ecccbac8fb34850b2f7ec1c73ae7111"
+    },
+    "createdAt": "2026-10-26T01:15:29.11267Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "business_get_dependency_health",
+      "callId": "5ecccbac8fb34850b2f7ec1c73ae7111",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:15:29.169275Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "dependency": "postgres"
+      },
+      "node": "diagnose",
+      "tool": "business_get_dependency_health",
+      "callId": "call_lcfZCyVE5p9iTtrX8k8OI1Q6"
+    },
+    "createdAt": "2026-10-26T01:15:30.310979Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "business_get_dependency_health",
+      "callId": "call_lcfZCyVE5p9iTtrX8k8OI1Q6",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:15:30.357368Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "query": "이상 시작: 2026-10-26T01:15:17.071043Z\n근거: 지표 p95_seconds(최근 1분) 5.65초, error_rate 0.0, 요청 수 109.77 RPS, 로그 신호: request_queue_backlog 84건(처리 슬롯 대기) 최초_first_seen 2026-10-26T01:14:45Z, 예시 로그: \"request queue backlog: 316 requests waiting for a processing slot (4/4 slots busy), queue wait 4575ms\"\n직전 변경: 2026-10-23T05:47:44Z - gitops/tenants/tenant-a/order-api.yaml 의 의존 장애 구성 및 로그 라벨링 변경 포함\n원인 후보:\n1) RB-STD-03 트래픽 급증 — 84건의 request_queue_backlog 신호(first_seen 2026-10-26T01:14:45+00:00) · (증상: 백로그로 인한 순차 처리 지연) (evidence: true)\n2) RB-STD-01 풀 고갈 — connection_pool_exhausted 신호 0건 (evidence: false)\n3) RB-STD-02 작업 스레드 고갈 — worker_pool_saturated 신호 0건 (evidence: false)\n4) RB-STD-04 외부 의존 지연 — external_api_timeout 신호 0건 (evidence: false)\n5) RB-STD-05 DB 지연 — slow_query 신호 0건, 의존 대상: postgres, 의존 상태: DEGRADED, 의존 지연 비율(dependency_share) 0.28, evidence: true\n의존 대상 상태: postgres — p95Seconds 1.605, callsPerSecond 197.4, 상태 DEGRADED, 최근 1분 window\n처리할 원인: RB-STD-03\n병목: 앱\n\n로깅·지표 요약 근거\n- 지표: p95_seconds 약 5.65초로 주문 API의 응답 시간 상한 초과 지속 확인\n- 신호: order-api 로그에서 84건의 request_queue_backlog 발생(first_seen 2026-10-26T01:14:45Z)\n- 의존 상태: postgres의 p95 1.605초로 DEGRADED 상태이며 호출량 197.4 RPS 기록\n- 직전 변경 요약: 2026-10-23 배포 및 dependency-faults 설정 변경으로 로그 및 의존 장애 핸들링 구조 개선 반영\n참고: 과거 비슷한 사례(postmortem-incident-6)에서도 RB-STD-03(트래픽 급증으로 백로그 발생)와 RB-STD-05/04의 상호작용이 장애 원인으로 도출된 바 있음. 이번 사례에서도 백로그 신호가 주된 원인 후보로 확인됨.\n\n조치 권고(다음 단계):\n- 바로 고칠 수 있는 앱 원인 순서로 RB-STD-03(백로그) 중심의 스케일링/ autoscaler 조정 검토 권고. 현재 order-api의 currentReplicas 2에서 desiredReplicas 3으로 상향이 가능하며, atMax 상태임에 따라 maxReplicas 증가 여부를 확인 필요.\n- 의존 대상(DEGRADED) 지연이 백로그 확산의 요인일 수 있어, DB 연결 대기 여유(connectionHeadroom)와 풀 크기(poolSize) 재검토 필요.\n- 필요 시 롤백 없이 점진적 롤링 업데이트/휴지 시간 고려한 배포 정책 적용 고려.\n\n참고: 이 상태에서의 병목은 앱(처리 대기) 쪽으로 판단되며, RB-STD-03이 최우선 처리 원인으로 선정됨.",
+        "scope": "common",
+        "top_k": 2,
+        "doc_type": "runbook"
+      },
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "42ef998559914af8a4b9d0825fc1305c"
+    },
+    "createdAt": "2026-10-26T01:15:38.70162Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "42ef998559914af8a4b9d0825fc1305c",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:15:38.932184Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "query": "이상 시작: 2026-10-26T01:15:17.071043Z\n근거: 지표 p95_seconds(최근 1분) 5.65초, error_rate 0.0, 요청 수 109.77 RPS, 로그 신호: request_queue_backlog 84건(처리 슬롯 대기) 최초_first_seen 2026-10-26T01:14:45Z, 예시 로그: \"request queue backlog: 316 requests waiting for a processing slot (4/4 slots busy), queue wait 4575ms\"\n직전 변경: 2026-10-23T05:47:44Z - gitops/tenants/tenant-a/order-api.yaml 의 의존 장애 구성 및 로그 라벨링 변경 포함\n원인 후보:\n1) RB-STD-03 트래픽 급증 — 84건의 request_queue_backlog 신호(first_seen 2026-10-26T01:14:45+00:00) · (증상: 백로그로 인한 순차 처리 지연) (evidence: true)\n2) RB-STD-01 풀 고갈 — connection_pool_exhausted 신호 0건 (evidence: false)\n3) RB-STD-02 작업 스레드 고갈 — worker_pool_saturated 신호 0건 (evidence: false)\n4) RB-STD-04 외부 의존 지연 — external_api_timeout 신호 0건 (evidence: false)\n5) RB-STD-05 DB 지연 — slow_query 신호 0건, 의존 대상: postgres, 의존 상태: DEGRADED, 의존 지연 비율(dependency_share) 0.28, evidence: true\n의존 대상 상태: postgres — p95Seconds 1.605, callsPerSecond 197.4, 상태 DEGRADED, 최근 1분 window\n처리할 원인: RB-STD-03\n병목: 앱\n\n로깅·지표 요약 근거\n- 지표: p95_seconds 약 5.65초로 주문 API의 응답 시간 상한 초과 지속 확인\n- 신호: order-api 로그에서 84건의 request_queue_backlog 발생(first_seen 2026-10-26T01:14:45Z)\n- 의존 상태: postgres의 p95 1.605초로 DEGRADED 상태이며 호출량 197.4 RPS 기록\n- 직전 변경 요약: 2026-10-23 배포 및 dependency-faults 설정 변경으로 로그 및 의존 장애 핸들링 구조 개선 반영\n참고: 과거 비슷한 사례(postmortem-incident-6)에서도 RB-STD-03(트래픽 급증으로 백로그 발생)와 RB-STD-05/04의 상호작용이 장애 원인으로 도출된 바 있음. 이번 사례에서도 백로그 신호가 주된 원인 후보로 확인됨.\n\n조치 권고(다음 단계):\n- 바로 고칠 수 있는 앱 원인 순서로 RB-STD-03(백로그) 중심의 스케일링/ autoscaler 조정 검토 권고. 현재 order-api의 currentReplicas 2에서 desiredReplicas 3으로 상향이 가능하며, atMax 상태임에 따라 maxReplicas 증가 여부를 확인 필요.\n- 의존 대상(DEGRADED) 지연이 백로그 확산의 요인일 수 있어, DB 연결 대기 여유(connectionHeadroom)와 풀 크기(poolSize) 재검토 필요.\n- 필요 시 롤백 없이 점진적 롤링 업데이트/휴지 시간 고려한 배포 정책 적용 고려.\n\n참고: 이 상태에서의 병목은 앱(처리 대기) 쪽으로 판단되며, RB-STD-03이 최우선 처리 원인으로 선정됨.",
+        "scope": "tenant",
+        "top_k": 2,
+        "doc_type": "runbook"
+      },
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "f8c9e217bead40de89cba844b0a415a0"
+    },
+    "createdAt": "2026-10-26T01:15:38.934781Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "f8c9e217bead40de89cba844b0a415a0",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:15:39.144188Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "query": "MSP가 사전 동의 없이 수행할 수 있는 허용 조치와 고객사 승인이 필요한 조치",
+        "scope": "tenant",
+        "top_k": 1,
+        "doc_type": "sla"
+      },
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "7d8bd77c66aa4adbb85e43237d382e65"
+    },
+    "createdAt": "2026-10-26T01:15:39.151124Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "7d8bd77c66aa4adbb85e43237d382e65",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:15:39.346348Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {},
+      "node": "propose_action",
+      "tool": "business_get_service_inventory",
+      "callId": "7f07a397d0d54d2aa5d053a642bf0726"
+    },
+    "createdAt": "2026-10-26T01:15:39.349081Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "propose_action",
+      "tool": "business_get_service_inventory",
+      "callId": "7f07a397d0d54d2aa5d053a642bf0726",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:15:39.447186Z"
+  },
+  {
+    "type": "STEP",
+    "data": {
+      "node": "propose_action",
+      "facts": [
+        {
+          "clause": "RB-STD-01",
+          "signal": "connection_pool_exhausted",
+          "evidence": false,
+          "dependency": null,
+          "first_seen": null,
+          "signal_count": 0,
+          "dependency_share": null,
+          "dependency_status": null
+        },
+        {
+          "clause": "RB-STD-02",
+          "signal": "worker_pool_saturated",
+          "evidence": false,
+          "dependency": null,
+          "first_seen": null,
+          "signal_count": 0,
+          "dependency_share": null,
+          "dependency_status": null
+        },
+        {
+          "clause": "RB-STD-03",
+          "signal": "request_queue_backlog",
+          "evidence": true,
+          "dependency": null,
+          "first_seen": "2026-10-26T01:14:45+00:00",
+          "signal_count": 84,
+          "dependency_share": null,
+          "dependency_status": null
+        },
+        {
+          "clause": "RB-STD-04",
+          "signal": "external_api_timeout",
+          "evidence": false,
+          "dependency": null,
+          "first_seen": null,
+          "signal_count": 0,
+          "dependency_share": null,
+          "dependency_status": null
+        },
+        {
+          "clause": "RB-STD-05",
+          "signal": "slow_query",
+          "evidence": true,
+          "dependency": "postgres",
+          "first_seen": null,
+          "signal_count": 0,
+          "dependency_share": 0.28,
+          "dependency_status": "DEGRADED"
+        }
+      ],
+      "causes": [
+        "RB-STD-03",
+        "RB-STD-01",
+        "RB-STD-02",
+        "RB-STD-04",
+        "RB-STD-05"
+      ],
+      "target": "RB-STD-03"
+    },
+    "createdAt": "2026-10-26T01:15:39.45004Z"
+  },
+  {
+    "type": "APPROVAL_REQUIRED",
+    "data": {
+      "args": {
+        "action": "adjust_autoscaler",
+        "reason": "RB-STD-03에 따른 트래픽 급증으로 백로그가 발생하고 있으나 현재 atMax 상태로 더 확장이 불가하므로 안전 상한 4까지 HPA 최대치를 올리는 조치를 수행한다.",
+        "service": "order-api",
+        "incident_id": 15,
+        "max_replicas": 4
+      },
+      "tool": "business_execute_runbook_action",
+      "impact": {
+        "runtime": "kubernetes",
+        "replicas": 3,
+        "readyReplicas": 3,
+        "safeMaxReplicas": 4,
+        "targetMaxReplicas": 4,
+        "autoscalerMaxReplicas": 3,
+        "autoscalerMinReplicas": 2
+      },
+      "reason": "",
+      "runbook": [
+        {
+          "uri": "docs://_common/runbook-standard",
+          "scope": "common",
+          "score": 0.697,
+          "title": "MSP 표준 장애 대응 런북",
+          "doc_id": "runbook-standard",
+          "content": "[문서] MSP 표준 장애 대응 런북 | MSP 공통 | 런북 | 절 MSP 표준 장애 대응 런북 > RB-STD-03 트래픽 급증 (앱 처리 용량 부족)\n\n## RB-STD-03 트래픽 급증 (앱 처리 용량 부족)\n\n- 증상: 에러율은 정상인데 p95 응답시간 상승, 로그에 `request queue backlog` 경고 반복\n- 구분: 5xx 에러가 늘지 않는다(늘면 RB-STD-02). 외부 API timeout 로그와 DB `slow query` 로그가 없다. 지연이 앱의 처리 대기에서 생긴다\n- 구조 검토: 서비스 목록의 `autoscaling`(HPA)을 먼저 본다. 안전 상한(`safe_max_replicas`)은 DB 최대 연결 수와 계약 상한으로 정해지며, 넘으면 확장 때문에 DB 장애가 날 수 있다\n  - HPA가 있고 최대치에 닿지 않았다(`atMax` false): HPA가 늘리는 중이다. 레플리카를 직접 바꾸지 않고 조치하지 않는다\n  - HPA가 최대치에 닿았고 최대치가 안전 상한보다 작다(`canRaiseMax` true): HPA 최대치를 안전 상한까지 올린다\n  - HPA가 최대치에 닿았고 최대치가 이미 안전 상한이다: 더 늘릴 수 없다. RB-STD-06을 따른다\n  - HPA가 없다: 목표 레플리카는 현재의 2배이고, 안전 상한을 넘으면 상한까지만 늘린다. 이미 상한이면 RB-STD-06\n- 재시작(`restart_pods`)은 처리 용량을 늘리지 않으므로 급증에 효과가 없다. 확장할 수 없으면 재시작으로 대신하지 않고 RB-STD-06을 따른다\n- 조치: HPA가 있으면 `adjust_autoscaler`(`max_replicas`=안전 상한). HPA가 없으면 `scale_deployment`(`replicas`=목표 레플리카). HPA가 관리하는 서비스의 레플리카는 직접 바꾸지 않는다(HPA가 곧 덮어쓴다)",
+          "section": "RB-STD-03 트래픽 급증 (앱 처리 용량 부족)",
+          "version": "81501068c9b4",
+          "doc_type": "runbook",
+          "section_path": "MSP 표준 장애 대응 런북 > RB-STD-03 트래픽 급증 (앱 처리 용량 부족)",
+          "source_format": "md",
+          "document_version": 5
+        },
+        {
+          "uri": "docs://_common/runbook-standard",
+          "scope": "common",
+          "score": 0.627,
+          "title": "MSP 표준 장애 대응 런북",
+          "doc_id": "runbook-standard",
+          "content": "[문서] MSP 표준 장애 대응 런북 | MSP 공통 | 런북 | 절 MSP 표준 장애 대응 런북 > RB-STD-02 작업 스레드 고갈 (파드 멈춤)\n\n## RB-STD-02 작업 스레드 고갈 (파드 멈춤)\n\n- 증상: 5xx 에러율 급증, 로그에 `503 worker pool saturated`, `oldest worker blocked` 반복\n- 구분: 이상 시작 직전에 배포·설정 변경이 없다. 프로세스 내부 상태 문제로 본다. 5xx 없이 응답만 느리고 `request queue backlog`(처리 슬롯 대기)가 보이면 이 조항이 아니라 RB-STD-03(트래픽 급증)이다. 처리 슬롯이 모두 쓰이는 것은 요청이 많아서이지 스레드가 멈춰서가 아니다\n- 구조 검토: 레플리카가 2개 이상이고 무상태면 하나씩 재시작해 중단 없이 처리한다. 레플리카가 1개면 재시작하는 동안 서비스 전체가 멈추므로, 제안 이유에 전체 중단 영향을 적는다. 재시작은 그대로 제안하고, 공지는 보고서 뒤에 보낸다. 상태 저장 서비스면 RB-STD-06을 따른다\n- 조치: 파드를 재시작한다 (`restart_pods`)",
+          "section": "RB-STD-02 작업 스레드 고갈 (파드 멈춤)",
+          "version": "81501068c9b4",
+          "doc_type": "runbook",
+          "section_path": "MSP 표준 장애 대응 런북 > RB-STD-02 작업 스레드 고갈 (파드 멈춤)",
+          "source_format": "md",
+          "document_version": 5
+        },
+        {
+          "uri": "docs://tenant-a/runbook-order-api",
+          "scope": "tenant",
+          "score": 0.536,
+          "title": "A사 order-api 서비스 런북",
+          "doc_id": "runbook-order-api",
+          "content": "[문서] A사 order-api 서비스 런북 | tenant-a | 런북 | 절 A사 order-api 서비스 런북 > RB-A-02 DB 관련 연락과 주의\n\n## RB-A-02 DB 관련 연락과 주의\n\n- order-api의 DB(postgres)는 A사 DBA가 소유한다. DB 자체가 느리거나 장애면 앱 조치 전에 A사 DBA에게 먼저 연락한다\n- 확장할 때는 레플리카 수에 커넥션 풀 크기를 곱한 값이 DB 연결 한도를 넘지 않게 한다\n- 레플리카 수는 HPA(`hpa.yaml`, 평소 최대 3)가 정한다. 레플리카를 직접 바꾸지 않고, 최대치가 모자랄 때만 최대치를 올리는 PR을 만든다",
+          "section": "RB-A-02 DB 관련 연락과 주의",
+          "version": "be56622a31c6",
+          "doc_type": "runbook",
+          "section_path": "A사 order-api 서비스 런북 > RB-A-02 DB 관련 연락과 주의",
+          "source_format": "md",
+          "document_version": 1
+        }
+      ],
+      "evidence": [
+        {
+          "args": {
+            "limit": 200,
+            "logql": "{app=\"demo-app\", service=\"order-api\", level=~\"ERROR|WARN\"}",
+            "direction": "backward",
+            "endRfc3339": "2026-10-26T01:15:27+00:00",
+            "startRfc3339": "2026-10-26T01:13:17+00:00"
+          },
+          "tool": "grafana_query_loki_logs",
+          "status": "success",
+          "signals": {
+            "slow_query": 0,
+            "external_api_timeout": 0,
+            "request_queue_backlog": 78,
+            "worker_pool_saturated": 0,
+            "connection_pool_exhausted": 0
+          },
+          "summary": "[{\"count\": 76, \"level\": \"WARN\", \"example\": \"WARN  [virtual-14227] c.o.d.OrderService - request queue backlog: 316 requests waiting for a processing slot (4/4 slots busy), queue wait 4575ms\"}, {\"count\": 2, \"level\": \"WARN\", \"example\": \"WARN  [scheduling-1] c.o.d.OrderService - request queue backlog: 306 requests waiting for a processing slot (4/4 slots busy), queue wait 1512ms\"}]"
+        },
+        {
+          "args": {
+            "error_rate": "(sum(rate(demo_orders_seconds_count{service=\"order-api\", outcome=\"error\"}[1m])) or vector(0)) / sum(rate(demo_orders_seconds_count{service=\"order-api\"}[1m]))",
+            "p95_seconds": "histogram_quantile(0.95, sum by (le) (rate(demo_orders_seconds_bucket{service=\"order-api\"}[1m])))",
+            "requests_per_second": "sum(rate(demo_orders_seconds_count{service=\"order-api\"}[1m]))"
+          },
+          "tool": "grafana_query_prometheus",
+          "summary": "{\"error_rate\": 0.0, \"p95_seconds\": 5.646013996004978, \"requests_per_second\": 109.77101610574738}"
+        },
+        {
+          "args": {
+            "service": "order-api"
+          },
+          "tool": "business_list_recent_changes",
+          "summary": "{\"service\": \"order-api\", \"changeMode\": \"GITOPS\", \"source\": \"설정 저장소 gitops/tenants/tenant-a/order-api.yaml\", \"commits\": [{\"sha\": \"2a4d729\", \"message\": \"Deploy more demo services and inject faults per service\\n\\nTenant A gains cart-api (with its own HPA) and inventory-api, tenant B gains checkin-api, each with a load generator and its own dependency-faults ConfigMap. inject.sh takes --service, clear without it cleans every service of the tenant, and concurrent commits retry on conflicts. The agent"
+        },
+        {
+          "tool": "cause_facts",
+          "summary": "[{\"clause\": \"RB-STD-01\", \"signal\": \"connection_pool_exhausted\", \"signal_count\": 0, \"first_seen\": null, \"dependency\": null, \"dependency_status\": null, \"dependency_share\": null, \"evidence\": false}, {\"clause\": \"RB-STD-02\", \"signal\": \"worker_pool_saturated\", \"signal_count\": 0, \"first_seen\": null, \"dependency\": null, \"dependency_status\": null, \"dependency_share\": null, \"evidence\": false}, {\"clause\": \"RB-STD-03\", \"signal\": \"request_queue_backlog\", \"signal_count\": 84, \"first_seen\": \"2026-10-26T01:14:45"
+        },
+        {
+          "args": {
+            "dependency": "postgres"
+          },
+          "tool": "business_get_dependency_health",
+          "status": "success",
+          "summary": "<tool_output>\n{\"dependency\":\"postgres\",\"service\":\"cart-api\",\"kind\":\"database\",\"owner\":\"tenant\",\"ownerContact\":\"A사 DBA팀\",\"status\":\"DEGRADED\",\"p95Seconds\":1.605,\"callsPerSecond\":197.4,\"window\":\"최근 1분\",\"thresholds\":{\"degradedSeconds\":0.3,\"downSeconds\":3.0}}\n</tool_output>"
+        }
+      ],
+      "approvalId": "1667b22e-1fd4-52c5-b770-519c5864302e",
+      "changeMode": "GITOPS"
+    },
+    "createdAt": "2026-10-26T01:15:46.474118Z"
+  },
+  {
+    "type": "APPROVAL_DECIDED",
+    "data": {
+      "by": "engineer",
+      "tool": "business_execute_runbook_action",
+      "decision": "APPROVE"
+    },
+    "createdAt": "2026-10-26T01:15:49.439684Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "action": "adjust_autoscaler",
+        "reason": "RB-STD-03에 따른 트래픽 급증으로 백로그가 발생하고 있으나 현재 atMax 상태로 더 확장이 불가하므로 안전 상한 4까지 HPA 최대치를 올리는 조치를 수행한다.",
+        "service": "order-api",
+        "incident_id": 15,
+        "max_replicas": 4
+      },
+      "node": "propose_action",
+      "tool": "business_execute_runbook_action",
+      "callId": "0dfffe4e9b2b4d788ebf7e3ceb9837a1"
+    },
+    "createdAt": "2026-10-26T01:15:49.487592Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "propose_action",
+      "tool": "business_execute_runbook_action",
+      "callId": "0dfffe4e9b2b4d788ebf7e3ceb9837a1",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:15:54.158669Z"
+  },
+  {
+    "type": "CHANGE_PENDING",
+    "data": {
+      "args": {
+        "action": "adjust_autoscaler",
+        "reason": "RB-STD-03에 따른 트래픽 급증으로 백로그가 발생하고 있으나 현재 atMax 상태로 더 확장이 불가하므로 안전 상한 4까지 HPA 최대치를 올리는 조치를 수행한다.",
+        "service": "order-api",
+        "incident_id": 15,
+        "max_replicas": 4
+      },
+      "kind": "CHANGE",
+      "tool": "business_execute_runbook_action",
+      "files": [
+        "gitops/tenants/tenant-a/hpa.yaml"
+      ],
+      "prUrl": "https://github.com/bbbbb0413/ai-agent-capstone/pull/96",
+      "action": "adjust_autoscaler",
+      "service": "order-api",
+      "prNumber": 96,
+      "changeMode": "GITOPS"
+    },
+    "createdAt": "2026-10-26T01:15:54.180375Z"
+  },
+  {
+    "type": "CHANGE_FINISHED",
+    "data": {
+      "result": "SYNCED"
+    },
+    "createdAt": "2026-10-26T01:16:25.471638Z"
+  },
+  {
+    "type": "STEP",
+    "data": {
+      "node": "verify",
+      "waitSeconds": 20
+    },
+    "createdAt": "2026-10-26T01:16:25.994223Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "expr": "(sum(rate(demo_orders_seconds_count{service=\"order-api\", outcome=\"error\"}[15s])) or vector(0)) / sum(rate(demo_orders_seconds_count{service=\"order-api\"}[15s]))",
+        "endTime": "now",
+        "queryType": "instant",
+        "datasourceUid": "prom-tenant-a"
+      },
+      "node": "verify",
+      "tool": "grafana_query_prometheus",
+      "callId": "f09b141da4c04d8db5ed1f4b3727ff2b"
+    },
+    "createdAt": "2026-10-26T01:16:46.027313Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "verify",
+      "tool": "grafana_query_prometheus",
+      "callId": "f09b141da4c04d8db5ed1f4b3727ff2b",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:16:46.343296Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "expr": "histogram_quantile(0.95, sum by (le) (rate(demo_orders_seconds_bucket{service=\"order-api\"}[15s])))",
+        "endTime": "now",
+        "queryType": "instant",
+        "datasourceUid": "prom-tenant-a"
+      },
+      "node": "verify",
+      "tool": "grafana_query_prometheus",
+      "callId": "cedfe321d7894d519867f80fdbfc65f7"
+    },
+    "createdAt": "2026-10-26T01:16:46.349464Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "verify",
+      "tool": "grafana_query_prometheus",
+      "callId": "cedfe321d7894d519867f80fdbfc65f7",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:16:46.382945Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"order-api\", level=~\"ERROR|WARN\"} |= \"Connection is not available\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T01:16:49+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T01:15:54+00:00",
+        "datasourceUid": "loki-tenant-a"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "c1b4a357bd4f432087e72dcfbdffd0fa"
+    },
+    "createdAt": "2026-10-26T01:16:49.572438Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "c1b4a357bd4f432087e72dcfbdffd0fa",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:16:49.807821Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"order-api\", level=~\"ERROR|WARN\"} |= \"503 worker pool saturated\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T01:16:49+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T01:15:54+00:00",
+        "datasourceUid": "loki-tenant-a"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "a1b964c31ce7429186d8c751e3407438"
+    },
+    "createdAt": "2026-10-26T01:16:49.812507Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "a1b964c31ce7429186d8c751e3407438",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:16:49.848472Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"order-api\", level=~\"ERROR|WARN\"} |= \"request queue backlog\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T01:16:49+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T01:15:54+00:00",
+        "datasourceUid": "loki-tenant-a"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "ad49057f70db4f11931833712ff8f9b0"
+    },
+    "createdAt": "2026-10-26T01:16:49.853252Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "ad49057f70db4f11931833712ff8f9b0",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:16:49.890624Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"order-api\", level=~\"ERROR|WARN\"} |= \"payment API timeout\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T01:16:49+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T01:15:54+00:00",
+        "datasourceUid": "loki-tenant-a"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "975e97cbb0214ae5af37722d3d2e60a0"
+    },
+    "createdAt": "2026-10-26T01:16:49.894854Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "975e97cbb0214ae5af37722d3d2e60a0",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:16:49.926713Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"order-api\", level=~\"ERROR|WARN\"} |= \"slow query\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T01:16:49+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T01:15:54+00:00",
+        "datasourceUid": "loki-tenant-a"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "da80cdadb3fa45ca9654cb0473e3fb94"
+    },
+    "createdAt": "2026-10-26T01:16:49.934591Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "da80cdadb3fa45ca9654cb0473e3fb94",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:16:49.96945Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "limit": 200,
+        "logql": "{app=\"demo-app\", service=\"order-api\", level=~\"ERROR|WARN\"}",
+        "direction": "backward",
+        "endRfc3339": "2026-10-26T01:16:49+00:00",
+        "startRfc3339": "2026-10-26T01:13:17+00:00",
+        "datasourceUid": "loki-tenant-a"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "bfe5a40506f84187a933ae3de22c7a43"
+    },
+    "createdAt": "2026-10-26T01:16:49.992035Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "bfe5a40506f84187a933ae3de22c7a43",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:16:50.048092Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "expr": "(sum(rate(demo_orders_seconds_count{service=\"order-api\", outcome=\"error\"}[1m])) or vector(0)) / sum(rate(demo_orders_seconds_count{service=\"order-api\"}[1m]))",
+        "endTime": "now",
+        "queryType": "instant",
+        "datasourceUid": "prom-tenant-a"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "6226e8f04d954a72a8829b89e7007c41"
+    },
+    "createdAt": "2026-10-26T01:16:50.052707Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "6226e8f04d954a72a8829b89e7007c41",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:16:50.113957Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "expr": "histogram_quantile(0.95, sum by (le) (rate(demo_orders_seconds_bucket{service=\"order-api\"}[1m])))",
+        "endTime": "now",
+        "queryType": "instant",
+        "datasourceUid": "prom-tenant-a"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "fa88f3c5c25747d98c1ae4f466c330d5"
+    },
+    "createdAt": "2026-10-26T01:16:50.118424Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "fa88f3c5c25747d98c1ae4f466c330d5",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:16:50.173746Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "expr": "sum(rate(demo_orders_seconds_count{service=\"order-api\"}[1m]))",
+        "endTime": "now",
+        "queryType": "instant",
+        "datasourceUid": "prom-tenant-a"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "800859f585a942fabcdc68228c83cb06"
+    },
+    "createdAt": "2026-10-26T01:16:50.175468Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "800859f585a942fabcdc68228c83cb06",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:16:50.209432Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"order-api\", level=~\"ERROR|WARN\"} |= \"Connection is not available\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T01:16:50+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T01:15:54+00:00",
+        "datasourceUid": "loki-tenant-a"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "6da8d62e4a1241debb747638470441c9"
+    },
+    "createdAt": "2026-10-26T01:16:50.215447Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "6da8d62e4a1241debb747638470441c9",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:16:50.256827Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"order-api\", level=~\"ERROR|WARN\"} |= \"503 worker pool saturated\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T01:16:50+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T01:15:54+00:00",
+        "datasourceUid": "loki-tenant-a"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "4c38b8e497e24c858d34f01498df1894"
+    },
+    "createdAt": "2026-10-26T01:16:50.259585Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "4c38b8e497e24c858d34f01498df1894",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:16:50.28522Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"order-api\", level=~\"ERROR|WARN\"} |= \"request queue backlog\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T01:16:50+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T01:15:54+00:00",
+        "datasourceUid": "loki-tenant-a"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "8c6fb477e2774582ab9e69c1b94b1257"
+    },
+    "createdAt": "2026-10-26T01:16:50.286588Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "8c6fb477e2774582ab9e69c1b94b1257",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:16:50.311607Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"order-api\", level=~\"ERROR|WARN\"} |= \"payment API timeout\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T01:16:50+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T01:15:54+00:00",
+        "datasourceUid": "loki-tenant-a"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "93f3c36c1f0a4657938759f8642b3af9"
+    },
+    "createdAt": "2026-10-26T01:16:50.314495Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "93f3c36c1f0a4657938759f8642b3af9",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:16:50.337858Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"order-api\", level=~\"ERROR|WARN\"} |= \"slow query\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T01:16:50+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T01:15:54+00:00",
+        "datasourceUid": "loki-tenant-a"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "881de06057104376ba29a6d0fc283e8b"
+    },
+    "createdAt": "2026-10-26T01:16:50.339249Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "881de06057104376ba29a6d0fc283e8b",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:16:50.372438Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "dependency": "postgres"
+      },
+      "node": "diagnose",
+      "tool": "business_get_dependency_health",
+      "callId": "01ef8861820c40f4be093bffe113a400"
+    },
+    "createdAt": "2026-10-26T01:16:50.377581Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "business_get_dependency_health",
+      "callId": "01ef8861820c40f4be093bffe113a400",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:16:50.460135Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "dependency": "postgres"
+      },
+      "node": "diagnose",
+      "tool": "business_get_dependency_health",
+      "callId": "call_UKtt61bnyw0zbIASZ7mBL17e"
+    },
+    "createdAt": "2026-10-26T01:16:53.165365Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "business_get_dependency_health",
+      "callId": "call_UKtt61bnyw0zbIASZ7mBL17e",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:16:53.263383Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "query": "이상 시작: 2026-10-26T01:15:17.071043Z\n근거: 지표 p95_seconds 5.32초, error_rate 0.0, RPS 238.48, WARN 로그의 백로그 신호 211건(최근 1분). 현재 신호는 request_queue_backlog 210건(first_seen 2026-10-26T01:15:45Z)로 지속 중. 조치 후에도 잔존 중인 백로그 및 로그 예시: \"request queue backlog: 211 requests waiting for a processing slot (4/4 slots busy), queue wait 2587ms\"\n직전 변경: 2026-10-23T05:47:44Z - order-api autoscaler 조정 및 로그/의존 장애 구성이 이뤄짐\n원인 후보:\n1) RB-STD-03 트래픽 급증 — signal_count: 210, first_seen: 2026-10-26T01:15:45+00:00, 증상: 백로그로 인한 순차 처리 지연 (evidence: true)\n2) RB-STD-01 풀 고갈 — signal: connection_pool_exhausted, signal_count: 0 (evidence: false)\n3) RB-STD-02 작업 스레드 고갈 — signal: worker_pool_saturated, signal_count: 0 (evidence: false)\n4) RB-STD-04 외부 의존 지연 — signal: external_api_timeout, signal_count: 0 (evidence: false)\n5) RB-STD-05 DB 지연 — signal: slow_query, dependency: postgres, dependency_status: HEALTHY, evidence: false\n의존 대상 상태(코드가 조회):\n- postgres: HEALTHY, p95Seconds 0.009, callsPerSecond 27.008, 최근 1분 window\n진단에 따른 처리할 원인:\n- 처리할 원인: RB-STD-07 원인 미확정\n- 병목: 앱\n\n코멘트 및 근거 해설\n- 현재 백로그는 여전히 누적되어 있으며, 조치 이후에도 지속적으로 발생하고 있습니다. 다만 의존 DB(Postgres)는 HEALTHY로 확인되어 DB 지연은 이번 시나리오의 주요 원인이 아니라고 판단됩니다.\n- RB-STD-03의 신호가 가장 강력하며, 이번 조사에서도 신호_count가 가장 크고 first_seen 시점도 명확합니다. 하지만 요청하신 규칙에 따라 이미 조치한 원인은 처리 원인 목록에서 제외되어 있어, 이번에는 증상으로 남은 RB-STD-03을 독립 원인으로 다루되, 최종 처리 대상은 RB-STD-07으로 남겨 두고 추가 조치를 제안합니다.\n\n다음 단계 제안\n- RB-STD-03에 대한 고도화된 대응 검토: 더 aggressive한Autoscaler 정책(초과 스케일링 임계값 조정, 스케일링 지연 시간 단축)이나 큐 길이 관리 정책(백로그가 일정 수준 이상일 때 요청 큐 제한/우회 로직 도입) 검토.\n- 주문 처리 파이프라인의 비대칭 처리 확인: OrderService에서 큐 대기가 길어지는 경로를 특정 로그로 재확인하고, 큐 슬롯 재분배나 우선순위 조정이 가능한지 확인.\n- 필요 시 의존성 모니터링 강화: 현재는 DB HEALTHY이나, 외부 API 의존성이나 캐시 계층의 지연 여부를 추가로 모니터링해 보강.\n- 원인 미확정 RB-STD-07에 대한 에스컬레이션 계획 수립: 조치로 충분치 않으면 운영팀(DBA/애플리케이션 엔지니어) 협업으로 추가 진단 및 수정안을 마련.\n\n참고: 현재 시점의 의존 상태는 HEALTHY로 확인되었고, 역학은 주로 앱 내부의 처리 대기/백로그에 의해 좌우되는 것으로 보입니다.",
+        "scope": "common",
+        "top_k": 2,
+        "doc_type": "runbook"
+      },
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "adb198db505e4f5894ff5afdc572cdef"
+    },
+    "createdAt": "2026-10-26T01:17:03.396231Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "adb198db505e4f5894ff5afdc572cdef",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:17:03.858283Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "query": "이상 시작: 2026-10-26T01:15:17.071043Z\n근거: 지표 p95_seconds 5.32초, error_rate 0.0, RPS 238.48, WARN 로그의 백로그 신호 211건(최근 1분). 현재 신호는 request_queue_backlog 210건(first_seen 2026-10-26T01:15:45Z)로 지속 중. 조치 후에도 잔존 중인 백로그 및 로그 예시: \"request queue backlog: 211 requests waiting for a processing slot (4/4 slots busy), queue wait 2587ms\"\n직전 변경: 2026-10-23T05:47:44Z - order-api autoscaler 조정 및 로그/의존 장애 구성이 이뤄짐\n원인 후보:\n1) RB-STD-03 트래픽 급증 — signal_count: 210, first_seen: 2026-10-26T01:15:45+00:00, 증상: 백로그로 인한 순차 처리 지연 (evidence: true)\n2) RB-STD-01 풀 고갈 — signal: connection_pool_exhausted, signal_count: 0 (evidence: false)\n3) RB-STD-02 작업 스레드 고갈 — signal: worker_pool_saturated, signal_count: 0 (evidence: false)\n4) RB-STD-04 외부 의존 지연 — signal: external_api_timeout, signal_count: 0 (evidence: false)\n5) RB-STD-05 DB 지연 — signal: slow_query, dependency: postgres, dependency_status: HEALTHY, evidence: false\n의존 대상 상태(코드가 조회):\n- postgres: HEALTHY, p95Seconds 0.009, callsPerSecond 27.008, 최근 1분 window\n진단에 따른 처리할 원인:\n- 처리할 원인: RB-STD-07 원인 미확정\n- 병목: 앱\n\n코멘트 및 근거 해설\n- 현재 백로그는 여전히 누적되어 있으며, 조치 이후에도 지속적으로 발생하고 있습니다. 다만 의존 DB(Postgres)는 HEALTHY로 확인되어 DB 지연은 이번 시나리오의 주요 원인이 아니라고 판단됩니다.\n- RB-STD-03의 신호가 가장 강력하며, 이번 조사에서도 신호_count가 가장 크고 first_seen 시점도 명확합니다. 하지만 요청하신 규칙에 따라 이미 조치한 원인은 처리 원인 목록에서 제외되어 있어, 이번에는 증상으로 남은 RB-STD-03을 독립 원인으로 다루되, 최종 처리 대상은 RB-STD-07으로 남겨 두고 추가 조치를 제안합니다.\n\n다음 단계 제안\n- RB-STD-03에 대한 고도화된 대응 검토: 더 aggressive한Autoscaler 정책(초과 스케일링 임계값 조정, 스케일링 지연 시간 단축)이나 큐 길이 관리 정책(백로그가 일정 수준 이상일 때 요청 큐 제한/우회 로직 도입) 검토.\n- 주문 처리 파이프라인의 비대칭 처리 확인: OrderService에서 큐 대기가 길어지는 경로를 특정 로그로 재확인하고, 큐 슬롯 재분배나 우선순위 조정이 가능한지 확인.\n- 필요 시 의존성 모니터링 강화: 현재는 DB HEALTHY이나, 외부 API 의존성이나 캐시 계층의 지연 여부를 추가로 모니터링해 보강.\n- 원인 미확정 RB-STD-07에 대한 에스컬레이션 계획 수립: 조치로 충분치 않으면 운영팀(DBA/애플리케이션 엔지니어) 협업으로 추가 진단 및 수정안을 마련.\n\n참고: 현재 시점의 의존 상태는 HEALTHY로 확인되었고, 역학은 주로 앱 내부의 처리 대기/백로그에 의해 좌우되는 것으로 보입니다.",
+        "scope": "tenant",
+        "top_k": 2,
+        "doc_type": "runbook"
+      },
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "03403aee42e74dd7b393345d2b979bf3"
+    },
+    "createdAt": "2026-10-26T01:17:03.860765Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "03403aee42e74dd7b393345d2b979bf3",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:17:04.08484Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "query": "MSP가 사전 동의 없이 수행할 수 있는 허용 조치와 고객사 승인이 필요한 조치",
+        "scope": "tenant",
+        "top_k": 1,
+        "doc_type": "sla"
+      },
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "5ea1c0dedfa44675bcb0d5247e9479ad"
+    },
+    "createdAt": "2026-10-26T01:17:04.088598Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "5ea1c0dedfa44675bcb0d5247e9479ad",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:17:04.328189Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {},
+      "node": "propose_action",
+      "tool": "business_get_service_inventory",
+      "callId": "21742961bde74cd08dd9c6ef07676a00"
+    },
+    "createdAt": "2026-10-26T01:17:04.341605Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "propose_action",
+      "tool": "business_get_service_inventory",
+      "callId": "21742961bde74cd08dd9c6ef07676a00",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:17:04.511095Z"
+  },
+  {
+    "type": "STEP",
+    "data": {
+      "node": "propose_action",
+      "facts": [
+        {
+          "clause": "RB-STD-01",
+          "signal": "connection_pool_exhausted",
+          "evidence": false,
+          "dependency": null,
+          "first_seen": null,
+          "signal_count": 0,
+          "dependency_share": null,
+          "dependency_status": null
+        },
+        {
+          "clause": "RB-STD-02",
+          "signal": "worker_pool_saturated",
+          "evidence": false,
+          "dependency": null,
+          "first_seen": null,
+          "signal_count": 0,
+          "dependency_share": null,
+          "dependency_status": null
+        },
+        {
+          "clause": "RB-STD-03",
+          "signal": "request_queue_backlog",
+          "evidence": true,
+          "dependency": null,
+          "first_seen": "2026-10-26T01:15:45+00:00",
+          "signal_count": 210,
+          "dependency_share": null,
+          "dependency_status": null
+        },
+        {
+          "clause": "RB-STD-04",
+          "signal": "external_api_timeout",
+          "evidence": false,
+          "dependency": null,
+          "first_seen": null,
+          "signal_count": 0,
+          "dependency_share": null,
+          "dependency_status": null
+        },
+        {
+          "clause": "RB-STD-05",
+          "signal": "slow_query",
+          "evidence": false,
+          "dependency": "postgres",
+          "first_seen": null,
+          "signal_count": 0,
+          "dependency_share": 0.0,
+          "dependency_status": "HEALTHY"
+        }
+      ],
+      "causes": [
+        "RB-STD-03",
+        "RB-STD-01",
+        "RB-STD-02",
+        "RB-STD-04",
+        "RB-STD-05"
+      ],
+      "target": null
+    },
+    "createdAt": "2026-10-26T01:17:04.516496Z"
+  },
+  {
+    "type": "APPROVAL_REQUIRED",
+    "data": {
+      "args": {
+        "reason": "RB-STD-03 트래픽 급증에 대한 대응이 필요하나, order-api의 HPA가 이미 atMax에 도달했고 canRaiseMax가 false로 구조상 확장을 더 이상 할 수 없기 때문에 자동 확장을 진행할 수 없다.",
+        "service": "order-api",
+        "category": "ACTION_BLOCKED",
+        "blocked_by": "STRUCTURE",
+        "incident_id": 15,
+        "required_action": "adjust_autoscaler"
+      },
+      "tool": "business_escalate_incident",
+      "reason": "",
+      "runbook": [
+        {
+          "uri": "docs://_common/runbook-standard",
+          "scope": "common",
+          "score": 0.698,
+          "title": "MSP 표준 장애 대응 런북",
+          "doc_id": "runbook-standard",
+          "content": "[문서] MSP 표준 장애 대응 런북 | MSP 공통 | 런북 | 절 MSP 표준 장애 대응 런북 > RB-STD-03 트래픽 급증 (앱 처리 용량 부족)\n\n## RB-STD-03 트래픽 급증 (앱 처리 용량 부족)\n\n- 증상: 에러율은 정상인데 p95 응답시간 상승, 로그에 `request queue backlog` 경고 반복\n- 구분: 5xx 에러가 늘지 않는다(늘면 RB-STD-02). 외부 API timeout 로그와 DB `slow query` 로그가 없다. 지연이 앱의 처리 대기에서 생긴다\n- 구조 검토: 서비스 목록의 `autoscaling`(HPA)을 먼저 본다. 안전 상한(`safe_max_replicas`)은 DB 최대 연결 수와 계약 상한으로 정해지며, 넘으면 확장 때문에 DB 장애가 날 수 있다\n  - HPA가 있고 최대치에 닿지 않았다(`atMax` false): HPA가 늘리는 중이다. 레플리카를 직접 바꾸지 않고 조치하지 않는다\n  - HPA가 최대치에 닿았고 최대치가 안전 상한보다 작다(`canRaiseMax` true): HPA 최대치를 안전 상한까지 올린다\n  - HPA가 최대치에 닿았고 최대치가 이미 안전 상한이다: 더 늘릴 수 없다. RB-STD-06을 따른다\n  - HPA가 없다: 목표 레플리카는 현재의 2배이고, 안전 상한을 넘으면 상한까지만 늘린다. 이미 상한이면 RB-STD-06\n- 재시작(`restart_pods`)은 처리 용량을 늘리지 않으므로 급증에 효과가 없다. 확장할 수 없으면 재시작으로 대신하지 않고 RB-STD-06을 따른다\n- 조치: HPA가 있으면 `adjust_autoscaler`(`max_replicas`=안전 상한). HPA가 없으면 `scale_deployment`(`replicas`=목표 레플리카). HPA가 관리하는 서비스의 레플리카는 직접 바꾸지 않는다(HPA가 곧 덮어쓴다)",
+          "section": "RB-STD-03 트래픽 급증 (앱 처리 용량 부족)",
+          "version": "81501068c9b4",
+          "doc_type": "runbook",
+          "section_path": "MSP 표준 장애 대응 런북 > RB-STD-03 트래픽 급증 (앱 처리 용량 부족)",
+          "source_format": "md",
+          "document_version": 5
+        },
+        {
+          "uri": "docs://_common/runbook-standard",
+          "scope": "common",
+          "score": 0.619,
+          "title": "MSP 표준 장애 대응 런북",
+          "doc_id": "runbook-standard",
+          "content": "[문서] MSP 표준 장애 대응 런북 | MSP 공통 | 런북 | 절 MSP 표준 장애 대응 런북 > RB-STD-02 작업 스레드 고갈 (파드 멈춤)\n\n## RB-STD-02 작업 스레드 고갈 (파드 멈춤)\n\n- 증상: 5xx 에러율 급증, 로그에 `503 worker pool saturated`, `oldest worker blocked` 반복\n- 구분: 이상 시작 직전에 배포·설정 변경이 없다. 프로세스 내부 상태 문제로 본다. 5xx 없이 응답만 느리고 `request queue backlog`(처리 슬롯 대기)가 보이면 이 조항이 아니라 RB-STD-03(트래픽 급증)이다. 처리 슬롯이 모두 쓰이는 것은 요청이 많아서이지 스레드가 멈춰서가 아니다\n- 구조 검토: 레플리카가 2개 이상이고 무상태면 하나씩 재시작해 중단 없이 처리한다. 레플리카가 1개면 재시작하는 동안 서비스 전체가 멈추므로, 제안 이유에 전체 중단 영향을 적는다. 재시작은 그대로 제안하고, 공지는 보고서 뒤에 보낸다. 상태 저장 서비스면 RB-STD-06을 따른다\n- 조치: 파드를 재시작한다 (`restart_pods`)",
+          "section": "RB-STD-02 작업 스레드 고갈 (파드 멈춤)",
+          "version": "81501068c9b4",
+          "doc_type": "runbook",
+          "section_path": "MSP 표준 장애 대응 런북 > RB-STD-02 작업 스레드 고갈 (파드 멈춤)",
+          "source_format": "md",
+          "document_version": 5
+        },
+        {
+          "uri": "docs://tenant-a/runbook-order-api",
+          "scope": "tenant",
+          "score": 0.522,
+          "title": "A사 order-api 서비스 런북",
+          "doc_id": "runbook-order-api",
+          "content": "[문서] A사 order-api 서비스 런북 | tenant-a | 런북 | 절 A사 order-api 서비스 런북 > RB-A-02 DB 관련 연락과 주의\n\n## RB-A-02 DB 관련 연락과 주의\n\n- order-api의 DB(postgres)는 A사 DBA가 소유한다. DB 자체가 느리거나 장애면 앱 조치 전에 A사 DBA에게 먼저 연락한다\n- 확장할 때는 레플리카 수에 커넥션 풀 크기를 곱한 값이 DB 연결 한도를 넘지 않게 한다\n- 레플리카 수는 HPA(`hpa.yaml`, 평소 최대 3)가 정한다. 레플리카를 직접 바꾸지 않고, 최대치가 모자랄 때만 최대치를 올리는 PR을 만든다",
+          "section": "RB-A-02 DB 관련 연락과 주의",
+          "version": "be56622a31c6",
+          "doc_type": "runbook",
+          "section_path": "A사 order-api 서비스 런북 > RB-A-02 DB 관련 연락과 주의",
+          "source_format": "md",
+          "document_version": 1
+        }
+      ],
+      "evidence": [
+        {
+          "args": {
+            "error_rate": "(sum(rate(demo_orders_seconds_count{service=\"order-api\", outcome=\"error\"}[15s])) or vector(0)) / sum(rate(demo_orders_seconds_count{service=\"order-api\"}[15s]))",
+            "p95_seconds": "histogram_quantile(0.95, sum by (le) (rate(demo_orders_seconds_bucket{service=\"order-api\"}[15s])))"
+          },
+          "tool": "grafana_query_prometheus",
+          "summary": "{\"error_rate\": 0.0, \"p95_seconds\": 1.732956168692467, \"window\": \"조치 직후 15초\", \"thresholds\": {\"error_rate\": 0.2, \"p95_seconds\": 1.0}}"
+        },
+        {
+          "args": {
+            "limit": 200,
+            "logql": "{app=\"demo-app\", service=\"order-api\", level=~\"ERROR|WARN\"}",
+            "direction": "backward",
+            "endRfc3339": "2026-10-26T01:16:49+00:00",
+            "startRfc3339": "2026-10-26T01:13:17+00:00"
+          },
+          "tool": "grafana_query_loki_logs",
+          "status": "success",
+          "signals": {
+            "slow_query": 0,
+            "external_api_timeout": 0,
+            "request_queue_backlog": 100,
+            "worker_pool_saturated": 0,
+            "connection_pool_exhausted": 0
+          },
+          "summary": "[{\"count\": 99, \"level\": \"WARN\", \"example\": \"WARN  [virtual-20397] c.o.d.OrderService - request queue backlog: 211 requests waiting for a processing slot (4/4 slots busy), queue wait 2587ms\"}, {\"count\": 1, \"level\": \"WARN\", \"example\": \"WARN  [scheduling-1] c.o.d.OrderService - request queue backlog: 34 requests waiting for a processing slot (2/4 slots busy), queue wait 806ms\"}]"
+        },
+        {
+          "args": {
+            "error_rate": "(sum(rate(demo_orders_seconds_count{service=\"order-api\", outcome=\"error\"}[1m])) or vector(0)) / sum(rate(demo_orders_seconds_count{service=\"order-api\"}[1m]))",
+            "p95_seconds": "histogram_quantile(0.95, sum by (le) (rate(demo_orders_seconds_bucket{service=\"order-api\"}[1m])))",
+            "requests_per_second": "sum(rate(demo_orders_seconds_count{service=\"order-api\"}[1m]))"
+          },
+          "tool": "grafana_query_prometheus",
+          "summary": "{\"error_rate\": 0.0, \"p95_seconds\": 5.318121095219855, \"requests_per_second\": 238.47556529428635}"
+        },
+        {
+          "tool": "cause_facts",
+          "summary": "[{\"clause\": \"RB-STD-01\", \"signal\": \"connection_pool_exhausted\", \"signal_count\": 0, \"first_seen\": null, \"dependency\": null, \"dependency_status\": null, \"dependency_share\": null, \"evidence\": false}, {\"clause\": \"RB-STD-02\", \"signal\": \"worker_pool_saturated\", \"signal_count\": 0, \"first_seen\": null, \"dependency\": null, \"dependency_status\": null, \"dependency_share\": null, \"evidence\": false}, {\"clause\": \"RB-STD-03\", \"signal\": \"request_queue_backlog\", \"signal_count\": 210, \"first_seen\": \"2026-10-26T01:15:4"
+        },
+        {
+          "args": {
+            "dependency": "postgres"
+          },
+          "tool": "business_get_dependency_health",
+          "status": "success",
+          "summary": "<tool_output>\n{\"dependency\":\"postgres\",\"service\":\"cart-api\",\"kind\":\"database\",\"owner\":\"tenant\",\"ownerContact\":\"A사 DBA팀\",\"status\":\"HEALTHY\",\"p95Seconds\":0.009,\"callsPerSecond\":27.008,\"window\":\"최근 1분\",\"thresholds\":{\"degradedSeconds\":0.3,\"downSeconds\":3.0}}\n</tool_output>"
+        }
+      ],
+      "approvalId": "155c0da4-86d9-57a4-bd1a-cac8194dec71"
+    },
+    "createdAt": "2026-10-26T01:17:17.563053Z"
+  },
+  {
+    "type": "APPROVAL_DECIDED",
+    "data": {
+      "by": "engineer",
+      "tool": "business_escalate_incident",
+      "decision": "APPROVE"
+    },
+    "createdAt": "2026-10-26T01:17:19.472308Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "reason": "RB-STD-03 트래픽 급증에 대한 대응이 필요하나, order-api의 HPA가 이미 atMax에 도달했고 canRaiseMax가 false로 구조상 확장을 더 이상 할 수 없기 때문에 자동 확장을 진행할 수 없다.",
+        "service": "order-api",
+        "category": "ACTION_BLOCKED",
+        "blocked_by": "STRUCTURE",
+        "incident_id": 15,
+        "required_action": "adjust_autoscaler"
+      },
+      "node": "propose_action",
+      "tool": "business_escalate_incident",
+      "callId": "696fb68b49824ce8a5531d5d9bad00c1"
+    },
+    "createdAt": "2026-10-26T01:17:20.047829Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "propose_action",
+      "tool": "business_escalate_incident",
+      "callId": "696fb68b49824ce8a5531d5d9bad00c1",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:17:20.283249Z"
+  },
+  {
+    "type": "STEP",
+    "data": {
+      "node": "report"
+    },
+    "createdAt": "2026-10-26T01:17:20.347358Z"
+  },
+  {
+    "type": "APPROVAL_REQUIRED",
+    "data": {
+      "args": {
+        "message": "order-api 서비스에서 오늘 10:15부터 이용 지연 또는 오류가 발생해 복구 작업을 진행하고 있습니다. 30분 안에 진행 상황을 다시 안내드리겠습니다.",
+        "incident_id": 15
+      },
+      "tool": "business_send_customer_notice",
+      "reason": "고객 공지 발송",
+      "runbook": [
+        {
+          "uri": "docs://_common/runbook-standard",
+          "scope": "common",
+          "score": 0.698,
+          "title": "MSP 표준 장애 대응 런북",
+          "doc_id": "runbook-standard",
+          "content": "[문서] MSP 표준 장애 대응 런북 | MSP 공통 | 런북 | 절 MSP 표준 장애 대응 런북 > RB-STD-03 트래픽 급증 (앱 처리 용량 부족)\n\n## RB-STD-03 트래픽 급증 (앱 처리 용량 부족)\n\n- 증상: 에러율은 정상인데 p95 응답시간 상승, 로그에 `request queue backlog` 경고 반복\n- 구분: 5xx 에러가 늘지 않는다(늘면 RB-STD-02). 외부 API timeout 로그와 DB `slow query` 로그가 없다. 지연이 앱의 처리 대기에서 생긴다\n- 구조 검토: 서비스 목록의 `autoscaling`(HPA)을 먼저 본다. 안전 상한(`safe_max_replicas`)은 DB 최대 연결 수와 계약 상한으로 정해지며, 넘으면 확장 때문에 DB 장애가 날 수 있다\n  - HPA가 있고 최대치에 닿지 않았다(`atMax` false): HPA가 늘리는 중이다. 레플리카를 직접 바꾸지 않고 조치하지 않는다\n  - HPA가 최대치에 닿았고 최대치가 안전 상한보다 작다(`canRaiseMax` true): HPA 최대치를 안전 상한까지 올린다\n  - HPA가 최대치에 닿았고 최대치가 이미 안전 상한이다: 더 늘릴 수 없다. RB-STD-06을 따른다\n  - HPA가 없다: 목표 레플리카는 현재의 2배이고, 안전 상한을 넘으면 상한까지만 늘린다. 이미 상한이면 RB-STD-06\n- 재시작(`restart_pods`)은 처리 용량을 늘리지 않으므로 급증에 효과가 없다. 확장할 수 없으면 재시작으로 대신하지 않고 RB-STD-06을 따른다\n- 조치: HPA가 있으면 `adjust_autoscaler`(`max_replicas`=안전 상한). HPA가 없으면 `scale_deployment`(`replicas`=목표 레플리카). HPA가 관리하는 서비스의 레플리카는 직접 바꾸지 않는다(HPA가 곧 덮어쓴다)",
+          "section": "RB-STD-03 트래픽 급증 (앱 처리 용량 부족)",
+          "version": "81501068c9b4",
+          "doc_type": "runbook",
+          "section_path": "MSP 표준 장애 대응 런북 > RB-STD-03 트래픽 급증 (앱 처리 용량 부족)",
+          "source_format": "md",
+          "document_version": 5
+        },
+        {
+          "uri": "docs://_common/runbook-standard",
+          "scope": "common",
+          "score": 0.619,
+          "title": "MSP 표준 장애 대응 런북",
+          "doc_id": "runbook-standard",
+          "content": "[문서] MSP 표준 장애 대응 런북 | MSP 공통 | 런북 | 절 MSP 표준 장애 대응 런북 > RB-STD-02 작업 스레드 고갈 (파드 멈춤)\n\n## RB-STD-02 작업 스레드 고갈 (파드 멈춤)\n\n- 증상: 5xx 에러율 급증, 로그에 `503 worker pool saturated`, `oldest worker blocked` 반복\n- 구분: 이상 시작 직전에 배포·설정 변경이 없다. 프로세스 내부 상태 문제로 본다. 5xx 없이 응답만 느리고 `request queue backlog`(처리 슬롯 대기)가 보이면 이 조항이 아니라 RB-STD-03(트래픽 급증)이다. 처리 슬롯이 모두 쓰이는 것은 요청이 많아서이지 스레드가 멈춰서가 아니다\n- 구조 검토: 레플리카가 2개 이상이고 무상태면 하나씩 재시작해 중단 없이 처리한다. 레플리카가 1개면 재시작하는 동안 서비스 전체가 멈추므로, 제안 이유에 전체 중단 영향을 적는다. 재시작은 그대로 제안하고, 공지는 보고서 뒤에 보낸다. 상태 저장 서비스면 RB-STD-06을 따른다\n- 조치: 파드를 재시작한다 (`restart_pods`)",
+          "section": "RB-STD-02 작업 스레드 고갈 (파드 멈춤)",
+          "version": "81501068c9b4",
+          "doc_type": "runbook",
+          "section_path": "MSP 표준 장애 대응 런북 > RB-STD-02 작업 스레드 고갈 (파드 멈춤)",
+          "source_format": "md",
+          "document_version": 5
+        },
+        {
+          "uri": "docs://tenant-a/runbook-order-api",
+          "scope": "tenant",
+          "score": 0.522,
+          "title": "A사 order-api 서비스 런북",
+          "doc_id": "runbook-order-api",
+          "content": "[문서] A사 order-api 서비스 런북 | tenant-a | 런북 | 절 A사 order-api 서비스 런북 > RB-A-02 DB 관련 연락과 주의\n\n## RB-A-02 DB 관련 연락과 주의\n\n- order-api의 DB(postgres)는 A사 DBA가 소유한다. DB 자체가 느리거나 장애면 앱 조치 전에 A사 DBA에게 먼저 연락한다\n- 확장할 때는 레플리카 수에 커넥션 풀 크기를 곱한 값이 DB 연결 한도를 넘지 않게 한다\n- 레플리카 수는 HPA(`hpa.yaml`, 평소 최대 3)가 정한다. 레플리카를 직접 바꾸지 않고, 최대치가 모자랄 때만 최대치를 올리는 PR을 만든다",
+          "section": "RB-A-02 DB 관련 연락과 주의",
+          "version": "be56622a31c6",
+          "doc_type": "runbook",
+          "section_path": "A사 order-api 서비스 런북 > RB-A-02 DB 관련 연락과 주의",
+          "source_format": "md",
+          "document_version": 1
+        }
+      ],
+      "evidence": [
+        {
+          "args": {
+            "limit": 200,
+            "logql": "{app=\"demo-app\", service=\"order-api\", level=~\"ERROR|WARN\"}",
+            "direction": "backward",
+            "endRfc3339": "2026-10-26T01:16:49+00:00",
+            "startRfc3339": "2026-10-26T01:13:17+00:00"
+          },
+          "tool": "grafana_query_loki_logs",
+          "status": "success",
+          "signals": {
+            "slow_query": 0,
+            "external_api_timeout": 0,
+            "request_queue_backlog": 100,
+            "worker_pool_saturated": 0,
+            "connection_pool_exhausted": 0
+          },
+          "summary": "[{\"count\": 99, \"level\": \"WARN\", \"example\": \"WARN  [virtual-20397] c.o.d.OrderService - request queue backlog: 211 requests waiting for a processing slot (4/4 slots busy), queue wait 2587ms\"}, {\"count\": 1, \"level\": \"WARN\", \"example\": \"WARN  [scheduling-1] c.o.d.OrderService - request queue backlog: 34 requests waiting for a processing slot (2/4 slots busy), queue wait 806ms\"}]"
+        },
+        {
+          "args": {
+            "error_rate": "(sum(rate(demo_orders_seconds_count{service=\"order-api\", outcome=\"error\"}[1m])) or vector(0)) / sum(rate(demo_orders_seconds_count{service=\"order-api\"}[1m]))",
+            "p95_seconds": "histogram_quantile(0.95, sum by (le) (rate(demo_orders_seconds_bucket{service=\"order-api\"}[1m])))",
+            "requests_per_second": "sum(rate(demo_orders_seconds_count{service=\"order-api\"}[1m]))"
+          },
+          "tool": "grafana_query_prometheus",
+          "summary": "{\"error_rate\": 0.0, \"p95_seconds\": 5.318121095219855, \"requests_per_second\": 238.47556529428635}"
+        },
+        {
+          "tool": "cause_facts",
+          "summary": "[{\"clause\": \"RB-STD-01\", \"signal\": \"connection_pool_exhausted\", \"signal_count\": 0, \"first_seen\": null, \"dependency\": null, \"dependency_status\": null, \"dependency_share\": null, \"evidence\": false}, {\"clause\": \"RB-STD-02\", \"signal\": \"worker_pool_saturated\", \"signal_count\": 0, \"first_seen\": null, \"dependency\": null, \"dependency_status\": null, \"dependency_share\": null, \"evidence\": false}, {\"clause\": \"RB-STD-03\", \"signal\": \"request_queue_backlog\", \"signal_count\": 210, \"first_seen\": \"2026-10-26T01:15:4"
+        },
+        {
+          "args": {
+            "dependency": "postgres"
+          },
+          "tool": "business_get_dependency_health",
+          "status": "success",
+          "summary": "<tool_output>\n{\"dependency\":\"postgres\",\"service\":\"cart-api\",\"kind\":\"database\",\"owner\":\"tenant\",\"ownerContact\":\"A사 DBA팀\",\"status\":\"HEALTHY\",\"p95Seconds\":0.009,\"callsPerSecond\":27.008,\"window\":\"최근 1분\",\"thresholds\":{\"degradedSeconds\":0.3,\"downSeconds\":3.0}}\n</tool_output>"
+        },
+        {
+          "tool": "business_escalate_incident",
+          "status": "success",
+          "summary": "<tool_output>\n{\"escalationId\":14,\"status\":\"QUEUED\",\"duplicate\":false,\"category\":\"ACTION_BLOCKED\",\"recipients\":[{\"kind\":\"MSP_ONCALL\",\"name\":\"engineer\",\"role\":\"MSP_ENGINEER\"},{\"kind\":\"MSP_ONCALL\",\"name\":\"admin\",\"role\":\"MSP_ADMIN\"},{\"kind\":\"CUSTOMER\",\"name\":\"A사 운영 담당\",\"role\":\"A사 온라인 쇼핑몰\"}],\"message\":\"[OpsLens 에스컬레이션] A사 온라인 쇼핑몰 인시던트 #15 (P2, order-api)\\n장애: tenant-a order-api p95 응답시간 1초 초과\\n분류: 필요한 조치를 계약·구조상 할 수 없음\\n이유: RB-STD-03 트래픽 급증에 대한 대응이 필요하나, order-api의 HPA가 이미 atMax에 도달했고 canRaiseMax가 fa"
+        }
+      ],
+      "approvalId": "ed946c57-736c-5513-8657-ad69e777ffa9"
+    },
+    "createdAt": "2026-10-26T01:17:42.263258Z"
+  },
+  {
+    "type": "APPROVAL_DECIDED",
+    "data": {
+      "by": "admin",
+      "tool": "business_send_customer_notice",
+      "decision": "APPROVE"
+    },
+    "createdAt": "2026-10-26T01:17:44.832991Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "message": "order-api 서비스에서 오늘 10:15부터 이용 지연 또는 오류가 발생해 복구 작업을 진행하고 있습니다. 30분 안에 진행 상황을 다시 안내드리겠습니다.",
+        "incident_id": 15
+      },
+      "node": "notice",
+      "tool": "business_send_customer_notice",
+      "callId": "bfd097943f2245889ffef22713ae48f8"
+    },
+    "createdAt": "2026-10-26T01:17:52.034789Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "notice",
+      "tool": "business_send_customer_notice",
+      "callId": "bfd097943f2245889ffef22713ae48f8",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:17:52.167224Z"
+  },
+  {
+    "type": "DONE",
+    "data": {},
+    "createdAt": "2026-10-26T01:17:52.187555Z"
+  }
+]

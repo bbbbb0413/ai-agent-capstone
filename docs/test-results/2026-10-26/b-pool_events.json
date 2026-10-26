@@ -1,0 +1,923 @@
+[
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {},
+      "node": "load_context",
+      "tool": "business_get_tenant_profile",
+      "callId": "c39720ee6e4a402aac31daccebb0972e"
+    },
+    "createdAt": "2026-10-26T01:14:07.168406Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "load_context",
+      "tool": "business_get_tenant_profile",
+      "callId": "c39720ee6e4a402aac31daccebb0972e",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:14:07.187886Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {},
+      "node": "load_context",
+      "tool": "business_get_service_inventory",
+      "callId": "7219d8aa9876421bb06e36c112ec49ed"
+    },
+    "createdAt": "2026-10-26T01:14:07.189688Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "load_context",
+      "tool": "business_get_service_inventory",
+      "callId": "7219d8aa9876421bb06e36c112ec49ed",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:14:07.22848Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "incident_id": 13
+      },
+      "node": "load_context",
+      "tool": "business_get_sla_terms",
+      "callId": "820d7e21ba1d4dd285e0574e355e984a"
+    },
+    "createdAt": "2026-10-26T01:14:07.229908Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "load_context",
+      "tool": "business_get_sla_terms",
+      "callId": "820d7e21ba1d4dd285e0574e355e984a",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:14:07.247047Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "status": "OPEN"
+      },
+      "node": "load_context",
+      "tool": "business_list_incidents",
+      "callId": "c4573ce89f974335902e230b2df1c406"
+    },
+    "createdAt": "2026-10-26T01:14:07.247946Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "load_context",
+      "tool": "business_list_incidents",
+      "callId": "c4573ce89f974335902e230b2df1c406",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:14:07.266319Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "status": "RESOLVED"
+      },
+      "node": "load_context",
+      "tool": "business_list_incidents",
+      "callId": "055c602146b44960946108d1d42a29ba"
+    },
+    "createdAt": "2026-10-26T01:14:07.26736Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "load_context",
+      "tool": "business_list_incidents",
+      "callId": "055c602146b44960946108d1d42a29ba",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:14:07.286421Z"
+  },
+  {
+    "type": "APPROVAL_REQUIRED",
+    "data": {
+      "args": {
+        "reason": "P1 장애 발생",
+        "category": "P1",
+        "incident_id": 13
+      },
+      "tool": "business_escalate_incident",
+      "reason": "P1 장애 발생",
+      "runbook": [],
+      "evidence": [],
+      "approvalId": "531b8586-9a72-52ba-9796-1e12f5a9764b"
+    },
+    "createdAt": "2026-10-26T01:14:07.290985Z"
+  },
+  {
+    "type": "APPROVAL_DECIDED",
+    "data": {
+      "by": "engineer",
+      "tool": "business_escalate_incident",
+      "decision": "APPROVE"
+    },
+    "createdAt": "2026-10-26T01:14:09.107806Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "reason": "P1 장애 발생",
+        "category": "P1",
+        "incident_id": 13
+      },
+      "node": "escalate",
+      "tool": "business_escalate_incident",
+      "callId": "83092386cc5d41b5bfdccdd1469bce29"
+    },
+    "createdAt": "2026-10-26T01:14:09.138475Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "escalate",
+      "tool": "business_escalate_incident",
+      "callId": "83092386cc5d41b5bfdccdd1469bce29",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:14:09.157508Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "limit": 200,
+        "logql": "{app=\"demo-app\", service=\"reservation-api\", level=~\"ERROR|WARN\"}",
+        "direction": "backward",
+        "endRfc3339": "2026-10-26T01:14:09+00:00",
+        "startRfc3339": "2026-10-26T01:12:47+00:00",
+        "datasourceUid": "loki-tenant-b"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "4cae867d48c54a869f8b00ccfa60555a"
+    },
+    "createdAt": "2026-10-26T01:14:09.159196Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "4cae867d48c54a869f8b00ccfa60555a",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:14:09.187253Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "expr": "(sum(rate(demo_orders_seconds_count{service=\"reservation-api\", outcome=\"error\"}[1m])) or vector(0)) / sum(rate(demo_orders_seconds_count{service=\"reservation-api\"}[1m]))",
+        "endTime": "now",
+        "queryType": "instant",
+        "datasourceUid": "prom-tenant-b"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "1b3cbc4b1f5a45e4b674c62f15947b80"
+    },
+    "createdAt": "2026-10-26T01:14:09.188928Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "1b3cbc4b1f5a45e4b674c62f15947b80",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:14:09.206245Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "expr": "histogram_quantile(0.95, sum by (le) (rate(demo_orders_seconds_bucket{service=\"reservation-api\"}[1m])))",
+        "endTime": "now",
+        "queryType": "instant",
+        "datasourceUid": "prom-tenant-b"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "0a397305babe4fa5a8400a0f1644012f"
+    },
+    "createdAt": "2026-10-26T01:14:09.207282Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "0a397305babe4fa5a8400a0f1644012f",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:14:09.2234Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "expr": "sum(rate(demo_orders_seconds_count{service=\"reservation-api\"}[1m]))",
+        "endTime": "now",
+        "queryType": "instant",
+        "datasourceUid": "prom-tenant-b"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "2fca572a71954be88ffdf43bb11c5de2"
+    },
+    "createdAt": "2026-10-26T01:14:09.224611Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "2fca572a71954be88ffdf43bb11c5de2",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:14:09.241937Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "service": "reservation-api"
+      },
+      "node": "diagnose",
+      "tool": "business_list_recent_changes",
+      "callId": "ee27e2445bed44fb8e237b9ed1e20a9a"
+    },
+    "createdAt": "2026-10-26T01:14:09.242988Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "business_list_recent_changes",
+      "callId": "ee27e2445bed44fb8e237b9ed1e20a9a",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:14:09.270572Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "query": "reservation-api tenant-b reservation-api 에러율 20% 초과 로그 신호: {\"connection_pool_exhausted\": 50, \"worker_pool_saturated\": 0, \"request_queue_backlog\": 0, \"external_api_timeout\": 0, \"slow_query\": 0}",
+        "scope": "tenant",
+        "top_k": 2,
+        "doc_type": "postmortem",
+        "exclude_doc_id": "postmortem-incident-13"
+      },
+      "node": "retrieve_history",
+      "tool": "rag_search_documents",
+      "callId": "8934705a4b45477b817f16fea081aa6d"
+    },
+    "createdAt": "2026-10-26T01:14:09.271685Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "retrieve_history",
+      "tool": "rag_search_documents",
+      "callId": "8934705a4b45477b817f16fea081aa6d",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:14:09.457421Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"reservation-api\", level=~\"ERROR|WARN\"} |= \"Connection is not available\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T01:14:09+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T01:12:47+00:00",
+        "datasourceUid": "loki-tenant-b"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "cd763380397d4e5995c5c5628cc7ae20"
+    },
+    "createdAt": "2026-10-26T01:14:09.459488Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "cd763380397d4e5995c5c5628cc7ae20",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:14:09.482402Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"reservation-api\", level=~\"ERROR|WARN\"} |= \"503 worker pool saturated\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T01:14:09+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T01:12:47+00:00",
+        "datasourceUid": "loki-tenant-b"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "7680841fb3db413fbb6949b07d807b82"
+    },
+    "createdAt": "2026-10-26T01:14:09.483623Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "7680841fb3db413fbb6949b07d807b82",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:14:09.501209Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"reservation-api\", level=~\"ERROR|WARN\"} |= \"request queue backlog\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T01:14:09+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T01:12:47+00:00",
+        "datasourceUid": "loki-tenant-b"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "a1022fa67df64d78b78a53fc6f5c695c"
+    },
+    "createdAt": "2026-10-26T01:14:09.502246Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "a1022fa67df64d78b78a53fc6f5c695c",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:14:09.519844Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"reservation-api\", level=~\"ERROR|WARN\"} |= \"payment API timeout\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T01:14:09+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T01:12:47+00:00",
+        "datasourceUid": "loki-tenant-b"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "ff6eb9fa7b3543a29b5aee7a5ac7a8de"
+    },
+    "createdAt": "2026-10-26T01:14:09.521063Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "ff6eb9fa7b3543a29b5aee7a5ac7a8de",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:14:09.542367Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"reservation-api\", level=~\"ERROR|WARN\"} |= \"slow query\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T01:14:09+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T01:12:47+00:00",
+        "datasourceUid": "loki-tenant-b"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "d2f1584e7eb943a5a9d3139bea0cf9e5"
+    },
+    "createdAt": "2026-10-26T01:14:09.543522Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "d2f1584e7eb943a5a9d3139bea0cf9e5",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:14:09.561905Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "dependency": "payment-gateway"
+      },
+      "node": "diagnose",
+      "tool": "business_get_dependency_health",
+      "callId": "ad4d1197ba374cb5bacd630ec8427659"
+    },
+    "createdAt": "2026-10-26T01:14:09.563006Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "business_get_dependency_health",
+      "callId": "ad4d1197ba374cb5bacd630ec8427659",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:14:09.583777Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {},
+      "node": "diagnose",
+      "tool": "business_get_service_inventory",
+      "callId": "call_EKrQU0ZzTr4hzjh7fGtNp3TV"
+    },
+    "createdAt": "2026-10-26T01:14:11.03611Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "business_get_service_inventory",
+      "callId": "call_EKrQU0ZzTr4hzjh7fGtNp3TV",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:14:11.093418Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "query": "이상 시작: 2026-10-26T01:14:07.053467Z\n근거: 에러율 0.3545, p95 0.128초, 최근 1분 요청 수 5.16/s; 로그에서 503/연결 풀 고갈 다수. 반복 로그 예시: \"ERROR ... 503 Service Unavailable\", \"HikariPool - Connection is not available, request timed out ...\"\n직전 변경: 2026-10-26T01:13:29Z, 변경 내용: reservation-api 배포 이력 revision 4 (image OPSLens/demo-app:0.1.0), DEPLOYEDAt 2026-10-26T01:13:29Z\n원인 후보:\n1) RB-STD-01 — connection_pool_exhausted — 114건 신호 (first_seen 2026-10-26T01:13:25+00:00) (증상: RB-STD-01) — 근거 있음\n2) RB-STD-04 — external_api_timeout(의존: payment-gateway, 상태 DEGRADED, dependency_share 18.54) — 근거 있음\n3) RB-STD-02 — worker_pool_saturated — 신호 0 (근거 없음)\n4) RB-STD-03 — request_queue_backlog — 신호 0 (근거 없음)\n처리할 원인: RB-STD-01\n병목: 앱\n\n설명 요약\n- 현재 에러율이 0.35로 0.05 이상이며, 주요 원인 후보로 RB-STD-01의 연결 풀 고갈이 관측됩니다. 로그에서도 503 및 HikariPool 관련 메시지가 다수 확인됩니다. 의존 대상인 payment-gateway의 DEGRADED 상태도 관찰되나, dependency_share가 0.5 미만(0.185)으로 판단될 여지가 있어 이번 장애의 주된 병목은 애플리케이션 내부의 연결 풀 고갈로 보입니다.\n- 직전 배포 시점은 01:13:29Z로, 장애 시작 시각인 01:14:07Z와 약 38초 간격으로 배포가 이뤄졌습니다. 배포 이력과 장애 시점 간의 시간 관계를 고려하면, 최근 변경이 컨테이너 풀 구성(또는 런타임 파드 상태)에 영향을 주었을 가능성을 열어둡니다.\n- 외부 의존은 DEGRADED이나, 의존 지표의 share가 0.5 미만으로 판단되므로 RB-STD-04만으로 단정하기엔 부족합니다. 우선 RB-STD-01을 최우선 원인으로 두고 조치를 계획하는 것이 적절합니다.\n\n다음 조치 제안(승인 요청용 요약)\n- 원인 RB-STD-01에 따라 앱 내 연결 풀 관리 점검 및 파드 재시작 여부를 고려합니다. reboot/restart_pods 같은 조치로 풀 재생성을 시도해도 괜찮은가요?\n  근거: 현 시점의 연결 풀 고갈 신호 다수 및 503 에러 다수, 로그에서 HikariPool 관련 메시지 확인\n- 필요 시 의존 대상의 지연도 모니터링을 지속하고, payment-gateway의 DEGRADED 상태에 대한 외부 연락 창구를 확인하는 절차를 병행합니다.\n  근거: 의존 상태 DEGRADED와 예비 신호 존재\n\n참고: 이 답은 현재 관측치에 기반한 임시 진단이며, 최종 조치 이전에 고객사 승인(간단한 조치: restart_pods 가능 여부) 필요합니다.",
+        "scope": "common",
+        "top_k": 2,
+        "doc_type": "runbook"
+      },
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "df83fde49af7469fb95fb8ce73c0abb1"
+    },
+    "createdAt": "2026-10-26T01:14:19.293537Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "df83fde49af7469fb95fb8ce73c0abb1",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:14:19.573551Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "query": "이상 시작: 2026-10-26T01:14:07.053467Z\n근거: 에러율 0.3545, p95 0.128초, 최근 1분 요청 수 5.16/s; 로그에서 503/연결 풀 고갈 다수. 반복 로그 예시: \"ERROR ... 503 Service Unavailable\", \"HikariPool - Connection is not available, request timed out ...\"\n직전 변경: 2026-10-26T01:13:29Z, 변경 내용: reservation-api 배포 이력 revision 4 (image OPSLens/demo-app:0.1.0), DEPLOYEDAt 2026-10-26T01:13:29Z\n원인 후보:\n1) RB-STD-01 — connection_pool_exhausted — 114건 신호 (first_seen 2026-10-26T01:13:25+00:00) (증상: RB-STD-01) — 근거 있음\n2) RB-STD-04 — external_api_timeout(의존: payment-gateway, 상태 DEGRADED, dependency_share 18.54) — 근거 있음\n3) RB-STD-02 — worker_pool_saturated — 신호 0 (근거 없음)\n4) RB-STD-03 — request_queue_backlog — 신호 0 (근거 없음)\n처리할 원인: RB-STD-01\n병목: 앱\n\n설명 요약\n- 현재 에러율이 0.35로 0.05 이상이며, 주요 원인 후보로 RB-STD-01의 연결 풀 고갈이 관측됩니다. 로그에서도 503 및 HikariPool 관련 메시지가 다수 확인됩니다. 의존 대상인 payment-gateway의 DEGRADED 상태도 관찰되나, dependency_share가 0.5 미만(0.185)으로 판단될 여지가 있어 이번 장애의 주된 병목은 애플리케이션 내부의 연결 풀 고갈로 보입니다.\n- 직전 배포 시점은 01:13:29Z로, 장애 시작 시각인 01:14:07Z와 약 38초 간격으로 배포가 이뤄졌습니다. 배포 이력과 장애 시점 간의 시간 관계를 고려하면, 최근 변경이 컨테이너 풀 구성(또는 런타임 파드 상태)에 영향을 주었을 가능성을 열어둡니다.\n- 외부 의존은 DEGRADED이나, 의존 지표의 share가 0.5 미만으로 판단되므로 RB-STD-04만으로 단정하기엔 부족합니다. 우선 RB-STD-01을 최우선 원인으로 두고 조치를 계획하는 것이 적절합니다.\n\n다음 조치 제안(승인 요청용 요약)\n- 원인 RB-STD-01에 따라 앱 내 연결 풀 관리 점검 및 파드 재시작 여부를 고려합니다. reboot/restart_pods 같은 조치로 풀 재생성을 시도해도 괜찮은가요?\n  근거: 현 시점의 연결 풀 고갈 신호 다수 및 503 에러 다수, 로그에서 HikariPool 관련 메시지 확인\n- 필요 시 의존 대상의 지연도 모니터링을 지속하고, payment-gateway의 DEGRADED 상태에 대한 외부 연락 창구를 확인하는 절차를 병행합니다.\n  근거: 의존 상태 DEGRADED와 예비 신호 존재\n\n참고: 이 답은 현재 관측치에 기반한 임시 진단이며, 최종 조치 이전에 고객사 승인(간단한 조치: restart_pods 가능 여부) 필요합니다.",
+        "scope": "tenant",
+        "top_k": 2,
+        "doc_type": "runbook"
+      },
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "da0915b21c174984a8023df83bd160ae"
+    },
+    "createdAt": "2026-10-26T01:14:19.57518Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "da0915b21c174984a8023df83bd160ae",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:14:19.766138Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "query": "MSP가 사전 동의 없이 수행할 수 있는 허용 조치와 고객사 승인이 필요한 조치",
+        "scope": "tenant",
+        "top_k": 1,
+        "doc_type": "sla"
+      },
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "2797f8374b544d6fabbb4b9e9a513dfc"
+    },
+    "createdAt": "2026-10-26T01:14:19.767747Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "2797f8374b544d6fabbb4b9e9a513dfc",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:14:19.982212Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {},
+      "node": "propose_action",
+      "tool": "business_get_service_inventory",
+      "callId": "5c6f1814634840eeb00e7a1272b928f8"
+    },
+    "createdAt": "2026-10-26T01:14:19.984768Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "propose_action",
+      "tool": "business_get_service_inventory",
+      "callId": "5c6f1814634840eeb00e7a1272b928f8",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:14:20.037618Z"
+  },
+  {
+    "type": "STEP",
+    "data": {
+      "node": "propose_action",
+      "facts": [
+        {
+          "clause": "RB-STD-01",
+          "signal": "connection_pool_exhausted",
+          "evidence": true,
+          "dependency": null,
+          "first_seen": "2026-10-26T01:13:25+00:00",
+          "signal_count": 114,
+          "dependency_share": null,
+          "dependency_status": null
+        },
+        {
+          "clause": "RB-STD-02",
+          "signal": "worker_pool_saturated",
+          "evidence": false,
+          "dependency": null,
+          "first_seen": null,
+          "signal_count": 0,
+          "dependency_share": null,
+          "dependency_status": null
+        },
+        {
+          "clause": "RB-STD-03",
+          "signal": "request_queue_backlog",
+          "evidence": false,
+          "dependency": null,
+          "first_seen": null,
+          "signal_count": 0,
+          "dependency_share": null,
+          "dependency_status": null
+        },
+        {
+          "clause": "RB-STD-04",
+          "signal": "external_api_timeout",
+          "evidence": true,
+          "dependency": "payment-gateway",
+          "first_seen": null,
+          "signal_count": 0,
+          "dependency_share": 18.54,
+          "dependency_status": "DEGRADED"
+        },
+        {
+          "clause": "RB-STD-05",
+          "signal": "slow_query",
+          "evidence": false,
+          "dependency": null,
+          "first_seen": null,
+          "signal_count": 0,
+          "dependency_share": null,
+          "dependency_status": null
+        }
+      ],
+      "causes": [
+        "RB-STD-01",
+        "RB-STD-04",
+        "RB-STD-02",
+        "RB-STD-03"
+      ],
+      "target": "RB-STD-01"
+    },
+    "createdAt": "2026-10-26T01:14:20.03893Z"
+  },
+  {
+    "type": "APPROVAL_REQUIRED",
+    "data": {
+      "args": {
+        "reason": "RB-STD-01에 따른 롤백 조치가 필요하나 계약상 롤백은 고객 승인 필요로 즉시 실행 불가.",
+        "service": "reservation-api",
+        "category": "ACTION_BLOCKED",
+        "blocked_by": "CONTRACT",
+        "incident_id": 13,
+        "required_action": "rollback_deployment"
+      },
+      "tool": "business_escalate_incident",
+      "reason": "",
+      "runbook": [
+        {
+          "uri": "docs://_common/runbook-standard",
+          "scope": "common",
+          "score": 0.641,
+          "title": "MSP 표준 장애 대응 런북",
+          "doc_id": "runbook-standard",
+          "content": "[문서] MSP 표준 장애 대응 런북 | MSP 공통 | 런북 | 절 MSP 표준 장애 대응 런북 > RB-STD-03 트래픽 급증 (앱 처리 용량 부족)\n\n## RB-STD-03 트래픽 급증 (앱 처리 용량 부족)\n\n- 증상: 에러율은 정상인데 p95 응답시간 상승, 로그에 `request queue backlog` 경고 반복\n- 구분: 5xx 에러가 늘지 않는다(늘면 RB-STD-02). 외부 API timeout 로그와 DB `slow query` 로그가 없다. 지연이 앱의 처리 대기에서 생긴다\n- 구조 검토: 서비스 목록의 `autoscaling`(HPA)을 먼저 본다. 안전 상한(`safe_max_replicas`)은 DB 최대 연결 수와 계약 상한으로 정해지며, 넘으면 확장 때문에 DB 장애가 날 수 있다\n  - HPA가 있고 최대치에 닿지 않았다(`atMax` false): HPA가 늘리는 중이다. 레플리카를 직접 바꾸지 않고 조치하지 않는다\n  - HPA가 최대치에 닿았고 최대치가 안전 상한보다 작다(`canRaiseMax` true): HPA 최대치를 안전 상한까지 올린다\n  - HPA가 최대치에 닿았고 최대치가 이미 안전 상한이다: 더 늘릴 수 없다. RB-STD-06을 따른다\n  - HPA가 없다: 목표 레플리카는 현재의 2배이고, 안전 상한을 넘으면 상한까지만 늘린다. 이미 상한이면 RB-STD-06\n- 재시작(`restart_pods`)은 처리 용량을 늘리지 않으므로 급증에 효과가 없다. 확장할 수 없으면 재시작으로 대신하지 않고 RB-STD-06을 따른다\n- 조치: HPA가 있으면 `adjust_autoscaler`(`max_replicas`=안전 상한). HPA가 없으면 `scale_deployment`(`replicas`=목표 레플리카). HPA가 관리하는 서비스의 레플리카는 직접 바꾸지 않는다(HPA가 곧 덮어쓴다)",
+          "section": "RB-STD-03 트래픽 급증 (앱 처리 용량 부족)",
+          "version": "81501068c9b4",
+          "doc_type": "runbook",
+          "section_path": "MSP 표준 장애 대응 런북 > RB-STD-03 트래픽 급증 (앱 처리 용량 부족)",
+          "source_format": "md",
+          "document_version": 5
+        },
+        {
+          "uri": "docs://_common/runbook-standard",
+          "scope": "common",
+          "score": 0.641,
+          "title": "MSP 표준 장애 대응 런북",
+          "doc_id": "runbook-standard",
+          "content": "[문서] MSP 표준 장애 대응 런북 | MSP 공통 | 런북 | 절 MSP 표준 장애 대응 런북 > RB-STD-01 설정 변경으로 인한 DB 커넥션 풀 고갈\n\n## RB-STD-01 설정 변경으로 인한 DB 커넥션 풀 고갈\n\n- 증상: 5xx 에러율 급증, 로그에 `HikariPool-1 - Connection is not available, request timed out` 반복\n- 구분: 최근 변경 이력에서 이상 시작 직전에 커넥션 풀 설정(`DEMO_POOL_SIZE`)이 줄었다. DB 자체 지연 로그(`slow query`)는 없다\n- 구조 검토: DB 의존 대상의 상태가 정상인지 확인한다. DB가 지연·장애 상태면 RB-STD-05를 따른다\n- 조치: 직전 배포로 롤백한다 (`rollback_deployment`)\n- 직전 변경이 없으면 RB-STD-02의 재시작을 검토한다",
+          "section": "RB-STD-01 설정 변경으로 인한 DB 커넥션 풀 고갈",
+          "version": "81501068c9b4",
+          "doc_type": "runbook",
+          "section_path": "MSP 표준 장애 대응 런북 > RB-STD-01 설정 변경으로 인한 DB 커넥션 풀 고갈",
+          "source_format": "md",
+          "document_version": 5
+        },
+        {
+          "uri": "docs://tenant-b/runbook-reservation-api",
+          "scope": "tenant",
+          "score": 0.502,
+          "title": "B사 reservation-api 서비스 런북",
+          "doc_id": "runbook-reservation-api",
+          "content": "[문서] B사 reservation-api 서비스 런북 | tenant-b | 런북 | 절 B사 reservation-api 서비스 런북 > RB-B-02 재시작 시 주의\n\n## RB-B-02 재시작 시 주의\n\n- reservation-api는 레플리카가 1개라 재시작하는 동안 예약 서비스 전체가 멈춘다(약 10~20초)\n- 재시작을 제안할 때는 전체 중단 영향을 이유에 적는다. 재시작이 필요하면 그대로 제안하고, 고객 공지는 조치 뒤에 보낸다",
+          "section": "RB-B-02 재시작 시 주의",
+          "version": "a747700199ef",
+          "doc_type": "runbook",
+          "section_path": "B사 reservation-api 서비스 런북 > RB-B-02 재시작 시 주의",
+          "source_format": "md",
+          "document_version": 1
+        }
+      ],
+      "evidence": [
+        {
+          "args": {
+            "limit": 200,
+            "logql": "{app=\"demo-app\", service=\"reservation-api\", level=~\"ERROR|WARN\"}",
+            "direction": "backward",
+            "endRfc3339": "2026-10-26T01:14:09+00:00",
+            "startRfc3339": "2026-10-26T01:12:47+00:00"
+          },
+          "tool": "grafana_query_loki_logs",
+          "status": "success",
+          "signals": {
+            "slow_query": 0,
+            "external_api_timeout": 0,
+            "request_queue_backlog": 0,
+            "worker_pool_saturated": 0,
+            "connection_pool_exhausted": 50
+          },
+          "summary": "[{\"count\": 50, \"level\": \"ERROR\", \"example\": \"ERROR [scheduling-1] c.o.d.OrderService - order failed: 503 Service Unavailable customer=[EMAIL] phone=[PHONE]\"}, {\"count\": 50, \"level\": \"ERROR\", \"example\": \"ERROR [scheduling-1] c.z.h.p.HikariPool - HikariPool-1 - Connection is not available, request timed out after 30000ms (total=5, active=5, idle=0, waiting=21)\"}]"
+        },
+        {
+          "args": {
+            "error_rate": "(sum(rate(demo_orders_seconds_count{service=\"reservation-api\", outcome=\"error\"}[1m])) or vector(0)) / sum(rate(demo_orders_seconds_count{service=\"reservation-api\"}[1m]))",
+            "p95_seconds": "histogram_quantile(0.95, sum by (le) (rate(demo_orders_seconds_bucket{service=\"reservation-api\"}[1m])))",
+            "requests_per_second": "sum(rate(demo_orders_seconds_count{service=\"reservation-api\"}[1m]))"
+          },
+          "tool": "grafana_query_prometheus",
+          "summary": "{\"error_rate\": 0.35445945163708725, \"p95_seconds\": 0.12839920640639169, \"requests_per_second\": 5.155556185660277}"
+        },
+        {
+          "args": {
+            "service": "reservation-api"
+          },
+          "tool": "business_list_recent_changes",
+          "summary": "{\"service\": \"reservation-api\", \"changeMode\": \"DIRECT\", \"source\": \"kubernetes 배포 이력\", \"revisions\": [{\"revision\": 4, \"image\": \"opslens/demo-app:0.1.0\", \"env\": {\"DEMO_DEPENDENCY_FAULTS_FILE\": \"/etc/demo-faults/dependency-faults\", \"DEMO_POOL_SIZE\": \"5\", \"LOKI_URL\": \"http://loki:3100/loki/api/v1/push\", \"SERVICE_NAME\": \"reservation-api\", \"TENANT_ID\": \"tenant-b\"}, \"createdAt\": \"2026-10-26T00:22:58Z\", \"deployedAt\": \"2026-10-26T01:13:29Z\"}, {\"revision\": 3, \"image\": \"opslens/demo-app:0.1.0\", \"env\": {\"DEMO"
+        },
+        {
+          "tool": "cause_facts",
+          "summary": "[{\"clause\": \"RB-STD-01\", \"signal\": \"connection_pool_exhausted\", \"signal_count\": 114, \"first_seen\": \"2026-10-26T01:13:25+00:00\", \"dependency\": null, \"dependency_status\": null, \"dependency_share\": null, \"evidence\": true}, {\"clause\": \"RB-STD-02\", \"signal\": \"worker_pool_saturated\", \"signal_count\": 0, \"first_seen\": null, \"dependency\": null, \"dependency_status\": null, \"dependency_share\": null, \"evidence\": false}, {\"clause\": \"RB-STD-03\", \"signal\": \"request_queue_backlog\", \"signal_count\": 0, \"first_seen"
+        },
+        {
+          "args": {},
+          "tool": "business_get_service_inventory",
+          "status": "success",
+          "summary": "<tool_output>\n[{\"name\":\"checkin-api\",\"runtime\":\"kubernetes\",\"target\":\"kind-opslens-tenants/tenant-b\",\"stateful\":false,\"contractReplicas\":{\"max\":1,\"min\":1},\"dependencies\":[{\"name\":\"payment-gateway\",\"kind\":\"external_api\",\"owner\":\"third_party\",\"ownerContact\":\"B사 결제 담당(대행사 문의)\",\"maxConnections\":null,\"connectionHeadroom\":0.8}],\"observability\":{\"requestMetric\":\"demo_orders_seconds\",\"errorSelector\":\"outcome=\\\"error\\\"\",\"logSelector\":\"app=\\\"demo-app\\\"\",\"logSignals\":{\"slow_query\":\"slow query\",\"external_ap"
+        }
+      ],
+      "approvalId": "0968856c-fbf9-5942-9393-f9e6ecf8d358"
+    },
+    "createdAt": "2026-10-26T01:14:46.107738Z"
+  },
+  {
+    "type": "APPROVAL_DECIDED",
+    "data": {
+      "by": "engineer",
+      "tool": "business_escalate_incident",
+      "decision": "APPROVE"
+    },
+    "createdAt": "2026-10-26T01:14:49.201063Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "reason": "RB-STD-01에 따른 롤백 조치가 필요하나 계약상 롤백은 고객 승인 필요로 즉시 실행 불가.",
+        "service": "reservation-api",
+        "category": "ACTION_BLOCKED",
+        "blocked_by": "CONTRACT",
+        "incident_id": 13,
+        "required_action": "rollback_deployment"
+      },
+      "node": "propose_action",
+      "tool": "business_escalate_incident",
+      "callId": "a4e6b2bc30d14157be50a2cebcb8f265"
+    },
+    "createdAt": "2026-10-26T01:14:49.326022Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "propose_action",
+      "tool": "business_escalate_incident",
+      "callId": "a4e6b2bc30d14157be50a2cebcb8f265",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:14:49.37225Z"
+  },
+  {
+    "type": "STEP",
+    "data": {
+      "node": "report"
+    },
+    "createdAt": "2026-10-26T01:14:49.375116Z"
+  },
+  {
+    "type": "APPROVAL_REQUIRED",
+    "data": {
+      "args": {
+        "message": "영향받은 서비스는 reservation-api이며 시작 시각은 10:14(KST)입니다. 현재 조치 중이며 아직 정상화되지 않았습니다. 다음 안내는 30분 간격으로 업데이트 드리며, 30분 이내에 현황을 공유하겠습니다.",
+        "incident_id": 13
+      },
+      "tool": "business_send_customer_notice",
+      "reason": "고객 공지 발송",
+      "runbook": [
+        {
+          "uri": "docs://_common/runbook-standard",
+          "scope": "common",
+          "score": 0.641,
+          "title": "MSP 표준 장애 대응 런북",
+          "doc_id": "runbook-standard",
+          "content": "[문서] MSP 표준 장애 대응 런북 | MSP 공통 | 런북 | 절 MSP 표준 장애 대응 런북 > RB-STD-03 트래픽 급증 (앱 처리 용량 부족)\n\n## RB-STD-03 트래픽 급증 (앱 처리 용량 부족)\n\n- 증상: 에러율은 정상인데 p95 응답시간 상승, 로그에 `request queue backlog` 경고 반복\n- 구분: 5xx 에러가 늘지 않는다(늘면 RB-STD-02). 외부 API timeout 로그와 DB `slow query` 로그가 없다. 지연이 앱의 처리 대기에서 생긴다\n- 구조 검토: 서비스 목록의 `autoscaling`(HPA)을 먼저 본다. 안전 상한(`safe_max_replicas`)은 DB 최대 연결 수와 계약 상한으로 정해지며, 넘으면 확장 때문에 DB 장애가 날 수 있다\n  - HPA가 있고 최대치에 닿지 않았다(`atMax` false): HPA가 늘리는 중이다. 레플리카를 직접 바꾸지 않고 조치하지 않는다\n  - HPA가 최대치에 닿았고 최대치가 안전 상한보다 작다(`canRaiseMax` true): HPA 최대치를 안전 상한까지 올린다\n  - HPA가 최대치에 닿았고 최대치가 이미 안전 상한이다: 더 늘릴 수 없다. RB-STD-06을 따른다\n  - HPA가 없다: 목표 레플리카는 현재의 2배이고, 안전 상한을 넘으면 상한까지만 늘린다. 이미 상한이면 RB-STD-06\n- 재시작(`restart_pods`)은 처리 용량을 늘리지 않으므로 급증에 효과가 없다. 확장할 수 없으면 재시작으로 대신하지 않고 RB-STD-06을 따른다\n- 조치: HPA가 있으면 `adjust_autoscaler`(`max_replicas`=안전 상한). HPA가 없으면 `scale_deployment`(`replicas`=목표 레플리카). HPA가 관리하는 서비스의 레플리카는 직접 바꾸지 않는다(HPA가 곧 덮어쓴다)",
+          "section": "RB-STD-03 트래픽 급증 (앱 처리 용량 부족)",
+          "version": "81501068c9b4",
+          "doc_type": "runbook",
+          "section_path": "MSP 표준 장애 대응 런북 > RB-STD-03 트래픽 급증 (앱 처리 용량 부족)",
+          "source_format": "md",
+          "document_version": 5
+        },
+        {
+          "uri": "docs://_common/runbook-standard",
+          "scope": "common",
+          "score": 0.641,
+          "title": "MSP 표준 장애 대응 런북",
+          "doc_id": "runbook-standard",
+          "content": "[문서] MSP 표준 장애 대응 런북 | MSP 공통 | 런북 | 절 MSP 표준 장애 대응 런북 > RB-STD-01 설정 변경으로 인한 DB 커넥션 풀 고갈\n\n## RB-STD-01 설정 변경으로 인한 DB 커넥션 풀 고갈\n\n- 증상: 5xx 에러율 급증, 로그에 `HikariPool-1 - Connection is not available, request timed out` 반복\n- 구분: 최근 변경 이력에서 이상 시작 직전에 커넥션 풀 설정(`DEMO_POOL_SIZE`)이 줄었다. DB 자체 지연 로그(`slow query`)는 없다\n- 구조 검토: DB 의존 대상의 상태가 정상인지 확인한다. DB가 지연·장애 상태면 RB-STD-05를 따른다\n- 조치: 직전 배포로 롤백한다 (`rollback_deployment`)\n- 직전 변경이 없으면 RB-STD-02의 재시작을 검토한다",
+          "section": "RB-STD-01 설정 변경으로 인한 DB 커넥션 풀 고갈",
+          "version": "81501068c9b4",
+          "doc_type": "runbook",
+          "section_path": "MSP 표준 장애 대응 런북 > RB-STD-01 설정 변경으로 인한 DB 커넥션 풀 고갈",
+          "source_format": "md",
+          "document_version": 5
+        },
+        {
+          "uri": "docs://tenant-b/runbook-reservation-api",
+          "scope": "tenant",
+          "score": 0.502,
+          "title": "B사 reservation-api 서비스 런북",
+          "doc_id": "runbook-reservation-api",
+          "content": "[문서] B사 reservation-api 서비스 런북 | tenant-b | 런북 | 절 B사 reservation-api 서비스 런북 > RB-B-02 재시작 시 주의\n\n## RB-B-02 재시작 시 주의\n\n- reservation-api는 레플리카가 1개라 재시작하는 동안 예약 서비스 전체가 멈춘다(약 10~20초)\n- 재시작을 제안할 때는 전체 중단 영향을 이유에 적는다. 재시작이 필요하면 그대로 제안하고, 고객 공지는 조치 뒤에 보낸다",
+          "section": "RB-B-02 재시작 시 주의",
+          "version": "a747700199ef",
+          "doc_type": "runbook",
+          "section_path": "B사 reservation-api 서비스 런북 > RB-B-02 재시작 시 주의",
+          "source_format": "md",
+          "document_version": 1
+        }
+      ],
+      "evidence": [
+        {
+          "args": {
+            "error_rate": "(sum(rate(demo_orders_seconds_count{service=\"reservation-api\", outcome=\"error\"}[1m])) or vector(0)) / sum(rate(demo_orders_seconds_count{service=\"reservation-api\"}[1m]))",
+            "p95_seconds": "histogram_quantile(0.95, sum by (le) (rate(demo_orders_seconds_bucket{service=\"reservation-api\"}[1m])))",
+            "requests_per_second": "sum(rate(demo_orders_seconds_count{service=\"reservation-api\"}[1m]))"
+          },
+          "tool": "grafana_query_prometheus",
+          "summary": "{\"error_rate\": 0.35445945163708725, \"p95_seconds\": 0.12839920640639169, \"requests_per_second\": 5.155556185660277}"
+        },
+        {
+          "args": {
+            "service": "reservation-api"
+          },
+          "tool": "business_list_recent_changes",
+          "summary": "{\"service\": \"reservation-api\", \"changeMode\": \"DIRECT\", \"source\": \"kubernetes 배포 이력\", \"revisions\": [{\"revision\": 4, \"image\": \"opslens/demo-app:0.1.0\", \"env\": {\"DEMO_DEPENDENCY_FAULTS_FILE\": \"/etc/demo-faults/dependency-faults\", \"DEMO_POOL_SIZE\": \"5\", \"LOKI_URL\": \"http://loki:3100/loki/api/v1/push\", \"SERVICE_NAME\": \"reservation-api\", \"TENANT_ID\": \"tenant-b\"}, \"createdAt\": \"2026-10-26T00:22:58Z\", \"deployedAt\": \"2026-10-26T01:13:29Z\"}, {\"revision\": 3, \"image\": \"opslens/demo-app:0.1.0\", \"env\": {\"DEMO"
+        },
+        {
+          "tool": "cause_facts",
+          "summary": "[{\"clause\": \"RB-STD-01\", \"signal\": \"connection_pool_exhausted\", \"signal_count\": 114, \"first_seen\": \"2026-10-26T01:13:25+00:00\", \"dependency\": null, \"dependency_status\": null, \"dependency_share\": null, \"evidence\": true}, {\"clause\": \"RB-STD-02\", \"signal\": \"worker_pool_saturated\", \"signal_count\": 0, \"first_seen\": null, \"dependency\": null, \"dependency_status\": null, \"dependency_share\": null, \"evidence\": false}, {\"clause\": \"RB-STD-03\", \"signal\": \"request_queue_backlog\", \"signal_count\": 0, \"first_seen"
+        },
+        {
+          "args": {},
+          "tool": "business_get_service_inventory",
+          "status": "success",
+          "summary": "<tool_output>\n[{\"name\":\"checkin-api\",\"runtime\":\"kubernetes\",\"target\":\"kind-opslens-tenants/tenant-b\",\"stateful\":false,\"contractReplicas\":{\"max\":1,\"min\":1},\"dependencies\":[{\"name\":\"payment-gateway\",\"kind\":\"external_api\",\"owner\":\"third_party\",\"ownerContact\":\"B사 결제 담당(대행사 문의)\",\"maxConnections\":null,\"connectionHeadroom\":0.8}],\"observability\":{\"requestMetric\":\"demo_orders_seconds\",\"errorSelector\":\"outcome=\\\"error\\\"\",\"logSelector\":\"app=\\\"demo-app\\\"\",\"logSignals\":{\"slow_query\":\"slow query\",\"external_ap"
+        },
+        {
+          "tool": "business_escalate_incident",
+          "status": "success",
+          "summary": "<tool_output>\n{\"escalationId\":11,\"status\":\"QUEUED\",\"duplicate\":false,\"category\":\"ACTION_BLOCKED\",\"recipients\":[{\"kind\":\"MSP_ONCALL\",\"name\":\"engineer\",\"role\":\"MSP_ENGINEER\"},{\"kind\":\"MSP_ONCALL\",\"name\":\"admin\",\"role\":\"MSP_ADMIN\"},{\"kind\":\"CUSTOMER\",\"name\":\"B사 운영 승인 담당\",\"role\":\"B사 예약 플랫폼\"}],\"message\":\"[OpsLens 에스컬레이션] B사 예약 플랫폼 인시던트 #13 (P1, reservation-api)\\n장애: tenant-b reservation-api 에러율 20% 초과\\n분류: 필요한 조치를 계약·구조상 할 수 없음\\n이유: RB-STD-01에 따른 롤백 조치가 필요하나 계약상 롤백은 고객 승인 필요로 즉시 실행 불가.\\n필요한 조치: rollb"
+        }
+      ],
+      "approvalId": "5b73715d-a33d-5932-986a-7f3529518053"
+    },
+    "createdAt": "2026-10-26T01:15:00.144474Z"
+  },
+  {
+    "type": "APPROVAL_DECIDED",
+    "data": {
+      "by": "admin",
+      "tool": "business_send_customer_notice",
+      "decision": "APPROVE"
+    },
+    "createdAt": "2026-10-26T01:15:01.238244Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "message": "영향받은 서비스는 reservation-api이며 시작 시각은 10:14(KST)입니다. 현재 조치 중이며 아직 정상화되지 않았습니다. 다음 안내는 30분 간격으로 업데이트 드리며, 30분 이내에 현황을 공유하겠습니다.",
+        "incident_id": 13
+      },
+      "node": "notice",
+      "tool": "business_send_customer_notice",
+      "callId": "311dcfc96cc342e09b9ec973042d7e85"
+    },
+    "createdAt": "2026-10-26T01:15:01.284558Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "notice",
+      "tool": "business_send_customer_notice",
+      "callId": "311dcfc96cc342e09b9ec973042d7e85",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:15:01.306936Z"
+  },
+  {
+    "type": "DONE",
+    "data": {},
+    "createdAt": "2026-10-26T01:15:01.312303Z"
+  }
+]

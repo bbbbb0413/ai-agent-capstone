@@ -1,0 +1,123 @@
+{
+  "id": "e652faba-3755-4964-8a8b-bfaa85e8aa82",
+  "tenantId": "tenant-b",
+  "incidentId": 13,
+  "type": "DIAGNOSE",
+  "question": "tenant-b reservation-api 에러율 20% 초과",
+  "status": "DONE",
+  "requestedBy": null,
+  "pendingAction": null,
+  "answer": "## 요약\n tenant-b reservation-api 에러율이 20%를 초과하는 장애가 발생했고, 현재 정상화되지는 않았습니다. 주요 원인 후보로 RB-STD-01의 연결 풀 고갈이 관측되며, 직전 배포 시점과의 시차를 고려해 배포 영향 가능성을 확인 중입니다. 지금은 실행된 조치가 없고, 고객 승인 후 롤백 등 조치를 준비 중입니다.\n\n## 근거\n- 메트릭: 에러율 0.3545, p95 0.128초, 최근 1분 요청 수 5.16/s\n- 로그: 503 Service Unavailable 다수, HikariPool - Connection is not available, request timed out 다수\n- 변경 이력: reservation-api 배포 이력 revision 4 (image OPSLens/demo-app:0.1.0), deployedAt 2026-10-26T01:13:29Z\n- 문서: MSP 표준 런북 RB-STD-01 설정 변경으로 인한 DB 커넥션 풀 고갈, RB-STD-02 재시작 주의 등\n- 실행 이력: escalation 및 승인 대기 상태, restart_pods 등은 미실행 상태\n- 참고: 과거 장애 #2와의 유사 이력 있음(참고 목적, 원인 확정 아님)\n\n## 원인 후보\n1) RB-STD-01 — connection_pool_exhausted — 114건 신호 (first_seen 2026-10-26T01:13:25+00:00) (근거 있음) · 처리: 후보에서 우선 원인으로 두고 조치 계획\n2) RB-STD-04 — external_api_timeout(의존: payment-gateway, 상태 DEGRADED, dependency_share 18.54) — 근거 있음\n3) RB-STD-02 — worker_pool_saturated — 신호 0 (근거 없음)\n4) RB-STD-03 — request_queue_backlog — 신호 0 (근거 없음)\n\n- 처리할 원인: RB-STD-01\n- 병목: 앱\n\n## 조치와 결과\n- 승인 상태: 승인 필요(승인자 결정 대기). 승인 여부에 따라 조치를 실행 여부 판단\n- 현재 실행된 조치: 없음\n- 실행 방식: 승인 후 실행 예정. (직접 실행 여부는 승인 여부에 달려 있음)\n- 제안된 조치(승인 요청용 요약):\n  - RB-STD-01에 따라 앱 내 연결 풀 관리 점검 및 파드 재시작 여부를 고려\n  - 필요 시 payment-gateway 의존 지연 모니터링 및 외부 연락 창구 확인 병행\n- 참고: RB-STD-01에 따른 롤백 조치가 필요하나 계약상 롤백은 고객 승인 필요로 즉시 실행 불가\n\n- 에스컬레이션 및 승인의 근거: RB-STD-01의 롤백 및 재배포 관련 프로토콜 및 SLA 제3조 허용 조치에 따라 고객 승인 필요\n\n## SLA 영향\n- 도구로 받은 응답 기한 및 남은 시간은 아래와 같음\n  - remainingMinutes: 59\n  - responseDeadline: 2026-10-26T02:14:07.053467Z\n\n## 권장 다음 행동\n- MSP 측에서 RB-STD-01에 대한 롤백/배포 롤백 여부를 고객 승인 시 즉시 진행할 수 있도록 고객 승인 절차를 빠르게 완료하도록 요청한다.\n- 승인 후 바로 실행할 수 있도록 롤백(deployment rollback) 또는 설정 롤백 조치를 준비한다.\n- 의존 결제 게이트웨이의 DEGRADED 상태를 모니터링 지속하고, 외부 결제사와의 커뮤니케이션 창구를 확인한다.\n\n- 사람 확인 필요 사항\n  - 롤백 조치의 즉시 실행 가능 여부 확인 및 고객 승인 시점 정의\n  - 롤백 시점 및 영향 범위(예약 플랫폼 전체 영향 여부) 합의\n\n## 조사 과정\n- 도구 호출 순서 및 결과\n  - grafana_query_loki_logs: reservation-api 관련 ERROR/WARN 로그 분석. 결과: 503 다수, HikariPool 관련 메시지 다수\n  - grafana_query_prometheus: 에러율, p95, 요청수 확인. 결과: 에러율 0.354, p95 0.128s, 5.16/s\n  - business_list_recent_changes: 최근 변경 이력 확인. 결과: 배포 이력 및 환경 변수 등\n  - cause_facts: 원인 후보 정리. RB-STD-01 신호 114건, RB-STD-04 DEGRADED 의존 신호 존재\n  - business_escalate_incident: 에스컬레이션 기록 생성 및 상태 QUEUED\n  - approvals: 외부 승인 필요 상태 확인 및 두 차례 승인 기록\n  - change: 현재 CHANGE 없음",
+  "sources": [
+    {
+      "doc": "docs://_common/runbook-standard",
+      "section": "RB-STD-03 트래픽 급증 (앱 처리 용량 부족)"
+    },
+    {
+      "doc": "docs://_common/runbook-standard",
+      "section": "RB-STD-01 설정 변경으로 인한 DB 커넥션 풀 고갈"
+    },
+    {
+      "doc": "docs://tenant-b/runbook-reservation-api",
+      "section": "RB-B-02 재시작 시 주의"
+    },
+    {
+      "doc": "docs://tenant-b/runbook-reservation-api",
+      "section": "RB-B-03 외부 결제 연동과 고객 공지"
+    },
+    {
+      "doc": "docs://tenant-b/sla-contract",
+      "section": "제3조 허용 조치"
+    },
+    {
+      "doc": "docs://tenant-b/postmortem-incident-2",
+      "section": "원인 후보"
+    },
+    {
+      "doc": "docs://tenant-b/postmortem-incident-2",
+      "section": "근거"
+    }
+  ],
+  "summary": {
+    "cause": "RB-STD-01 연결 풀 고갈로 요청 대기 시간 증가 및 503 다발",
+    "action": {
+      "args": {
+        "reason": "RB-STD-01에 따른 롤백 조치가 필요하나 계약상 롤백은 고객 승인 필요로 즉시 실행 불가.",
+        "service": "reservation-api",
+        "category": "ACTION_BLOCKED",
+        "blocked_by": "CONTRACT",
+        "incident_id": 13,
+        "required_action": "rollback_deployment"
+      },
+      "tool": "business_escalate_incident",
+      "result": {
+        "status": "QUEUED",
+        "message": "[OpsLens 에스컬레이션] B사 예약 플랫폼 인시던트 #13 (P1, reservation-api)\n장애: tenant-b reservation-api 에러율 20% 초과\n분류: 필요한 조치를 계약·구조상 할 수 없음\n이유: RB-STD-01에 따른 롤백 조치가 필요하나 계약상 롤백은 고객 승인 필요로 즉시 실행 불가.\n필요한 조치: rollback_deployment\n할 수 없는 이유: 계약상 허용되지 않는 조치\nOpsLens에서 인시던트 #13의 작업과 보고서를 확인한다",
+        "category": "ACTION_BLOCKED",
+        "delivery": "호출 기록을 저장했다. Slack 발송은 작업 상세에서 문안·채널을 검토한 뒤 별도로 승인한다",
+        "duplicate": false,
+        "recipients": [
+          {
+            "kind": "MSP_ONCALL",
+            "name": "engineer",
+            "role": "MSP_ENGINEER"
+          },
+          {
+            "kind": "MSP_ONCALL",
+            "name": "admin",
+            "role": "MSP_ADMIN"
+          },
+          {
+            "kind": "CUSTOMER",
+            "name": "B사 운영 승인 담당",
+            "role": "B사 예약 플랫폼"
+          }
+        ],
+        "escalationId": 11
+      },
+      "decision": "APPROVE"
+    },
+    "change": null,
+    "notice": "APPROVE",
+    "service": "reservation-api",
+    "severity": "P1",
+    "recovered": null,
+    "error_type": "DB 커넥션 풀 고갈",
+    "escalation": "APPROVE",
+    "other_causes": [
+      "RB-STD-04 외부 결제 연동 지연",
+      "RB-STD-02 워커 풀 포화"
+    ],
+    "notice_result": {
+      "status": "SENT"
+    },
+    "runbook_clause": "RB-STD-01 설정 변경으로 인한 DB 커넥션 풀 고갈",
+    "escalation_result": {
+      "status": "QUEUED",
+      "category": "ACTION_BLOCKED",
+      "recipients": [
+        {
+          "kind": "MSP_ONCALL",
+          "name": "engineer",
+          "role": "MSP_ENGINEER"
+        },
+        {
+          "kind": "MSP_ONCALL",
+          "name": "admin",
+          "role": "MSP_ADMIN"
+        },
+        {
+          "kind": "CUSTOMER",
+          "name": "B사 운영 승인 담당",
+          "role": "B사 예약 플랫폼"
+        }
+      ],
+      "escalationId": 11
+    }
+  },
+  "traceUrl": null,
+  "createdAt": "2026-10-26T01:14:07.055254Z",
+  "updatedAt": "2026-10-26T01:15:01.312303Z",
+  "retryOf": null,
+  "retriedBy": null
+}

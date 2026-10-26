@@ -1,0 +1,1046 @@
+[
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {},
+      "node": "load_context",
+      "tool": "business_get_tenant_profile",
+      "callId": "6d1af9f61fbd4786bc6bd8717fa78547"
+    },
+    "createdAt": "2026-10-26T01:11:41.911553Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "load_context",
+      "tool": "business_get_tenant_profile",
+      "callId": "6d1af9f61fbd4786bc6bd8717fa78547",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:41.945006Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {},
+      "node": "load_context",
+      "tool": "business_get_service_inventory",
+      "callId": "20f3e6a7589846118343997d3b16cd5e"
+    },
+    "createdAt": "2026-10-26T01:11:41.946712Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "load_context",
+      "tool": "business_get_service_inventory",
+      "callId": "20f3e6a7589846118343997d3b16cd5e",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:42.019364Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "incident_id": 8
+      },
+      "node": "load_context",
+      "tool": "business_get_sla_terms",
+      "callId": "2b0689da145c462abcb485e59b474b1e"
+    },
+    "createdAt": "2026-10-26T01:11:42.021297Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "load_context",
+      "tool": "business_get_sla_terms",
+      "callId": "2b0689da145c462abcb485e59b474b1e",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:42.048888Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "status": "OPEN"
+      },
+      "node": "load_context",
+      "tool": "business_list_incidents",
+      "callId": "dbb38b4a887748ed9ff80681b8afca44"
+    },
+    "createdAt": "2026-10-26T01:11:42.051737Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "load_context",
+      "tool": "business_list_incidents",
+      "callId": "dbb38b4a887748ed9ff80681b8afca44",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:42.088905Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "status": "RESOLVED"
+      },
+      "node": "load_context",
+      "tool": "business_list_incidents",
+      "callId": "3c20229183074aa9ad151aed4e083455"
+    },
+    "createdAt": "2026-10-26T01:11:42.091354Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "load_context",
+      "tool": "business_list_incidents",
+      "callId": "3c20229183074aa9ad151aed4e083455",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:42.122008Z"
+  },
+  {
+    "type": "APPROVAL_REQUIRED",
+    "data": {
+      "args": {
+        "reason": "P1 장애 발생",
+        "category": "P1",
+        "incident_id": 8
+      },
+      "tool": "business_escalate_incident",
+      "reason": "P1 장애 발생",
+      "runbook": [],
+      "evidence": [],
+      "approvalId": "97fe85c4-f14f-555a-af14-0b94274500df"
+    },
+    "createdAt": "2026-10-26T01:11:42.129966Z"
+  },
+  {
+    "type": "APPROVAL_DECIDED",
+    "data": {
+      "by": "engineer",
+      "tool": "business_escalate_incident",
+      "decision": "APPROVE"
+    },
+    "createdAt": "2026-10-26T01:11:43.224331Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "reason": "P1 장애 발생",
+        "category": "P1",
+        "incident_id": 8
+      },
+      "node": "escalate",
+      "tool": "business_escalate_incident",
+      "callId": "24a17d8c09254f3e98a982c2707ef932"
+    },
+    "createdAt": "2026-10-26T01:11:43.297655Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "escalate",
+      "tool": "business_escalate_incident",
+      "callId": "24a17d8c09254f3e98a982c2707ef932",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:43.353691Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "limit": 200,
+        "logql": "{app=\"demo-app\", service=\"reservation-api\", level=~\"ERROR|WARN\"}",
+        "direction": "backward",
+        "endRfc3339": "2026-10-26T01:11:43+00:00",
+        "startRfc3339": "2026-10-26T01:09:07+00:00",
+        "datasourceUid": "loki-tenant-b"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "cd8d5852ea12418cade14b0a803ab14f"
+    },
+    "createdAt": "2026-10-26T01:11:43.360063Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "cd8d5852ea12418cade14b0a803ab14f",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:43.429728Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "expr": "(sum(rate(demo_orders_seconds_count{service=\"reservation-api\", outcome=\"error\"}[1m])) or vector(0)) / sum(rate(demo_orders_seconds_count{service=\"reservation-api\"}[1m]))",
+        "endTime": "now",
+        "queryType": "instant",
+        "datasourceUid": "prom-tenant-b"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "7cf6e8225c244568929feabb072d4f3a"
+    },
+    "createdAt": "2026-10-26T01:11:43.431926Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "7cf6e8225c244568929feabb072d4f3a",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:43.474866Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "expr": "histogram_quantile(0.95, sum by (le) (rate(demo_orders_seconds_bucket{service=\"reservation-api\"}[1m])))",
+        "endTime": "now",
+        "queryType": "instant",
+        "datasourceUid": "prom-tenant-b"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "c21c7e2480ce4ca891ae9d3aac84ac63"
+    },
+    "createdAt": "2026-10-26T01:11:43.478412Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "c21c7e2480ce4ca891ae9d3aac84ac63",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:43.509845Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "expr": "sum(rate(demo_orders_seconds_count{service=\"reservation-api\"}[1m]))",
+        "endTime": "now",
+        "queryType": "instant",
+        "datasourceUid": "prom-tenant-b"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "4258e29a096b44058ea2e1511ff82586"
+    },
+    "createdAt": "2026-10-26T01:11:43.51164Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "4258e29a096b44058ea2e1511ff82586",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:43.541504Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "service": "reservation-api"
+      },
+      "node": "diagnose",
+      "tool": "business_list_recent_changes",
+      "callId": "916c48258bda4b3e9af3d921995fc5ec"
+    },
+    "createdAt": "2026-10-26T01:11:43.54303Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "business_list_recent_changes",
+      "callId": "916c48258bda4b3e9af3d921995fc5ec",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:43.594939Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "query": "reservation-api tenant-b reservation-api 에러율 20% 초과 로그 신호: {\"connection_pool_exhausted\": 0, \"worker_pool_saturated\": 100, \"request_queue_backlog\": 0, \"external_api_timeout\": 0, \"slow_query\": 0}",
+        "scope": "tenant",
+        "top_k": 2,
+        "doc_type": "postmortem",
+        "exclude_doc_id": "postmortem-incident-8"
+      },
+      "node": "retrieve_history",
+      "tool": "rag_search_documents",
+      "callId": "acd813924d044dccbff4a7483aacbc62"
+    },
+    "createdAt": "2026-10-26T01:11:43.597293Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "retrieve_history",
+      "tool": "rag_search_documents",
+      "callId": "acd813924d044dccbff4a7483aacbc62",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:43.918722Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"reservation-api\", level=~\"ERROR|WARN\"} |= \"Connection is not available\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T01:11:43+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T01:09:07+00:00",
+        "datasourceUid": "loki-tenant-b"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "28be1c110ad84841bcdb44d6f3233bed"
+    },
+    "createdAt": "2026-10-26T01:11:43.92065Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "28be1c110ad84841bcdb44d6f3233bed",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:43.956459Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"reservation-api\", level=~\"ERROR|WARN\"} |= \"503 worker pool saturated\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T01:11:43+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T01:09:07+00:00",
+        "datasourceUid": "loki-tenant-b"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "5a191b5d4f7e4f559fe142c8b28eedab"
+    },
+    "createdAt": "2026-10-26T01:11:43.95866Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "5a191b5d4f7e4f559fe142c8b28eedab",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:43.993381Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"reservation-api\", level=~\"ERROR|WARN\"} |= \"request queue backlog\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T01:11:43+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T01:09:07+00:00",
+        "datasourceUid": "loki-tenant-b"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "dc5006e7e1c8448b9219d5c76aedfa11"
+    },
+    "createdAt": "2026-10-26T01:11:43.995399Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "dc5006e7e1c8448b9219d5c76aedfa11",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:44.030557Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"reservation-api\", level=~\"ERROR|WARN\"} |= \"payment API timeout\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T01:11:43+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T01:09:07+00:00",
+        "datasourceUid": "loki-tenant-b"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "4bfb27bc4a914568b55852859adc31e9"
+    },
+    "createdAt": "2026-10-26T01:11:44.033754Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "4bfb27bc4a914568b55852859adc31e9",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:44.065828Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"reservation-api\", level=~\"ERROR|WARN\"} |= \"slow query\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T01:11:43+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T01:09:07+00:00",
+        "datasourceUid": "loki-tenant-b"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "57475966b1ac4ab0841f70d081476661"
+    },
+    "createdAt": "2026-10-26T01:11:44.067858Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "57475966b1ac4ab0841f70d081476661",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:44.097913Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "dependency": "payment-gateway"
+      },
+      "node": "diagnose",
+      "tool": "business_get_dependency_health",
+      "callId": "636d4568c06a48dd9a3f444324b9ef2a"
+    },
+    "createdAt": "2026-10-26T01:11:44.099426Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "business_get_dependency_health",
+      "callId": "636d4568c06a48dd9a3f444324b9ef2a",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:44.143899Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "dependency": "payment-gateway"
+      },
+      "node": "diagnose",
+      "tool": "business_get_dependency_health",
+      "callId": "call_IvYeXRJDHlJSv9nkc6B75Ljq"
+    },
+    "createdAt": "2026-10-26T01:11:46.147173Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "business_get_dependency_health",
+      "callId": "call_IvYeXRJDHlJSv9nkc6B75Ljq",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:46.177581Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {},
+      "node": "diagnose",
+      "tool": "business_get_service_inventory",
+      "callId": "call_iqMe55lln9YXZMhj5heLgIAc"
+    },
+    "createdAt": "2026-10-26T01:11:46.17909Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "business_get_service_inventory",
+      "callId": "call_iqMe55lln9YXZMhj5heLgIAc",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:46.231803Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "query": "이상 시작: 2026-10-26T01:11:07.072329Z\n근거: 에러율 1.0, p95 0.085s, 즉시 증가하는 worker_pool_saturated 신호(신호=363), 의존 대상(payment-gateway) 상태_DEGRADED, p95=2.137s, dependency_share=25.06\n직전 변경: 2026-10-26T00:24:46Z (reservation-api 배포 이력, revision 3, 이미지 opslens/demo-app:0.1.0)\n원인 후보:\n1) RB-STD-02 — worker_pool_saturated — 363( first_seen 2026-10-26T01:10:30+00:00 ) (증상: RB-STD-02)\n2) RB-STD-04 — external_api_timeout(의존: payment-gateway, 상태_DEGRADED, dependency_share 25.06) (근거 없음)\n3) RB-STD-03 — request_queue_backlog(신호_count 0) (근거 없음)\n처리할 원인: RB-STD-02\n병목: 앱",
+        "scope": "common",
+        "top_k": 2,
+        "doc_type": "runbook"
+      },
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "100a54c27cd14cb0b9222edeef73ae5b"
+    },
+    "createdAt": "2026-10-26T01:11:52.130073Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "100a54c27cd14cb0b9222edeef73ae5b",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:52.428818Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "query": "이상 시작: 2026-10-26T01:11:07.072329Z\n근거: 에러율 1.0, p95 0.085s, 즉시 증가하는 worker_pool_saturated 신호(신호=363), 의존 대상(payment-gateway) 상태_DEGRADED, p95=2.137s, dependency_share=25.06\n직전 변경: 2026-10-26T00:24:46Z (reservation-api 배포 이력, revision 3, 이미지 opslens/demo-app:0.1.0)\n원인 후보:\n1) RB-STD-02 — worker_pool_saturated — 363( first_seen 2026-10-26T01:10:30+00:00 ) (증상: RB-STD-02)\n2) RB-STD-04 — external_api_timeout(의존: payment-gateway, 상태_DEGRADED, dependency_share 25.06) (근거 없음)\n3) RB-STD-03 — request_queue_backlog(신호_count 0) (근거 없음)\n처리할 원인: RB-STD-02\n병목: 앱",
+        "scope": "tenant",
+        "top_k": 2,
+        "doc_type": "runbook"
+      },
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "539f1b18a955471197971ea72b6b4014"
+    },
+    "createdAt": "2026-10-26T01:11:52.431719Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "539f1b18a955471197971ea72b6b4014",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:52.59777Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "query": "MSP가 사전 동의 없이 수행할 수 있는 허용 조치와 고객사 승인이 필요한 조치",
+        "scope": "tenant",
+        "top_k": 1,
+        "doc_type": "sla"
+      },
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "f9fcea67cedc45f6a1a660f448691404"
+    },
+    "createdAt": "2026-10-26T01:11:52.601528Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "f9fcea67cedc45f6a1a660f448691404",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:52.802314Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {},
+      "node": "propose_action",
+      "tool": "business_get_service_inventory",
+      "callId": "959c669f29d74465b84566b99423aa0e"
+    },
+    "createdAt": "2026-10-26T01:11:52.806142Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "propose_action",
+      "tool": "business_get_service_inventory",
+      "callId": "959c669f29d74465b84566b99423aa0e",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:52.926289Z"
+  },
+  {
+    "type": "STEP",
+    "data": {
+      "node": "propose_action",
+      "facts": [
+        {
+          "clause": "RB-STD-01",
+          "signal": "connection_pool_exhausted",
+          "evidence": false,
+          "dependency": null,
+          "first_seen": null,
+          "signal_count": 0,
+          "dependency_share": null,
+          "dependency_status": null
+        },
+        {
+          "clause": "RB-STD-02",
+          "signal": "worker_pool_saturated",
+          "evidence": true,
+          "dependency": null,
+          "first_seen": "2026-10-26T01:10:30+00:00",
+          "signal_count": 363,
+          "dependency_share": null,
+          "dependency_status": null
+        },
+        {
+          "clause": "RB-STD-03",
+          "signal": "request_queue_backlog",
+          "evidence": false,
+          "dependency": null,
+          "first_seen": null,
+          "signal_count": 0,
+          "dependency_share": null,
+          "dependency_status": null
+        },
+        {
+          "clause": "RB-STD-04",
+          "signal": "external_api_timeout",
+          "evidence": true,
+          "dependency": "payment-gateway",
+          "first_seen": null,
+          "signal_count": 0,
+          "dependency_share": 25.06,
+          "dependency_status": "DEGRADED"
+        },
+        {
+          "clause": "RB-STD-05",
+          "signal": "slow_query",
+          "evidence": false,
+          "dependency": null,
+          "first_seen": null,
+          "signal_count": 0,
+          "dependency_share": null,
+          "dependency_status": null
+        }
+      ],
+      "causes": [
+        "RB-STD-02",
+        "RB-STD-04",
+        "RB-STD-03"
+      ],
+      "target": "RB-STD-02"
+    },
+    "createdAt": "2026-10-26T01:11:52.931923Z"
+  },
+  {
+    "type": "APPROVAL_REQUIRED",
+    "data": {
+      "args": {
+        "action": "restart_pods",
+        "reason": "RB-STD-02에 따라 worker_pool_saturated 이슈를 완화하기 위한 1차 조치로 reservation-api 파드 재시작을 수행한다(RB-STD-02). 다만 현재 레플리카가 1개여서 재시작 시 전체 서비스가 약 10-20초 중단될 수 있다.",
+        "service": "reservation-api",
+        "incident_id": 8
+      },
+      "tool": "business_execute_runbook_action",
+      "impact": {
+        "runtime": "kubernetes",
+        "replicas": 1,
+        "restartMode": "ALL_AT_ONCE",
+        "zeroDowntime": false,
+        "readyReplicas": 1,
+        "safeMaxReplicas": 1
+      },
+      "reason": "",
+      "runbook": [
+        {
+          "uri": "docs://_common/runbook-standard",
+          "scope": "common",
+          "score": 0.571,
+          "title": "MSP 표준 장애 대응 런북",
+          "doc_id": "runbook-standard",
+          "content": "[문서] MSP 표준 장애 대응 런북 | MSP 공통 | 런북 | 절 MSP 표준 장애 대응 런북 > RB-STD-02 작업 스레드 고갈 (파드 멈춤)\n\n## RB-STD-02 작업 스레드 고갈 (파드 멈춤)\n\n- 증상: 5xx 에러율 급증, 로그에 `503 worker pool saturated`, `oldest worker blocked` 반복\n- 구분: 이상 시작 직전에 배포·설정 변경이 없다. 프로세스 내부 상태 문제로 본다. 5xx 없이 응답만 느리고 `request queue backlog`(처리 슬롯 대기)가 보이면 이 조항이 아니라 RB-STD-03(트래픽 급증)이다. 처리 슬롯이 모두 쓰이는 것은 요청이 많아서이지 스레드가 멈춰서가 아니다\n- 구조 검토: 레플리카가 2개 이상이고 무상태면 하나씩 재시작해 중단 없이 처리한다. 레플리카가 1개면 재시작하는 동안 서비스 전체가 멈추므로, 제안 이유에 전체 중단 영향을 적는다. 재시작은 그대로 제안하고, 공지는 보고서 뒤에 보낸다. 상태 저장 서비스면 RB-STD-06을 따른다\n- 조치: 파드를 재시작한다 (`restart_pods`)",
+          "section": "RB-STD-02 작업 스레드 고갈 (파드 멈춤)",
+          "version": "81501068c9b4",
+          "doc_type": "runbook",
+          "section_path": "MSP 표준 장애 대응 런북 > RB-STD-02 작업 스레드 고갈 (파드 멈춤)",
+          "source_format": "md",
+          "document_version": 5
+        },
+        {
+          "uri": "docs://_common/runbook-standard",
+          "scope": "common",
+          "score": 0.538,
+          "title": "MSP 표준 장애 대응 런북",
+          "doc_id": "runbook-standard",
+          "content": "[문서] MSP 표준 장애 대응 런북 | MSP 공통 | 런북 | 절 MSP 표준 장애 대응 런북 > RB-STD-03 트래픽 급증 (앱 처리 용량 부족)\n\n## RB-STD-03 트래픽 급증 (앱 처리 용량 부족)\n\n- 증상: 에러율은 정상인데 p95 응답시간 상승, 로그에 `request queue backlog` 경고 반복\n- 구분: 5xx 에러가 늘지 않는다(늘면 RB-STD-02). 외부 API timeout 로그와 DB `slow query` 로그가 없다. 지연이 앱의 처리 대기에서 생긴다\n- 구조 검토: 서비스 목록의 `autoscaling`(HPA)을 먼저 본다. 안전 상한(`safe_max_replicas`)은 DB 최대 연결 수와 계약 상한으로 정해지며, 넘으면 확장 때문에 DB 장애가 날 수 있다\n  - HPA가 있고 최대치에 닿지 않았다(`atMax` false): HPA가 늘리는 중이다. 레플리카를 직접 바꾸지 않고 조치하지 않는다\n  - HPA가 최대치에 닿았고 최대치가 안전 상한보다 작다(`canRaiseMax` true): HPA 최대치를 안전 상한까지 올린다\n  - HPA가 최대치에 닿았고 최대치가 이미 안전 상한이다: 더 늘릴 수 없다. RB-STD-06을 따른다\n  - HPA가 없다: 목표 레플리카는 현재의 2배이고, 안전 상한을 넘으면 상한까지만 늘린다. 이미 상한이면 RB-STD-06\n- 재시작(`restart_pods`)은 처리 용량을 늘리지 않으므로 급증에 효과가 없다. 확장할 수 없으면 재시작으로 대신하지 않고 RB-STD-06을 따른다\n- 조치: HPA가 있으면 `adjust_autoscaler`(`max_replicas`=안전 상한). HPA가 없으면 `scale_deployment`(`replicas`=목표 레플리카). HPA가 관리하는 서비스의 레플리카는 직접 바꾸지 않는다(HPA가 곧 덮어쓴다)",
+          "section": "RB-STD-03 트래픽 급증 (앱 처리 용량 부족)",
+          "version": "81501068c9b4",
+          "doc_type": "runbook",
+          "section_path": "MSP 표준 장애 대응 런북 > RB-STD-03 트래픽 급증 (앱 처리 용량 부족)",
+          "source_format": "md",
+          "document_version": 5
+        },
+        {
+          "uri": "docs://tenant-b/runbook-reservation-api",
+          "scope": "tenant",
+          "score": 0.482,
+          "title": "B사 reservation-api 서비스 런북",
+          "doc_id": "runbook-reservation-api",
+          "content": "[문서] B사 reservation-api 서비스 런북 | tenant-b | 런북 | 절 B사 reservation-api 서비스 런북 > RB-B-02 재시작 시 주의\n\n## RB-B-02 재시작 시 주의\n\n- reservation-api는 레플리카가 1개라 재시작하는 동안 예약 서비스 전체가 멈춘다(약 10~20초)\n- 재시작을 제안할 때는 전체 중단 영향을 이유에 적는다. 재시작이 필요하면 그대로 제안하고, 고객 공지는 조치 뒤에 보낸다",
+          "section": "RB-B-02 재시작 시 주의",
+          "version": "a747700199ef",
+          "doc_type": "runbook",
+          "section_path": "B사 reservation-api 서비스 런북 > RB-B-02 재시작 시 주의",
+          "source_format": "md",
+          "document_version": 1
+        }
+      ],
+      "evidence": [
+        {
+          "args": {
+            "error_rate": "(sum(rate(demo_orders_seconds_count{service=\"reservation-api\", outcome=\"error\"}[1m])) or vector(0)) / sum(rate(demo_orders_seconds_count{service=\"reservation-api\"}[1m]))",
+            "p95_seconds": "histogram_quantile(0.95, sum by (le) (rate(demo_orders_seconds_bucket{service=\"reservation-api\"}[1m])))",
+            "requests_per_second": "sum(rate(demo_orders_seconds_count{service=\"reservation-api\"}[1m]))"
+          },
+          "tool": "grafana_query_prometheus",
+          "summary": "{\"error_rate\": 1.0, \"p95_seconds\": 0.08525876103863636, \"requests_per_second\": 4.524416338326766}"
+        },
+        {
+          "args": {
+            "service": "reservation-api"
+          },
+          "tool": "business_list_recent_changes",
+          "summary": "{\"service\": \"reservation-api\", \"changeMode\": \"DIRECT\", \"source\": \"kubernetes 배포 이력\", \"revisions\": [{\"revision\": 3, \"image\": \"opslens/demo-app:0.1.0\", \"env\": {\"DEMO_DEPENDENCY_FAULTS_FILE\": \"/etc/demo-faults/dependency-faults\", \"DEMO_POOL_SIZE\": \"20\", \"LOKI_URL\": \"http://loki:3100/loki/api/v1/push\", \"SERVICE_NAME\": \"reservation-api\", \"TENANT_ID\": \"tenant-b\"}, \"createdAt\": \"2026-10-26T00:24:40Z\", \"deployedAt\": \"2026-10-26T00:24:46Z\"}, {\"revision\": 2, \"image\": \"opslens/demo-app:0.1.0\", \"env\": {\"DEM"
+        },
+        {
+          "tool": "cause_facts",
+          "summary": "[{\"clause\": \"RB-STD-01\", \"signal\": \"connection_pool_exhausted\", \"signal_count\": 0, \"first_seen\": null, \"dependency\": null, \"dependency_status\": null, \"dependency_share\": null, \"evidence\": false}, {\"clause\": \"RB-STD-02\", \"signal\": \"worker_pool_saturated\", \"signal_count\": 363, \"first_seen\": \"2026-10-26T01:10:30+00:00\", \"dependency\": null, \"dependency_status\": null, \"dependency_share\": null, \"evidence\": true}, {\"clause\": \"RB-STD-03\", \"signal\": \"request_queue_backlog\", \"signal_count\": 0, \"first_seen"
+        },
+        {
+          "args": {
+            "dependency": "payment-gateway"
+          },
+          "tool": "business_get_dependency_health",
+          "status": "success",
+          "summary": "<tool_output>\n{\"dependency\":\"payment-gateway\",\"service\":\"checkin-api\",\"kind\":\"external_api\",\"owner\":\"third_party\",\"ownerContact\":\"B사 결제 담당(대행사 문의)\",\"status\":\"DEGRADED\",\"p95Seconds\":2.11,\"callsPerSecond\":0.527,\"window\":\"최근 1분\",\"thresholds\":{\"degradedSeconds\":0.3,\"downSeconds\":3.0}}\n</tool_output>"
+        },
+        {
+          "args": {},
+          "tool": "business_get_service_inventory",
+          "status": "success",
+          "summary": "<tool_output>\n[{\"name\":\"checkin-api\",\"runtime\":\"kubernetes\",\"target\":\"kind-opslens-tenants/tenant-b\",\"stateful\":false,\"contractReplicas\":{\"max\":1,\"min\":1},\"dependencies\":[{\"name\":\"payment-gateway\",\"kind\":\"external_api\",\"owner\":\"third_party\",\"ownerContact\":\"B사 결제 담당(대행사 문의)\",\"maxConnections\":null,\"connectionHeadroom\":0.8}],\"observability\":{\"requestMetric\":\"demo_orders_seconds\",\"errorSelector\":\"outcome=\\\"error\\\"\",\"logSelector\":\"app=\\\"demo-app\\\"\",\"logSignals\":{\"slow_query\":\"slow query\",\"external_ap"
+        }
+      ],
+      "approvalId": "d02e485f-8668-5949-ae42-7e4bdc38e7d3",
+      "changeMode": "DIRECT"
+    },
+    "createdAt": "2026-10-26T01:12:10.791312Z"
+  },
+  {
+    "type": "APPROVAL_DECIDED",
+    "data": {
+      "by": "engineer",
+      "tool": "business_execute_runbook_action",
+      "decision": "APPROVE"
+    },
+    "createdAt": "2026-10-26T01:12:11.296856Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "action": "restart_pods",
+        "reason": "RB-STD-02에 따라 worker_pool_saturated 이슈를 완화하기 위한 1차 조치로 reservation-api 파드 재시작을 수행한다(RB-STD-02). 다만 현재 레플리카가 1개여서 재시작 시 전체 서비스가 약 10-20초 중단될 수 있다.",
+        "service": "reservation-api",
+        "incident_id": 8
+      },
+      "node": "propose_action",
+      "tool": "business_execute_runbook_action",
+      "callId": "daa77cecb26d419daa401b77da16e3c2"
+    },
+    "createdAt": "2026-10-26T01:12:11.345336Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "propose_action",
+      "tool": "business_execute_runbook_action",
+      "callId": "daa77cecb26d419daa401b77da16e3c2",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:12:11.402439Z"
+  },
+  {
+    "type": "STEP",
+    "data": {
+      "node": "verify",
+      "waitSeconds": 20
+    },
+    "createdAt": "2026-10-26T01:12:11.408381Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "expr": "(sum(rate(demo_orders_seconds_count{service=\"reservation-api\", outcome=\"error\"}[15s])) or vector(0)) / sum(rate(demo_orders_seconds_count{service=\"reservation-api\"}[15s]))",
+        "endTime": "now",
+        "queryType": "instant",
+        "datasourceUid": "prom-tenant-b"
+      },
+      "node": "verify",
+      "tool": "grafana_query_prometheus",
+      "callId": "bd9f4cf437574c839a5bce9583cd5080"
+    },
+    "createdAt": "2026-10-26T01:12:31.4093Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "verify",
+      "tool": "grafana_query_prometheus",
+      "callId": "bd9f4cf437574c839a5bce9583cd5080",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:12:31.447551Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "expr": "histogram_quantile(0.95, sum by (le) (rate(demo_orders_seconds_bucket{service=\"reservation-api\"}[15s])))",
+        "endTime": "now",
+        "queryType": "instant",
+        "datasourceUid": "prom-tenant-b"
+      },
+      "node": "verify",
+      "tool": "grafana_query_prometheus",
+      "callId": "c51253755b2b473582bd692e1f404097"
+    },
+    "createdAt": "2026-10-26T01:12:31.449061Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "verify",
+      "tool": "grafana_query_prometheus",
+      "callId": "c51253755b2b473582bd692e1f404097",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:12:31.467316Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "expr": "(sum(rate(demo_orders_seconds_count{service=\"reservation-api\", outcome=\"error\"}[15s])) or vector(0)) / sum(rate(demo_orders_seconds_count{service=\"reservation-api\"}[15s]))",
+        "endTime": "now",
+        "queryType": "instant",
+        "datasourceUid": "prom-tenant-b"
+      },
+      "node": "verify",
+      "tool": "grafana_query_prometheus",
+      "callId": "35a4d5c51d554a0da96297c2bc8bf847"
+    },
+    "createdAt": "2026-10-26T01:13:06.478542Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "verify",
+      "tool": "grafana_query_prometheus",
+      "callId": "35a4d5c51d554a0da96297c2bc8bf847",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:13:06.540966Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "expr": "histogram_quantile(0.95, sum by (le) (rate(demo_orders_seconds_bucket{service=\"reservation-api\"}[15s])))",
+        "endTime": "now",
+        "queryType": "instant",
+        "datasourceUid": "prom-tenant-b"
+      },
+      "node": "verify",
+      "tool": "grafana_query_prometheus",
+      "callId": "167dc155ddd1480e96af724a4476617b"
+    },
+    "createdAt": "2026-10-26T01:13:06.542725Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "verify",
+      "tool": "grafana_query_prometheus",
+      "callId": "167dc155ddd1480e96af724a4476617b",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:13:06.567747Z"
+  },
+  {
+    "type": "STEP",
+    "data": {
+      "node": "report"
+    },
+    "createdAt": "2026-10-26T01:13:08.702282Z"
+  },
+  {
+    "type": "APPROVAL_REQUIRED",
+    "data": {
+      "args": {
+        "message": "Reservation-api 서비스에 장애가 발생해 일부 요청에 에러가 발생했습니다. 현재 해당 서비스가 정상적으로 동작하고 있으며 에러율은 0.00%로 확인됩니다. 추후 원인 분석 결과를 공유드리겠습니다. 다음 안내는 외부 결제 연동 상태를 포함한 의존 관계를 모니터링하는 과정에서 추가로 안내드리겠습니다.",
+        "incident_id": 8
+      },
+      "tool": "business_send_customer_notice",
+      "reason": "고객 공지 발송",
+      "runbook": [
+        {
+          "uri": "docs://_common/runbook-standard",
+          "scope": "common",
+          "score": 0.571,
+          "title": "MSP 표준 장애 대응 런북",
+          "doc_id": "runbook-standard",
+          "content": "[문서] MSP 표준 장애 대응 런북 | MSP 공통 | 런북 | 절 MSP 표준 장애 대응 런북 > RB-STD-02 작업 스레드 고갈 (파드 멈춤)\n\n## RB-STD-02 작업 스레드 고갈 (파드 멈춤)\n\n- 증상: 5xx 에러율 급증, 로그에 `503 worker pool saturated`, `oldest worker blocked` 반복\n- 구분: 이상 시작 직전에 배포·설정 변경이 없다. 프로세스 내부 상태 문제로 본다. 5xx 없이 응답만 느리고 `request queue backlog`(처리 슬롯 대기)가 보이면 이 조항이 아니라 RB-STD-03(트래픽 급증)이다. 처리 슬롯이 모두 쓰이는 것은 요청이 많아서이지 스레드가 멈춰서가 아니다\n- 구조 검토: 레플리카가 2개 이상이고 무상태면 하나씩 재시작해 중단 없이 처리한다. 레플리카가 1개면 재시작하는 동안 서비스 전체가 멈추므로, 제안 이유에 전체 중단 영향을 적는다. 재시작은 그대로 제안하고, 공지는 보고서 뒤에 보낸다. 상태 저장 서비스면 RB-STD-06을 따른다\n- 조치: 파드를 재시작한다 (`restart_pods`)",
+          "section": "RB-STD-02 작업 스레드 고갈 (파드 멈춤)",
+          "version": "81501068c9b4",
+          "doc_type": "runbook",
+          "section_path": "MSP 표준 장애 대응 런북 > RB-STD-02 작업 스레드 고갈 (파드 멈춤)",
+          "source_format": "md",
+          "document_version": 5
+        },
+        {
+          "uri": "docs://_common/runbook-standard",
+          "scope": "common",
+          "score": 0.538,
+          "title": "MSP 표준 장애 대응 런북",
+          "doc_id": "runbook-standard",
+          "content": "[문서] MSP 표준 장애 대응 런북 | MSP 공통 | 런북 | 절 MSP 표준 장애 대응 런북 > RB-STD-03 트래픽 급증 (앱 처리 용량 부족)\n\n## RB-STD-03 트래픽 급증 (앱 처리 용량 부족)\n\n- 증상: 에러율은 정상인데 p95 응답시간 상승, 로그에 `request queue backlog` 경고 반복\n- 구분: 5xx 에러가 늘지 않는다(늘면 RB-STD-02). 외부 API timeout 로그와 DB `slow query` 로그가 없다. 지연이 앱의 처리 대기에서 생긴다\n- 구조 검토: 서비스 목록의 `autoscaling`(HPA)을 먼저 본다. 안전 상한(`safe_max_replicas`)은 DB 최대 연결 수와 계약 상한으로 정해지며, 넘으면 확장 때문에 DB 장애가 날 수 있다\n  - HPA가 있고 최대치에 닿지 않았다(`atMax` false): HPA가 늘리는 중이다. 레플리카를 직접 바꾸지 않고 조치하지 않는다\n  - HPA가 최대치에 닿았고 최대치가 안전 상한보다 작다(`canRaiseMax` true): HPA 최대치를 안전 상한까지 올린다\n  - HPA가 최대치에 닿았고 최대치가 이미 안전 상한이다: 더 늘릴 수 없다. RB-STD-06을 따른다\n  - HPA가 없다: 목표 레플리카는 현재의 2배이고, 안전 상한을 넘으면 상한까지만 늘린다. 이미 상한이면 RB-STD-06\n- 재시작(`restart_pods`)은 처리 용량을 늘리지 않으므로 급증에 효과가 없다. 확장할 수 없으면 재시작으로 대신하지 않고 RB-STD-06을 따른다\n- 조치: HPA가 있으면 `adjust_autoscaler`(`max_replicas`=안전 상한). HPA가 없으면 `scale_deployment`(`replicas`=목표 레플리카). HPA가 관리하는 서비스의 레플리카는 직접 바꾸지 않는다(HPA가 곧 덮어쓴다)",
+          "section": "RB-STD-03 트래픽 급증 (앱 처리 용량 부족)",
+          "version": "81501068c9b4",
+          "doc_type": "runbook",
+          "section_path": "MSP 표준 장애 대응 런북 > RB-STD-03 트래픽 급증 (앱 처리 용량 부족)",
+          "source_format": "md",
+          "document_version": 5
+        },
+        {
+          "uri": "docs://tenant-b/runbook-reservation-api",
+          "scope": "tenant",
+          "score": 0.482,
+          "title": "B사 reservation-api 서비스 런북",
+          "doc_id": "runbook-reservation-api",
+          "content": "[문서] B사 reservation-api 서비스 런북 | tenant-b | 런북 | 절 B사 reservation-api 서비스 런북 > RB-B-02 재시작 시 주의\n\n## RB-B-02 재시작 시 주의\n\n- reservation-api는 레플리카가 1개라 재시작하는 동안 예약 서비스 전체가 멈춘다(약 10~20초)\n- 재시작을 제안할 때는 전체 중단 영향을 이유에 적는다. 재시작이 필요하면 그대로 제안하고, 고객 공지는 조치 뒤에 보낸다",
+          "section": "RB-B-02 재시작 시 주의",
+          "version": "a747700199ef",
+          "doc_type": "runbook",
+          "section_path": "B사 reservation-api 서비스 런북 > RB-B-02 재시작 시 주의",
+          "source_format": "md",
+          "document_version": 1
+        }
+      ],
+      "evidence": [
+        {
+          "tool": "cause_facts",
+          "summary": "[{\"clause\": \"RB-STD-01\", \"signal\": \"connection_pool_exhausted\", \"signal_count\": 0, \"first_seen\": null, \"dependency\": null, \"dependency_status\": null, \"dependency_share\": null, \"evidence\": false}, {\"clause\": \"RB-STD-02\", \"signal\": \"worker_pool_saturated\", \"signal_count\": 363, \"first_seen\": \"2026-10-26T01:10:30+00:00\", \"dependency\": null, \"dependency_status\": null, \"dependency_share\": null, \"evidence\": true}, {\"clause\": \"RB-STD-03\", \"signal\": \"request_queue_backlog\", \"signal_count\": 0, \"first_seen"
+        },
+        {
+          "args": {
+            "dependency": "payment-gateway"
+          },
+          "tool": "business_get_dependency_health",
+          "status": "success",
+          "summary": "<tool_output>\n{\"dependency\":\"payment-gateway\",\"service\":\"checkin-api\",\"kind\":\"external_api\",\"owner\":\"third_party\",\"ownerContact\":\"B사 결제 담당(대행사 문의)\",\"status\":\"DEGRADED\",\"p95Seconds\":2.11,\"callsPerSecond\":0.527,\"window\":\"최근 1분\",\"thresholds\":{\"degradedSeconds\":0.3,\"downSeconds\":3.0}}\n</tool_output>"
+        },
+        {
+          "args": {},
+          "tool": "business_get_service_inventory",
+          "status": "success",
+          "summary": "<tool_output>\n[{\"name\":\"checkin-api\",\"runtime\":\"kubernetes\",\"target\":\"kind-opslens-tenants/tenant-b\",\"stateful\":false,\"contractReplicas\":{\"max\":1,\"min\":1},\"dependencies\":[{\"name\":\"payment-gateway\",\"kind\":\"external_api\",\"owner\":\"third_party\",\"ownerContact\":\"B사 결제 담당(대행사 문의)\",\"maxConnections\":null,\"connectionHeadroom\":0.8}],\"observability\":{\"requestMetric\":\"demo_orders_seconds\",\"errorSelector\":\"outcome=\\\"error\\\"\",\"logSelector\":\"app=\\\"demo-app\\\"\",\"logSignals\":{\"slow_query\":\"slow query\",\"external_ap"
+        },
+        {
+          "tool": "business_execute_runbook_action",
+          "status": "success",
+          "summary": "<tool_output>\n{\"action\":\"restart_pods\",\"service\":\"reservation-api\",\"runtime\":\"kubernetes\",\"changeMode\":\"DIRECT\",\"status\":\"EXECUTED\",\"restartedPods\":[\"reservation-api-fc8548f58-7grh8\"],\"restartMode\":\"ALL_AT_ONCE\"}\n</tool_output>"
+        },
+        {
+          "args": {
+            "error_rate": "(sum(rate(demo_orders_seconds_count{service=\"reservation-api\", outcome=\"error\"}[15s])) or vector(0)) / sum(rate(demo_orders_seconds_count{service=\"reservation-api\"}[15s]))",
+            "p95_seconds": "histogram_quantile(0.95, sum by (le) (rate(demo_orders_seconds_bucket{service=\"reservation-api\"}[15s])))"
+          },
+          "tool": "grafana_query_prometheus",
+          "summary": "{\"error_rate\": 0.0, \"p95_seconds\": 0.13981013224999997, \"window\": \"조치 직후 15초\", \"thresholds\": {\"error_rate\": 0.2, \"p95_seconds\": 1.0}, \"confirm\": {\"error_rate\": 0.0, \"p95_seconds\": 0.13048945683333335, \"window\": \"그 35초 뒤 15초\"}}"
+        }
+      ],
+      "approvalId": "d540e8de-968c-54ec-b2ea-8a8a199e91d9"
+    },
+    "createdAt": "2026-10-26T01:13:15.80047Z"
+  },
+  {
+    "type": "APPROVAL_DECIDED",
+    "data": {
+      "by": "admin",
+      "tool": "business_send_customer_notice",
+      "decision": "APPROVE"
+    },
+    "createdAt": "2026-10-26T01:13:19.417781Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "message": "Reservation-api 서비스에 장애가 발생해 일부 요청에 에러가 발생했습니다. 현재 해당 서비스가 정상적으로 동작하고 있으며 에러율은 0.00%로 확인됩니다. 추후 원인 분석 결과를 공유드리겠습니다. 다음 안내는 외부 결제 연동 상태를 포함한 의존 관계를 모니터링하는 과정에서 추가로 안내드리겠습니다.",
+        "incident_id": 8
+      },
+      "node": "notice",
+      "tool": "business_send_customer_notice",
+      "callId": "1f54f7c79f434e74875ae6ae1a14b432"
+    },
+    "createdAt": "2026-10-26T01:13:19.481543Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "notice",
+      "tool": "business_send_customer_notice",
+      "callId": "1f54f7c79f434e74875ae6ae1a14b432",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:13:19.510911Z"
+  },
+  {
+    "type": "DONE",
+    "data": {},
+    "createdAt": "2026-10-26T01:13:19.51842Z"
+  }
+]

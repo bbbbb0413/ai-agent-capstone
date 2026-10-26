@@ -1,0 +1,80 @@
+{
+  "id": "6e8d7aae-3651-492f-97f5-4c5a426e29ba",
+  "tenantId": "tenant-a",
+  "incidentId": 12,
+  "type": "DIAGNOSE",
+  "question": "tenant-a inventory-api p95 응답시간 1초 초과",
+  "status": "DONE",
+  "requestedBy": null,
+  "pendingAction": null,
+  "answer": "## 요약\ninventory-api p95 응답시간 증가 이슈가 발생했고 외부 의존(API) 지연이 관찰되었습니다. 현재 상태는 조치가 진행 중이며, 고객 공지는 이미 발송되었습니다.\n\n## 근거\n- 메트릭: p95_seconds=2.0165s, requests_per_second=3.98, error_rate=0.0 (1분 구간)\n- 로그: 외부 API timeout 경고 39건; WARN 레벨 로그에서 외부 결함 지표 확인\n- 변경 이력: 2026-10-23T05:47:44Z inventory-api.yaml 배포 커밋 및 장애용 데모 서비스 구성 추가 및 injection 스크립트 언급\n- 문서: MSP 표준 장애 대응 런북 RB-STD-04 외부 의존 서비스 지연\n- 과거_incident: 장애 #7에서 RB-STD-04 관련 외부 의존 지연 사례 확인\n\n## 원인 후보\n1) RB-STD-04 외부 의존 지연 — external_api_timeout, signal_count=40, first_seen=2026-10-26T01:13:15+00:00, evidence=true (처리: RB-STD-04)\n\n## 조치와 결과\n- 승인자: admin\n- 실행 내용: 외부 의존 지연 원인으로 RB-STD-04를 확인하고 조치 제안, 공지 발송\n- 실행 방식: 고객 공지 발송 포함, PR 없이 즉시 조치\n- 회복 확인 수치: evidence에 따른 외부 API timeout 39건, p95 2.016s, 0.0의 에러율\n- 현재 상태: 조치 진행 중(SENT 공지 발송)이며 내부 모니터링으로 추적 중\n\n## SLA 영향\n- 도구가 준 응답 기한 및 남은 시간 값을 그대로 사용한다. 남은 시간 약 59분 내에 재평가 예정.\n\n## 권장 다음 행동\n- 외부 의존 서비스 소유자와 의사소통 및 영향 범위 확인\n- 외부 API timeout의 재현 여부 확인 및 재발 방지 대책 수립\n- 필요 시 HPA/리소스 조정은 RB-STD-03/ RB-STD-04 가이드에 따라 진행\n\n## 조사 과정\n- grafana_query_loki_logs: inventory-api 관련 WARN 로그 및 외부 API timeout 확인 (다양한 경고 메시지 포함)\n- grafana_query_prometheus: p95_seconds, requests_per_second, error_rate 수치 확인\n- business_list_recent_changes: 변경 이력 확인(설정 저장소 gitops/tenants/tenant-a/inventory-api.yaml)\n- cause_facts: 각 RB-STD 후보별 신호 수치 및 근거 확인\n- business_get_service_inventory: 서비스 의존성 및 관측 지표 확인\n- business_send_customer_notice: 고객 공지 발송 확인",
+  "sources": [
+    {
+      "doc": "docs://_common/runbook-standard",
+      "section": "RB-STD-04 외부 의존 서비스 지연"
+    },
+    {
+      "doc": "docs://_common/runbook-standard",
+      "section": "RB-STD-03 트래픽 급증 (앱 처리 용량 부족)"
+    },
+    {
+      "doc": "docs://tenant-a/runbook-order-api",
+      "section": "RB-A-03 고객 공지 기준"
+    },
+    {
+      "doc": "docs://tenant-a/runbook-order-api",
+      "section": "RB-A-02 DB 관련 연락과 주의"
+    },
+    {
+      "doc": "docs://tenant-a/sla-contract",
+      "section": "제3조 허용 조치"
+    },
+    {
+      "doc": "docs://tenant-a/postmortem-incident-7",
+      "section": "요약"
+    },
+    {
+      "doc": "docs://tenant-a/postmortem-incident-7",
+      "section": "원인 후보"
+    }
+  ],
+  "summary": {
+    "cause": "RB-STD-04 외부 의존 지연",
+    "action": {
+      "args": {
+        "message": "inventory-api 서비스에서 오늘 10:13부터 이용 지연 또는 오류가 발생해 복구 작업을 진행하고 있습니다. 30분 안에 진행 상황을 다시 안내드리겠습니다.",
+        "incident_id": 12
+      },
+      "tool": "business_send_customer_notice",
+      "result": {
+        "sent": true,
+        "status": "SENT"
+      },
+      "decision": "APPROVE"
+    },
+    "change": null,
+    "notice": "APPROVE",
+    "service": "inventory-api",
+    "severity": "P2",
+    "recovered": null,
+    "error_type": "외부 API 지연",
+    "escalation": null,
+    "other_causes": [
+      "RB-STD-01 연결 풀 고갈",
+      "RB-STD-02 워커풀 포화",
+      "RB-STD-03 요청 대기열",
+      "RB-STD-05 slow_query"
+    ],
+    "notice_result": {
+      "sent": true,
+      "status": "SENT"
+    },
+    "runbook_clause": "RB-STD-04 외부 의존 서비스 지연",
+    "escalation_result": null
+  },
+  "traceUrl": null,
+  "createdAt": "2026-10-26T01:13:52.062996Z",
+  "updatedAt": "2026-10-26T01:14:26.376277Z",
+  "retryOf": null,
+  "retriedBy": null
+}

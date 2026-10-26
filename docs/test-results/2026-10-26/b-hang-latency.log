@@ -1,29 +1,29 @@
-09:22:57  ▶ B사 파드 멈춤 + 결제 지연 → 재시작 후 고객 공지 (겹친 장애)
-09:22:58  tenant-b checkin-api에 WORKER_HANG 주입; tenant-b checkin-api에 PAYMENT_LATENCY 주입
-09:22:58  tenant-b checkin-api 알림 → 인시던트·작업 생성을 기다린다 (알림 규칙 for 15s + 평가 주기)
-09:23:35  인시던트 #3 (P1) · 작업 4f36fbe2 · http://localhost:18000/tasks/4f36fbe2-23c3-4fd4-b13f-06855423db67
-09:23:35  상태: QUEUED
-09:24:19  상태: WAITING_APPROVAL
-09:24:19  승인 요청: business_escalate_incident P1
-09:24:19  → engineer가 승인
-09:24:23  상태: RUNNING
-09:24:39  상태: WAITING_APPROVAL
-09:24:39  승인 요청: business_execute_runbook_action restart_pods checkin-api
-09:24:39  → engineer가 승인
-09:24:43  상태: RUNNING
-09:25:39  상태: WAITING_APPROVAL
-09:25:39  승인 요청: business_send_customer_notice
-09:25:39  → admin가 승인
-09:25:43  상태: RUNNING
-09:25:51  상태: DONE
-09:25:51  ✅ 작업 완료 (상태 DONE)
-09:25:51  ✅ 진단마다 처리할 원인이 기대와 같다 (기대 RB-STD-02 → RB-STD-04, 실제 RB-STD-02 → RB-STD-04)
-09:25:51  ✅ 원인 후보에 RB-STD-02, RB-STD-04가 있다 (적힌 후보: RB-STD-01, RB-STD-02, RB-STD-03, RB-STD-04, RB-STD-05)
-09:25:51  ✅ 조치를 기대한 순서로 제안했다 (business_execute_runbook_action restart_pods checkin-api → business_send_customer_notice)
-09:25:51  ✅ 같은 앱 조치를 두 번 하지 않았다 (restart_pods)
-09:25:51  ❌ 고객 공지가 발송됐다
-09:25:51  ✅ 재시작 뒤 결제 지연이 남아 회복되지 않았다고 판정했다
-09:25:52  ✅ 재시작한 새 파드도 결제 지연을 이어받았다 (ConfigMap ['PAYMENT_LATENCY'])
-09:25:52  ✅ 인시던트가 하나만 열렸다 (#3)
-09:25:52  tenant-b checkin-api 장애 해제
-09:25:52  ■ 실패 (175초)
+10:11:54  ▶ B사 파드 멈춤 + 결제 지연 → 재시작 후 고객 공지 (겹친 장애)
+10:11:54  앞 장애의 인시던트(#9)가 닫히기를 기다린다 (알림 해제 반영)
+10:12:29  tenant-b checkin-api에 WORKER_HANG 주입; tenant-b checkin-api에 PAYMENT_LATENCY 주입
+10:12:29  tenant-b checkin-api 알림 → 인시던트·작업 생성을 기다린다 (알림 규칙 for 15s + 평가 주기)
+10:12:59  인시던트 #11 (P1) · 작업 2a0f64ac · http://127.0.0.1:18000/tasks/2a0f64ac-3124-4bce-aa9e-cd5d265d6843
+10:12:59  상태: WAITING_APPROVAL
+10:12:59  승인 요청: business_escalate_incident P1
+10:12:59  → engineer가 승인
+10:13:03  상태: RUNNING
+10:13:19  상태: WAITING_APPROVAL
+10:13:19  승인 요청: business_execute_runbook_action restart_pods checkin-api
+10:13:19  → engineer가 승인
+10:13:23  상태: RUNNING
+10:14:27  상태: WAITING_APPROVAL
+10:14:27  승인 요청: business_send_customer_notice
+10:14:27  → admin가 승인
+10:14:31  상태: RUNNING
+10:14:39  상태: DONE
+10:14:39  ✅ 작업 완료 (상태 DONE)
+10:14:39  ✅ 진단마다 처리할 원인이 기대와 같다 (기대 RB-STD-02 → RB-STD-04, 실제 RB-STD-02 → RB-STD-04)
+10:14:39  ✅ 원인 후보에 RB-STD-02, RB-STD-04가 있다 (적힌 후보: RB-STD-01, RB-STD-02, RB-STD-03, RB-STD-04, RB-STD-05)
+10:14:39  ✅ 조치를 기대한 순서로 제안했다 (business_execute_runbook_action restart_pods checkin-api → business_send_customer_notice)
+10:14:39  ✅ 같은 앱 조치를 두 번 하지 않았다 (restart_pods)
+10:14:39  ✅ 고객 공지가 발송됐다
+10:14:39  ✅ 재시작 뒤 결제 지연이 남아 회복되지 않았다고 판정했다
+10:14:39  ✅ 재시작한 새 파드도 결제 지연을 이어받았다 (ConfigMap ['PAYMENT_LATENCY'])
+10:14:39  ✅ 인시던트가 하나만 열렸다 (#11)
+10:14:40  tenant-b checkin-api 장애 해제
+10:14:40  ■ 통과 (165초)

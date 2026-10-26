@@ -1,0 +1,36 @@
+10:13:15  ▶ A사 트래픽 급증(안전 상한 초과) → 최대치 4 후 미회복 → 에스컬레이션
+10:13:15  order-api가 HPA 최대 3·레플리카 2로 돌아오기를 기다린다 (최대 현재: 4 4, 준비 4)
+10:14:47  tenant-a order-api 부하 발생기 켬 (초당 400건)
+10:14:47  tenant-a order-api 알림 → 인시던트·작업 생성을 기다린다 (알림 규칙 for 15s + 평가 주기)
+10:15:17  인시던트 #15 (P2) · 작업 02f96685 · http://127.0.0.1:18000/tasks/02f96685-1bfd-4fb6-8e7c-f00ce1fc4d93
+10:15:17  상태: QUEUED
+10:15:29  상태: RUNNING
+10:15:49  상태: WAITING_APPROVAL
+10:15:49  승인 요청: business_execute_runbook_action adjust_autoscaler order-api 4
+10:15:49  → engineer가 승인
+10:15:53  상태: RUNNING
+10:15:57  상태: CHANGE_PENDING
+10:15:57  ✅ PR #96이 A사 설정 경로만 바꾼다 (gitops/tenants/tenant-a/hpa.yaml)
+10:16:00  ✅ PR #96 병합 (Pull Request successfully merged)
+10:16:01  PR 브랜치 opslens/tenant-a/autoscaler-order-api-1792977349를 지웠다
+10:16:25  상태: RUNNING
+10:17:19  상태: WAITING_APPROVAL
+10:17:19  승인 요청: business_escalate_incident order-api ACTION_BLOCKED adjust_autoscaler STRUCTURE
+10:17:19  → engineer가 승인
+10:17:23  상태: RUNNING
+10:17:44  상태: WAITING_APPROVAL
+10:17:44  승인 요청: business_send_customer_notice
+10:17:45  → admin가 승인
+10:17:50  상태: RUNNING
+10:17:54  상태: DONE
+10:17:54  ✅ 작업 완료 (상태 DONE)
+10:17:54  ✅ 기대한 조치를 제안했다 (business_execute_runbook_action adjust_autoscaler order-api 4)
+10:17:54  ✅ 조치 제안이 한 번이다 (1번. 두 번 이상이면 회복 판단을 의심한다)
+10:17:54  ✅ 기대하지 않은 승인 요청이 없다
+10:17:54  ✅ 안전 상한 4을 넘는 최대치를 제안하지 않았다
+10:17:54  ✅ 최대치 4로도 회복되지 않았다고 판정했다
+10:17:54  ✅ 에스컬레이션 ACTION_BLOCKED STRUCTURE 대기열 등록 (있음: ACTION_BLOCKED STRUCTURE adjust_autoscaler)
+10:17:54  ✅ 받는 사람에 A사 운영 담당이 있다 (engineer, admin, A사 운영 담당)
+10:17:54  ✅ 고객 공지가 발송됐다
+10:17:56  tenant-a order-api 장애 해제 (관리 API 장애 해제 실패: kubectl --context kind-opslens-tenants -n … 실패: command terminated with exit code 7; e2e/20261026-101005에 커밋 27eb618 (Restore order-api autoscaler max to 3. ArgoCD가 30초 안에 반영한다))
+10:17:56  ■ 통과 (190초)

@@ -1,0 +1,18 @@
+10:10:30  ▶ B사 외부 결제 지연 → 고객 공지
+10:10:30  tenant-b checkin-api에 PAYMENT_LATENCY 주입
+10:10:30  tenant-b checkin-api 알림 → 인시던트·작업 생성을 기다린다 (알림 규칙 for 15s + 평가 주기)
+10:11:10  인시던트 #9 (P2) · 작업 a0d788b8 · http://127.0.0.1:18000/tasks/a0d788b8-5b98-463c-af5f-408041611b02
+10:11:10  상태: RUNNING
+10:11:42  상태: WAITING_APPROVAL
+10:11:42  승인 요청: business_send_customer_notice
+10:11:42  → admin가 승인
+10:11:46  상태: RUNNING
+10:11:54  상태: DONE
+10:11:54  ✅ 작업 완료 (상태 DONE)
+10:11:54  ✅ 기대한 조치를 제안했다 (business_send_customer_notice)
+10:11:54  ✅ 조치 제안이 한 번이다 (1번. 두 번 이상이면 회복 판단을 의심한다)
+10:11:54  ✅ 기대하지 않은 승인 요청이 없다
+10:11:54  ✅ 고객 공지가 발송됐다
+10:11:54  ✅ 외부 원인이라 앱 조치를 실행하지 않았다 (0건)
+10:11:54  tenant-b checkin-api 장애 해제
+10:11:54  ■ 통과 (84초)

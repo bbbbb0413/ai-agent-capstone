@@ -1,24 +1,25 @@
-09:22:57  ▶ B사 잘못된 배포 + DB 지연 → 롤백 불가 에스컬레이션 (겹친 장애)
-09:22:58  tenant-b reservation-api에 DB_SLOW 주입; B사 reservation-api에 DEMO_POOL_SIZE=5 배포
-09:22:58  tenant-b reservation-api 알림 → 인시던트·작업 생성을 기다린다 (알림 규칙 for 15s + 평가 주기)
-09:23:35  인시던트 #4 (P2) · 작업 171100b0 · http://localhost:18000/tasks/171100b0-13dd-46ad-a0b9-de5d234aad58
-09:23:35  상태: RUNNING
-09:24:19  상태: WAITING_APPROVAL
-09:24:19  승인 요청: business_escalate_incident reservation-api ACTION_BLOCKED rollback_deployment CONTRACT
-09:24:19  → engineer가 승인
-09:24:23  상태: RUNNING
-09:24:35  상태: WAITING_APPROVAL
-09:24:35  승인 요청: business_send_customer_notice
-09:24:35  → admin가 승인
-09:24:39  상태: DONE
-09:24:39  ✅ 작업 완료 (상태 DONE)
-09:24:39  ✅ 진단마다 처리할 원인이 기대와 같다 (기대 RB-STD-01, 실제 RB-STD-01)
-09:24:39  ✅ 원인 후보에 RB-STD-01, RB-STD-05가 있다 (적힌 후보: RB-STD-01, RB-STD-02, RB-STD-04, RB-STD-05)
-09:24:39  ✅ 조치를 기대한 순서로 제안했다 (business_escalate_incident reservation-api ACTION_BLOCKED rollback_deployment CONTRACT)
-09:24:39  ✅ 같은 앱 조치를 두 번 하지 않았다 (앱 조치 없음)
-09:24:39  ✅ 에스컬레이션 ACTION_BLOCKED rollback_deployment CONTRACT 대기열 등록 (있음: ACTION_BLOCKED CONTRACT rollback_deployment)
-09:24:39  ✅ 받는 사람에 B사 운영 승인 담당이 있다 (engineer, admin, B사 운영 승인 담당)
-09:24:39  ✅ 롤백이 계약상 불가라 앱 조치를 실행하지 않았다 (0건)
-09:24:39  ✅ 인시던트가 하나만 열렸다 (#4)
-09:24:40  tenant-b reservation-api 장애 해제 (B사 reservation-api에 DEMO_POOL_SIZE=20 배포)
-09:24:40  ■ 통과 (103초)
+10:17:53  ▶ B사 잘못된 배포 + DB 지연 → 롤백 불가 에스컬레이션 (겹친 장애)
+10:17:53  앞 장애의 인시던트(#17)가 닫히기를 기다린다 (알림 해제 반영)
+10:18:43  tenant-b reservation-api에 DB_SLOW 주입; B사 reservation-api에 DEMO_POOL_SIZE=5 배포
+10:18:43  tenant-b reservation-api 알림 → 인시던트·작업 생성을 기다린다 (알림 규칙 for 15s + 평가 주기)
+10:19:22  인시던트 #18 (P2) · 작업 83b19373 · http://127.0.0.1:18000/tasks/83b19373-5f1e-4982-9eaf-2e1cc5dd1552
+10:19:22  상태: RUNNING
+10:19:54  상태: WAITING_APPROVAL
+10:19:54  승인 요청: business_escalate_incident reservation-api ACTION_BLOCKED rollback_deployment CONTRACT
+10:19:54  → engineer가 승인
+10:19:58  상태: RUNNING
+10:20:10  상태: WAITING_APPROVAL
+10:20:10  승인 요청: business_send_customer_notice
+10:20:10  → admin가 승인
+10:20:14  상태: DONE
+10:20:14  ✅ 작업 완료 (상태 DONE)
+10:20:14  ✅ 진단마다 처리할 원인이 기대와 같다 (기대 RB-STD-01, 실제 RB-STD-01)
+10:20:14  ✅ 원인 후보에 RB-STD-01, RB-STD-05가 있다 (적힌 후보: RB-STD-01, RB-STD-02, RB-STD-03, RB-STD-04, RB-STD-05)
+10:20:14  ✅ 조치를 기대한 순서로 제안했다 (business_escalate_incident reservation-api ACTION_BLOCKED rollback_deployment CONTRACT)
+10:20:14  ✅ 같은 앱 조치를 두 번 하지 않았다 (앱 조치 없음)
+10:20:14  ✅ 에스컬레이션 ACTION_BLOCKED rollback_deployment CONTRACT 대기열 등록 (있음: ACTION_BLOCKED CONTRACT rollback_deployment)
+10:20:14  ✅ 받는 사람에 B사 운영 승인 담당이 있다 (engineer, admin, B사 운영 승인 담당)
+10:20:15  ✅ 롤백이 계약상 불가라 앱 조치를 실행하지 않았다 (0건)
+10:20:15  ✅ 인시던트가 하나만 열렸다 (#18)
+10:20:15  tenant-b reservation-api 장애 해제 (B사 reservation-api에 DEMO_POOL_SIZE=20 배포)
+10:20:15  ■ 통과 (142초)

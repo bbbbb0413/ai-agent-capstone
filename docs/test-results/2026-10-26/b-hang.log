@@ -1,0 +1,27 @@
+10:10:30  ▶ B사 파드 멈춤 → 재시작 (전체 중단 영향 표시)
+10:10:30  tenant-b reservation-api에 WORKER_HANG 주입
+10:10:30  tenant-b reservation-api 알림 → 인시던트·작업 생성을 기다린다 (알림 규칙 for 15s + 평가 주기)
+10:11:07  인시던트 #8 (P1) · 작업 8278bbbb · http://127.0.0.1:18000/tasks/8278bbbb-7a57-4f8d-8f53-35496194a62f
+10:11:07  상태: QUEUED
+10:11:43  상태: WAITING_APPROVAL
+10:11:43  승인 요청: business_escalate_incident P1
+10:11:43  → engineer가 승인
+10:11:47  상태: RUNNING
+10:12:11  상태: WAITING_APPROVAL
+10:12:11  승인 요청: business_execute_runbook_action restart_pods reservation-api
+10:12:11  → engineer가 승인
+10:12:15  상태: RUNNING
+10:13:19  상태: WAITING_APPROVAL
+10:13:19  승인 요청: business_send_customer_notice
+10:13:19  → admin가 승인
+10:13:23  상태: DONE
+10:13:23  ✅ 작업 완료 (상태 DONE)
+10:13:23  ✅ 기대한 조치를 제안했다 (business_execute_runbook_action restart_pods reservation-api)
+10:13:23  ✅ 조치 제안이 한 번이다 (1번. 두 번 이상이면 회복 판단을 의심한다)
+10:13:23  ✅ 기대하지 않은 승인 요청이 없다
+10:13:23  ✅ 승인 카드가 재시작 중 전체 서비스 중단을 알린다 (레플리카 1)
+10:13:23  ✅ 재시작이 Kubernetes API로 실행됐다
+10:13:23  ✅ 회복 확인: RECOVERED
+10:13:23  ✅ 파드가 새로 만들어졌다
+10:13:23  tenant-b reservation-api 장애 해제
+10:13:23  ■ 통과 (173초)

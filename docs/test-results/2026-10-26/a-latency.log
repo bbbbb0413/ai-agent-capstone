@@ -1,0 +1,18 @@
+10:13:13  ▶ A사 외부 결제 지연 → 고객 공지
+10:13:13  tenant-a inventory-api에 PAYMENT_LATENCY 주입
+10:13:13  tenant-a inventory-api 알림 → 인시던트·작업 생성을 기다린다 (알림 규칙 for 15s + 평가 주기)
+10:13:52  인시던트 #12 (P2) · 작업 6e8d7aae · http://127.0.0.1:18000/tasks/6e8d7aae-3651-492f-97f5-4c5a426e29ba
+10:13:52  상태: RUNNING
+10:14:20  상태: WAITING_APPROVAL
+10:14:20  승인 요청: business_send_customer_notice
+10:14:20  → admin가 승인
+10:14:24  상태: RUNNING
+10:14:28  상태: DONE
+10:14:28  ✅ 작업 완료 (상태 DONE)
+10:14:28  ✅ 기대한 조치를 제안했다 (business_send_customer_notice)
+10:14:28  ✅ 조치 제안이 한 번이다 (1번. 두 번 이상이면 회복 판단을 의심한다)
+10:14:28  ✅ 기대하지 않은 승인 요청이 없다
+10:14:28  ✅ 고객 공지가 발송됐다
+10:14:28  ✅ 외부 원인이라 앱 조치를 실행하지 않았다 (0건)
+10:14:29  tenant-a inventory-api 장애 해제
+10:14:29  ■ 통과 (76초)

@@ -1,0 +1,29 @@
+10:10:30  ▶ A사 파드 멈춤 → 순차 재시작
+10:10:31  tenant-a inventory-api에 WORKER_HANG 주입
+10:10:31  tenant-a inventory-api 알림 → 인시던트·작업 생성을 기다린다 (알림 규칙 for 15s + 평가 주기)
+10:11:04  인시던트 #7 (P1) · 작업 72522467 · http://127.0.0.1:18000/tasks/72522467-2915-4276-abbd-753eeffaea6f
+10:11:04  상태: WAITING_APPROVAL
+10:11:04  승인 요청: business_escalate_incident P1
+10:11:04  → engineer가 승인
+10:11:08  상태: RUNNING
+10:11:40  상태: WAITING_APPROVAL
+10:11:40  승인 요청: business_execute_runbook_action restart_pods inventory-api
+10:11:40  → engineer가 승인
+10:11:44  상태: RUNNING
+10:13:08  상태: WAITING_APPROVAL
+10:13:08  승인 요청: business_send_customer_notice
+10:13:08  → admin가 승인
+10:13:12  상태: DONE
+10:13:12  ✅ 작업 완료 (상태 DONE)
+10:13:12  ✅ 기대한 조치를 제안했다 (business_execute_runbook_action restart_pods inventory-api)
+10:13:12  ✅ 조치 제안이 한 번이다 (1번. 두 번 이상이면 회복 판단을 의심한다)
+10:13:12  ✅ 기대하지 않은 승인 요청이 없다
+10:13:12  ✅ 승인 카드가 순차 재시작임을 알린다
+10:13:12  ✅ 승인 카드가 전체 서비스 중단 없음을 알린다
+10:13:12  ✅ 승인 카드에 현재 레플리카가 표시된다
+10:13:12  ✅ 재시작이 Kubernetes API로 실행됐다
+10:13:12  ✅ 실제 조치도 파드를 하나씩 재시작했다
+10:13:12  ✅ 회복 확인: RECOVERED
+10:13:12  ✅ 파드가 새로 만들어졌다
+10:13:13  tenant-a inventory-api 장애 해제
+10:13:13  ■ 통과 (162초)

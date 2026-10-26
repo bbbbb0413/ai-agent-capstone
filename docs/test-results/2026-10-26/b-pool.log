@@ -1,0 +1,26 @@
+10:13:23  ▶ B사 잘못된 배포 → 롤백 계약상 불가 → 에스컬레이션
+10:13:23  B사 reservation-api에 DEMO_POOL_SIZE=5 배포
+10:13:23  tenant-b reservation-api 알림 → 인시던트·작업 생성을 기다린다 (알림 규칙 for 15s + 평가 주기)
+10:14:09  인시던트 #13 (P1) · 작업 e652faba · http://127.0.0.1:18000/tasks/e652faba-3755-4964-8a8b-bfaa85e8aa82
+10:14:09  상태: WAITING_APPROVAL
+10:14:09  승인 요청: business_escalate_incident P1
+10:14:09  → engineer가 승인
+10:14:13  상태: RUNNING
+10:14:49  상태: WAITING_APPROVAL
+10:14:49  승인 요청: business_escalate_incident reservation-api ACTION_BLOCKED rollback_deployment CONTRACT
+10:14:49  → engineer가 승인
+10:14:53  상태: RUNNING
+10:15:01  상태: WAITING_APPROVAL
+10:15:01  승인 요청: business_send_customer_notice
+10:15:01  → admin가 승인
+10:15:05  상태: DONE
+10:15:05  ✅ 작업 완료 (상태 DONE)
+10:15:05  ✅ 기대한 조치를 제안했다 (business_escalate_incident reservation-api ACTION_BLOCKED rollback_deployment CONTRACT)
+10:15:05  ✅ 조치 제안이 한 번이다 (1번. 두 번 이상이면 회복 판단을 의심한다)
+10:15:05  ✅ 기대하지 않은 승인 요청이 없다
+10:15:05  ✅ 에스컬레이션 ACTION_BLOCKED rollback_deployment CONTRACT 대기열 등록 (있음: P1, ACTION_BLOCKED CONTRACT rollback_deployment)
+10:15:05  ✅ 받는 사람에 B사 운영 승인 담당이 있다 (engineer, admin, B사 운영 승인 담당)
+10:15:05  ✅ 고객 공지가 발송됐다
+10:15:05  ✅ 롤백이 계약상 불가라 앱 조치를 실행하지 않았다 (0건)
+10:15:05  tenant-b reservation-api 장애 해제 (B사 reservation-api에 DEMO_POOL_SIZE=20 배포)
+10:15:05  ■ 통과 (102초)

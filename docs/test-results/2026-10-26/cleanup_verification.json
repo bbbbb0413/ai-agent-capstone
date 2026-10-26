@@ -1,0 +1,180 @@
+{
+  "checked_at": "2026-10-26T01:21:11.521939+00:00",
+  "gitops_branches": [
+    "main",
+    "main"
+  ],
+  "temporary_branches": [],
+  "main_sha_at_end": "1e3be406823451c38f49d2e5ab26ed11b9b31967",
+  "argocd": {
+    "target": "main",
+    "sync": "Synced",
+    "health": "Healthy"
+  },
+  "open_incidents": 0,
+  "unfinished_tasks": 0,
+  "slack_deliveries_before": 0,
+  "slack_deliveries_after": 0,
+  "pods": [
+    {
+      "tenant": "tenant-a",
+      "pod": "cart-api-745bd95d5f-c5wmk",
+      "faults": [],
+      "fault": "NONE",
+      "poolSize": 20
+    },
+    {
+      "tenant": "tenant-a",
+      "pod": "cart-api-745bd95d5f-pgm74",
+      "faults": [],
+      "poolSize": 20,
+      "fault": "NONE"
+    },
+    {
+      "tenant": "tenant-a",
+      "pod": "inventory-api-645dbd655-ks4fd",
+      "fault": "NONE",
+      "poolSize": 20,
+      "faults": []
+    },
+    {
+      "tenant": "tenant-a",
+      "pod": "inventory-api-645dbd655-l2v9p",
+      "poolSize": 20,
+      "fault": "NONE",
+      "faults": []
+    },
+    {
+      "tenant": "tenant-a",
+      "pod": "order-api-fb4c4777f-gfbks",
+      "faults": [],
+      "fault": "NONE",
+      "poolSize": 20
+    },
+    {
+      "tenant": "tenant-a",
+      "pod": "order-api-fb4c4777f-tz7dw",
+      "poolSize": 20,
+      "faults": [],
+      "fault": "NONE"
+    },
+    {
+      "tenant": "tenant-b",
+      "pod": "checkin-api-7fc685dd9f-lzv4l",
+      "poolSize": 20,
+      "faults": [],
+      "fault": "NONE"
+    },
+    {
+      "tenant": "tenant-b",
+      "pod": "reservation-api-fc8548f58-vmf5x",
+      "fault": "NONE",
+      "poolSize": 20,
+      "faults": []
+    }
+  ],
+  "deployments": [
+    {
+      "tenant": "tenant-a",
+      "name": "cart-api",
+      "desired": 2,
+      "ready": 2
+    },
+    {
+      "tenant": "tenant-a",
+      "name": "inventory-api",
+      "desired": 2,
+      "ready": 2
+    },
+    {
+      "tenant": "tenant-a",
+      "name": "order-api",
+      "desired": 2,
+      "ready": 2
+    },
+    {
+      "tenant": "tenant-b",
+      "name": "checkin-api",
+      "desired": 1,
+      "ready": 1
+    },
+    {
+      "tenant": "tenant-b",
+      "name": "reservation-api",
+      "desired": 1,
+      "ready": 1
+    }
+  ],
+  "dependency_faults": [
+    {
+      "tenant": "tenant-a",
+      "name": "dependency-faults-cart-api",
+      "data": {
+        "dependency-faults": ""
+      }
+    },
+    {
+      "tenant": "tenant-a",
+      "name": "dependency-faults-inventory-api",
+      "data": {
+        "dependency-faults": ""
+      }
+    },
+    {
+      "tenant": "tenant-a",
+      "name": "dependency-faults-order-api",
+      "data": {
+        "dependency-faults": ""
+      }
+    },
+    {
+      "tenant": "tenant-b",
+      "name": "dependency-faults-checkin-api",
+      "data": {
+        "dependency-faults": ""
+      }
+    },
+    {
+      "tenant": "tenant-b",
+      "name": "dependency-faults-reservation-api",
+      "data": {
+        "dependency-faults": ""
+      }
+    }
+  ],
+  "load_generators": [
+    {
+      "name": "loadgen-tenant-a",
+      "replicas": 0
+    },
+    {
+      "name": "loadgen-tenant-a-cart-api",
+      "replicas": 0
+    },
+    {
+      "name": "loadgen-tenant-b",
+      "replicas": 0
+    },
+    {
+      "name": "loadgen-tenant-b-checkin-api",
+      "replicas": 0
+    }
+  ],
+  "hpa": [
+    {
+      "name": "cart-api",
+      "min": 2,
+      "max": 3,
+      "current": 2,
+      "desired": 2
+    },
+    {
+      "name": "order-api",
+      "min": 2,
+      "max": 3,
+      "current": 2,
+      "desired": 2
+    }
+  ],
+  "passed": true
+}

@@ -1,0 +1,25 @@
+10:15:06  ▶ B사 트래픽 급증 → 확장 계약상 불가 → 에스컬레이션
+10:15:06  앞 장애의 인시던트(#13)가 닫히기를 기다린다 (알림 해제 반영)
+10:15:50  tenant-b reservation-api 부하 발생기 켬 (초당 120건)
+10:15:50  tenant-b reservation-api 알림 → 인시던트·작업 생성을 기다린다 (알림 규칙 for 15s + 평가 주기)
+10:16:23  인시던트 #17 (P2) · 작업 ed116936 · http://127.0.0.1:18000/tasks/ed116936-a717-4ec9-bf21-308587e6460e
+10:16:23  상태: RUNNING
+10:17:21  상태: WAITING_APPROVAL
+10:17:21  승인 요청: business_escalate_incident reservation-api ACTION_BLOCKED scale_deployment CONTRACT
+10:17:21  → engineer가 승인
+10:17:25  상태: RUNNING
+10:17:44  상태: WAITING_APPROVAL
+10:17:44  승인 요청: business_send_customer_notice
+10:17:44  → admin가 승인
+10:17:48  상태: RUNNING
+10:17:52  상태: DONE
+10:17:52  ✅ 작업 완료 (상태 DONE)
+10:17:52  ✅ 기대한 조치를 제안했다 (business_escalate_incident reservation-api ACTION_BLOCKED scale_deployment CONTRACT)
+10:17:52  ✅ 조치 제안이 한 번이다 (1번. 두 번 이상이면 회복 판단을 의심한다)
+10:17:52  ✅ 기대하지 않은 승인 요청이 없다
+10:17:52  ✅ 에스컬레이션 ACTION_BLOCKED scale_deployment CONTRACT 대기열 등록 (있음: ACTION_BLOCKED CONTRACT scale_deployment)
+10:17:52  ✅ 받는 사람에 B사 운영 승인 담당이 있다 (engineer, admin, B사 운영 승인 담당)
+10:17:52  ✅ 고객 공지가 발송됐다
+10:17:52  ✅ 확장이 계약상 불가라 앱 조치를 실행하지 않았다 (0건)
+10:17:53  tenant-b reservation-api 장애 해제
+10:17:53  ■ 통과 (167초)

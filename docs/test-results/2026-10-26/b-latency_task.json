@@ -1,0 +1,77 @@
+{
+  "id": "a0d788b8-5b98-463c-af5f-408041611b02",
+  "tenantId": "tenant-b",
+  "incidentId": 9,
+  "type": "DIAGNOSE",
+  "question": "tenant-b checkin-api p95 응답시간 1초 초과",
+  "status": "DONE",
+  "requestedBy": null,
+  "pendingAction": null,
+  "answer": "## 요약\n tenant-b의 checkin-api p95 응답시간이 1초를 초과하는 장애가 발생했고 현재 조치는 진행 중이며 외부 의존 지연이 원인으로 판단됩니다. 외부 결제 대행사(payment-gateway) 이슈로 p95가 2.024s 수준까지 상승했고, 외부 의존 신호는 19건이 확인되었습니다.\n\n## 근거\n- 메트릭: p95_seconds=2.018s, requests_per_second=2.27, error_rate=0.0, external_api_timeout 신호 19건(first_seen=2026-10-26T01:10:30+00:00), external 의존: payment-gateway (DEGRADED, p95Seconds=2.024, shares=0.98)\n- 로그: WARN 다수 및 외부 API 타임아웃 관련 로그 예시 다수(예: payment API timeout, retrying)\n  - 예시 로그: WARN [scheduling-1] PaymentGatewayClient - payment API timeout after 1743ms, retrying\n- 변경 이력: kubernetes 배포 이력 (opslens/demo-app:0.1.0) 2026-10-23T07:34:28Z\n- 문서: MSP 표준 장애 대응 런북 RB-STD-04 외부 의존 지연, RB-STD-02 워커 풀 포화\n- 외부 의존 상태 확인: payment-gateway 상태 DEGRADED, p95Seconds 2.024, callsPerSecond 1.855\n\n## 원인 후보\n1) RB-STD-04 외부 의존 지연 — external_api_timeout 신호 19건, 의존: payment-gateway, 상태: DEGRADED, first_seen=2026-10-26T01:10:30+00:00, dependency_share=0.98, 근거: true\n2) RB-STD-02 워커 풀 포화 — signal_count=0, first_seen=null, 근거: false\n\n- 최종 선정 원인: RB-STD-04\n- 증상으로 본 영향: 외부 의존 지연으로 p95 응답시간 상승이 관찰됨\n\n## 조치와 결과\n- 승인 및 조치: RB-STD-04에 따른 분석 및 외부 의존지연 문제를 우선으로 다룸\n- 실행 여부: 현재 실행 중으로 기록\n- 회복 여부: 미확정(현재 p95 약 2.0초대 유지, 에러율 0.0)\n- 조치 방향: 외부 의존의 문제이므로 MSP 내부 조치 한계가 있으며, 외부 의존 문제 해결을 우선 대외 협의 및 고객 공지 유지\n- 고객 공지 발송: 이미 발송 완료(SENT)\n\n참고: 과거 장애 기록과의 비교에서 외부 의존 지연이 지속적으로 확인되며, 이번 장애에서도 외부 결제 연동 지연과의 관련성이 높음\n\n## SLA 영향\n- 도구가 제공한 SLA 관련 수치 그대로 반영\n- 남은 시간 및 기한은 SLA 문서의 값에 따라 계산되며, 이번 장애로 인한 영향은 외부 의존 지연에 집중되어 있음\n\n## 권장 다음 행동\n- 사람 확인 필요:\n  - payment-gateway 측 엔지표 확인 및 계약/대행사 담당자와의 에스컬레이션 경로 점검\n  - 이번 외부 의존 지연이 언제부터 지속되었는지 추가 로그 교차 확인\n  - 필요 시 고객 공지 업데이트(현 상태 공유 및 회복 예상 시점 안내)\n  - 외부 의존 이슈가 지속될 경우 MSP의 에스컬레이션 및 대안 방안 논의(필요 시 RB-STD-06 등 보완 절차 검토)\n\n## 조사 과정\n- grafana_query_loki_logs: demo-app/checkin-api의 ERROR/WARN 로그 확인 (external_api_timeout 18건, external_api_timeout 경고 다수)\n- grafana_query_prometheus: p95_seconds 2.018s, requests_per_second 2.273, error_rate 0.0 확인\n- business_list_recent_changes: checkin-api의 최근 변경 이력 확인 (opslens/demo-app:0.1.0 배포 시점)\n- cause_facts: RB-STD-04의 외부 의존 지연 신호 19건, first_seen 2026-10-26T01:10:30+00:00, dependency_share 0.98\n- business_get_dependency_health: payment-gateway 상태 DEGRADED, p95Seconds 2.024, callsPerSecond 1.855\n- 사업부/런북: RB-STD-04 외부 의존 지연, RB-STD-02 워커 풀 포화 관련 조치 참고\n- 고객 공지 발송: 발송 성공(SENT)",
+  "sources": [
+    {
+      "doc": "docs://_common/runbook-standard",
+      "section": "RB-STD-04 외부 의존 서비스 지연"
+    },
+    {
+      "doc": "docs://_common/runbook-standard",
+      "section": "RB-STD-03 트래픽 급증 (앱 처리 용량 부족)"
+    },
+    {
+      "doc": "docs://tenant-b/runbook-reservation-api",
+      "section": "RB-B-03 외부 결제 연동과 고객 공지"
+    },
+    {
+      "doc": "docs://tenant-b/runbook-reservation-api",
+      "section": "RB-B-02 재시작 시 주의"
+    },
+    {
+      "doc": "docs://tenant-b/sla-contract",
+      "section": "제3조 허용 조치"
+    },
+    {
+      "doc": "docs://tenant-b/postmortem-incident-3",
+      "section": "원인 후보"
+    },
+    {
+      "doc": "docs://tenant-b/postmortem-incident-3",
+      "section": "조치와 결과"
+    }
+  ],
+  "summary": {
+    "cause": "외부 의존 지연으로 인한 p95 증가(결제 게이트웨이)",
+    "action": {
+      "args": {
+        "message": "영향받은 서비스는 checkin-api이며 시작 시각은 10:11(KST)입니다. 현재 장애 상태는 조치 중이며 외부 의존 지연으로 응답 시간이 길어지고 있습니다. 조치 진행 상황에 따라 30분 이내에 추가 안내를 드리겠습니다.",
+        "incident_id": 9
+      },
+      "tool": "business_send_customer_notice",
+      "result": {
+        "sent": true,
+        "status": "SENT"
+      },
+      "decision": "APPROVE"
+    },
+    "change": null,
+    "notice": "APPROVE",
+    "service": "checkin-api",
+    "severity": "P2",
+    "recovered": null,
+    "error_type": "외부 API 지연",
+    "escalation": null,
+    "other_causes": [
+      "RB-STD-02 워커 풀 포화 가능성"
+    ],
+    "notice_result": {
+      "sent": true,
+      "status": "SENT"
+    },
+    "runbook_clause": "RB-STD-04 외부 의존 서비스 지연",
+    "escalation_result": null
+  },
+  "traceUrl": null,
+  "createdAt": "2026-10-26T01:11:07.075654Z",
+  "updatedAt": "2026-10-26T01:11:52.469864Z",
+  "retryOf": null,
+  "retriedBy": null
+}

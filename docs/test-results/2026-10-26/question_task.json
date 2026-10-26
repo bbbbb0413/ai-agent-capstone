@@ -1,0 +1,39 @@
+{
+  "id": "0b0175d0-c27f-478d-a756-8213d85f5c29",
+  "tenantId": "tenant-a",
+  "incidentId": null,
+  "type": "QUESTION",
+  "question": "A사 SLA 계약서에서 P1 장애 응답 기한은 몇 분이야?",
+  "status": "DONE",
+  "requestedBy": 2,
+  "pendingAction": null,
+  "answer": "## 답변\nP1 장애의 인지 후 1차 대응과 고객 공지는 15분 이내입니다.\n\n## 근거\n- [문서] A사 운영 대행 SLA 계약서 | tenant-a | 제2조 응답 기한",
+  "sources": [
+    {
+      "doc": "docs://_common/runbook-standard",
+      "section": "RB-STD-06 계약·구조상 할 수 없는 조치가 필요할 때"
+    },
+    {
+      "doc": "docs://_common/runbook-standard",
+      "section": "RB-STD-03 트래픽 급증 (앱 처리 용량 부족)"
+    },
+    {
+      "doc": "docs://tenant-a/sla-contract",
+      "section": "제2조 응답 기한"
+    },
+    {
+      "doc": "docs://tenant-a/sla-contract",
+      "section": "제4조 SLA 크레딧"
+    },
+    {
+      "doc": "docs://tenant-a/sla-contract",
+      "section": "제3조 허용 조치"
+    }
+  ],
+  "summary": null,
+  "traceUrl": null,
+  "createdAt": "2026-10-26T01:10:11.641012Z",
+  "updatedAt": "2026-10-26T01:10:14.937788Z",
+  "retryOf": null,
+  "retriedBy": null
+}

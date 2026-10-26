@@ -1,0 +1,746 @@
+[
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {},
+      "node": "load_context",
+      "tool": "business_get_tenant_profile",
+      "callId": "c9208986c3684efab0e621c6eb894694"
+    },
+    "createdAt": "2026-10-26T01:11:07.167882Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "load_context",
+      "tool": "business_get_tenant_profile",
+      "callId": "c9208986c3684efab0e621c6eb894694",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:07.217635Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {},
+      "node": "load_context",
+      "tool": "business_get_service_inventory",
+      "callId": "895bcaf226ee46b6bcef04baede950c5"
+    },
+    "createdAt": "2026-10-26T01:11:07.233138Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "load_context",
+      "tool": "business_get_service_inventory",
+      "callId": "895bcaf226ee46b6bcef04baede950c5",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:07.398249Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "incident_id": 9
+      },
+      "node": "load_context",
+      "tool": "business_get_sla_terms",
+      "callId": "2b19ffd8cb62461093c5829119bf5e89"
+    },
+    "createdAt": "2026-10-26T01:11:07.400229Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "load_context",
+      "tool": "business_get_sla_terms",
+      "callId": "2b19ffd8cb62461093c5829119bf5e89",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:07.430982Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "status": "OPEN"
+      },
+      "node": "load_context",
+      "tool": "business_list_incidents",
+      "callId": "81f9582944f74a0ba2605c6a8efa6ef9"
+    },
+    "createdAt": "2026-10-26T01:11:07.433674Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "load_context",
+      "tool": "business_list_incidents",
+      "callId": "81f9582944f74a0ba2605c6a8efa6ef9",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:07.457426Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "status": "RESOLVED"
+      },
+      "node": "load_context",
+      "tool": "business_list_incidents",
+      "callId": "86c0c3a46b0b43df803019b39699939e"
+    },
+    "createdAt": "2026-10-26T01:11:07.458946Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "load_context",
+      "tool": "business_list_incidents",
+      "callId": "86c0c3a46b0b43df803019b39699939e",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:07.490675Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "limit": 200,
+        "logql": "{app=\"demo-app\", service=\"checkin-api\", level=~\"ERROR|WARN\"}",
+        "direction": "backward",
+        "endRfc3339": "2026-10-26T01:11:07+00:00",
+        "startRfc3339": "2026-10-26T01:09:07+00:00",
+        "datasourceUid": "loki-tenant-b"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "e5a8f46673114ca285f1f42a0a183644"
+    },
+    "createdAt": "2026-10-26T01:11:07.494063Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "e5a8f46673114ca285f1f42a0a183644",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:07.530324Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "expr": "(sum(rate(demo_orders_seconds_count{service=\"checkin-api\", outcome=\"error\"}[1m])) or vector(0)) / sum(rate(demo_orders_seconds_count{service=\"checkin-api\"}[1m]))",
+        "endTime": "now",
+        "queryType": "instant",
+        "datasourceUid": "prom-tenant-b"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "c7a470cdfb124ef98b364a2f6eac289d"
+    },
+    "createdAt": "2026-10-26T01:11:07.532112Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "c7a470cdfb124ef98b364a2f6eac289d",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:07.557203Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "expr": "histogram_quantile(0.95, sum by (le) (rate(demo_orders_seconds_bucket{service=\"checkin-api\"}[1m])))",
+        "endTime": "now",
+        "queryType": "instant",
+        "datasourceUid": "prom-tenant-b"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "91a724a943104aee83f7d1b9884725f2"
+    },
+    "createdAt": "2026-10-26T01:11:07.558554Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "91a724a943104aee83f7d1b9884725f2",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:07.583349Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "expr": "sum(rate(demo_orders_seconds_count{service=\"checkin-api\"}[1m]))",
+        "endTime": "now",
+        "queryType": "instant",
+        "datasourceUid": "prom-tenant-b"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "932b3f234f5e4d72ac74445d134141ed"
+    },
+    "createdAt": "2026-10-26T01:11:07.585121Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_prometheus",
+      "callId": "932b3f234f5e4d72ac74445d134141ed",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:07.60487Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "service": "checkin-api"
+      },
+      "node": "diagnose",
+      "tool": "business_list_recent_changes",
+      "callId": "9912ae7d266e403cba6e618f3b4961c5"
+    },
+    "createdAt": "2026-10-26T01:11:07.606422Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "business_list_recent_changes",
+      "callId": "9912ae7d266e403cba6e618f3b4961c5",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:07.643579Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "query": "checkin-api tenant-b checkin-api p95 응답시간 1초 초과 로그 신호: {\"connection_pool_exhausted\": 0, \"worker_pool_saturated\": 0, \"request_queue_backlog\": 0, \"external_api_timeout\": 18, \"slow_query\": 0}",
+        "scope": "tenant",
+        "top_k": 2,
+        "doc_type": "postmortem",
+        "exclude_doc_id": "postmortem-incident-9"
+      },
+      "node": "retrieve_history",
+      "tool": "rag_search_documents",
+      "callId": "17ddbdac40da4b709cc0deecdf4a2ed1"
+    },
+    "createdAt": "2026-10-26T01:11:07.645466Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "retrieve_history",
+      "tool": "rag_search_documents",
+      "callId": "17ddbdac40da4b709cc0deecdf4a2ed1",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:07.824173Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"checkin-api\", level=~\"ERROR|WARN\"} |= \"Connection is not available\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T01:11:07+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T01:09:07+00:00",
+        "datasourceUid": "loki-tenant-b"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "8e26f0d829c44e1ca213c2ccd5d65c9a"
+    },
+    "createdAt": "2026-10-26T01:11:07.827539Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "8e26f0d829c44e1ca213c2ccd5d65c9a",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:07.884801Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"checkin-api\", level=~\"ERROR|WARN\"} |= \"503 worker pool saturated\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T01:11:07+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T01:09:07+00:00",
+        "datasourceUid": "loki-tenant-b"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "8aa7b4951f3a4b27961529e82fe7316a"
+    },
+    "createdAt": "2026-10-26T01:11:07.904742Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "8aa7b4951f3a4b27961529e82fe7316a",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:07.953152Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"checkin-api\", level=~\"ERROR|WARN\"} |= \"request queue backlog\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T01:11:07+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T01:09:07+00:00",
+        "datasourceUid": "loki-tenant-b"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "cf0ac9509d2d48c8902bea4f4bd33f7b"
+    },
+    "createdAt": "2026-10-26T01:11:07.957248Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "cf0ac9509d2d48c8902bea4f4bd33f7b",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:07.988642Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"checkin-api\", level=~\"ERROR|WARN\"} |= \"payment API timeout\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T01:11:07+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T01:09:07+00:00",
+        "datasourceUid": "loki-tenant-b"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "3c08d79d13e5475fafe65efcfb9f15d0"
+    },
+    "createdAt": "2026-10-26T01:11:07.991144Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "3c08d79d13e5475fafe65efcfb9f15d0",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:08.020704Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "logql": "sum(count_over_time({app=\"demo-app\", service=\"checkin-api\", level=~\"ERROR|WARN\"} |= \"slow query\" [5s]))",
+        "queryType": "range",
+        "endRfc3339": "2026-10-26T01:11:07+00:00",
+        "stepSeconds": 5,
+        "startRfc3339": "2026-10-26T01:09:07+00:00",
+        "datasourceUid": "loki-tenant-b"
+      },
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "88522bf47bfa43d385d04a383a983bfc"
+    },
+    "createdAt": "2026-10-26T01:11:08.022307Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "grafana_query_loki_logs",
+      "callId": "88522bf47bfa43d385d04a383a983bfc",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:08.051036Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "dependency": "payment-gateway"
+      },
+      "node": "diagnose",
+      "tool": "business_get_dependency_health",
+      "callId": "bfaa69c1059e41e587a938882280561b"
+    },
+    "createdAt": "2026-10-26T01:11:08.052633Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "business_get_dependency_health",
+      "callId": "bfaa69c1059e41e587a938882280561b",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:08.079176Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "dependency": "payment-gateway"
+      },
+      "node": "diagnose",
+      "tool": "business_get_dependency_health",
+      "callId": "call_55aow9BK9IR0QAf3IvvrrmIZ"
+    },
+    "createdAt": "2026-10-26T01:11:10.328815Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "diagnose",
+      "tool": "business_get_dependency_health",
+      "callId": "call_55aow9BK9IR0QAf3IvvrrmIZ",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:10.429657Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "query": "이상 시작: 2026-10-26T01:11:07.072353Z\n근거: p95_seconds=2.018s, error_rate=0.0, requests_per_second=2.27, external_api_timeout 신호 19건(first_seen=2026-10-26T01:10:30+00:00), 의존 대상: payment-gateway(DEGRADED, p95Seconds=2.024, shares=0.98)\n직전 변경: 2026-10-23T07:34:28Z, kubernetes 배포 이력, 이미지 opslens/demo-app:0.1.0\n\n원인 후보:\n1) RB-STD-04 외부 의존 지연 — external_api_timeout 신호 19건, 의존: payment-gateway, 상태: DEGRADED, first_seen=2026-10-26T01:10:30+00:00, dependency_share=0.98, 근거: true\n2) RB-STD-02 워커 풀 포화 — signal_count=0, first_seen=null, 근거: false\n\n처리할 원인: RB-STD-04\n\n병목: 외부",
+        "scope": "common",
+        "top_k": 2,
+        "doc_type": "runbook"
+      },
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "0b203099ae4249119f9a17c94b4f3d0d"
+    },
+    "createdAt": "2026-10-26T01:11:16.01724Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "0b203099ae4249119f9a17c94b4f3d0d",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:16.256587Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "query": "이상 시작: 2026-10-26T01:11:07.072353Z\n근거: p95_seconds=2.018s, error_rate=0.0, requests_per_second=2.27, external_api_timeout 신호 19건(first_seen=2026-10-26T01:10:30+00:00), 의존 대상: payment-gateway(DEGRADED, p95Seconds=2.024, shares=0.98)\n직전 변경: 2026-10-23T07:34:28Z, kubernetes 배포 이력, 이미지 opslens/demo-app:0.1.0\n\n원인 후보:\n1) RB-STD-04 외부 의존 지연 — external_api_timeout 신호 19건, 의존: payment-gateway, 상태: DEGRADED, first_seen=2026-10-26T01:10:30+00:00, dependency_share=0.98, 근거: true\n2) RB-STD-02 워커 풀 포화 — signal_count=0, first_seen=null, 근거: false\n\n처리할 원인: RB-STD-04\n\n병목: 외부",
+        "scope": "tenant",
+        "top_k": 2,
+        "doc_type": "runbook"
+      },
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "1b1ffa46361f4ec88a20cf250e4789b0"
+    },
+    "createdAt": "2026-10-26T01:11:16.261724Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "1b1ffa46361f4ec88a20cf250e4789b0",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:16.448656Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "query": "MSP가 사전 동의 없이 수행할 수 있는 허용 조치와 고객사 승인이 필요한 조치",
+        "scope": "tenant",
+        "top_k": 1,
+        "doc_type": "sla"
+      },
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "b3c8e20368d446189742a19235a3aa80"
+    },
+    "createdAt": "2026-10-26T01:11:16.45265Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "b3c8e20368d446189742a19235a3aa80",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:16.629401Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {},
+      "node": "propose_action",
+      "tool": "business_get_service_inventory",
+      "callId": "543a121d8cb3495b8d5d1778678d370b"
+    },
+    "createdAt": "2026-10-26T01:11:16.636663Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "propose_action",
+      "tool": "business_get_service_inventory",
+      "callId": "543a121d8cb3495b8d5d1778678d370b",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:16.711328Z"
+  },
+  {
+    "type": "STEP",
+    "data": {
+      "node": "propose_action",
+      "facts": [
+        {
+          "clause": "RB-STD-01",
+          "signal": "connection_pool_exhausted",
+          "evidence": false,
+          "dependency": null,
+          "first_seen": null,
+          "signal_count": 0,
+          "dependency_share": null,
+          "dependency_status": null
+        },
+        {
+          "clause": "RB-STD-02",
+          "signal": "worker_pool_saturated",
+          "evidence": false,
+          "dependency": null,
+          "first_seen": null,
+          "signal_count": 0,
+          "dependency_share": null,
+          "dependency_status": null
+        },
+        {
+          "clause": "RB-STD-03",
+          "signal": "request_queue_backlog",
+          "evidence": false,
+          "dependency": null,
+          "first_seen": null,
+          "signal_count": 0,
+          "dependency_share": null,
+          "dependency_status": null
+        },
+        {
+          "clause": "RB-STD-04",
+          "signal": "external_api_timeout",
+          "evidence": true,
+          "dependency": "payment-gateway",
+          "first_seen": "2026-10-26T01:10:30+00:00",
+          "signal_count": 19,
+          "dependency_share": 0.98,
+          "dependency_status": "DEGRADED"
+        },
+        {
+          "clause": "RB-STD-05",
+          "signal": "slow_query",
+          "evidence": false,
+          "dependency": null,
+          "first_seen": null,
+          "signal_count": 0,
+          "dependency_share": null,
+          "dependency_status": null
+        }
+      ],
+      "causes": [
+        "RB-STD-04",
+        "RB-STD-02"
+      ],
+      "target": "RB-STD-04"
+    },
+    "createdAt": "2026-10-26T01:11:16.713417Z"
+  },
+  {
+    "type": "APPROVAL_REQUIRED",
+    "data": {
+      "args": {
+        "message": "영향받은 서비스는 checkin-api이며 시작 시각은 10:11(KST)입니다. 현재 장애 상태는 조치 중이며 외부 의존 지연으로 응답 시간이 길어지고 있습니다. 조치 진행 상황에 따라 30분 이내에 추가 안내를 드리겠습니다.",
+        "incident_id": 9
+      },
+      "tool": "business_send_customer_notice",
+      "reason": "",
+      "runbook": [
+        {
+          "uri": "docs://_common/runbook-standard",
+          "scope": "common",
+          "score": 0.536,
+          "title": "MSP 표준 장애 대응 런북",
+          "doc_id": "runbook-standard",
+          "content": "[문서] MSP 표준 장애 대응 런북 | MSP 공통 | 런북 | 절 MSP 표준 장애 대응 런북 > RB-STD-04 외부 의존 서비스 지연\n\n## RB-STD-04 외부 의존 서비스 지연\n\n- 증상: p95 응답시간 상승, 로그에 `payment API timeout` 같은 외부 호출 경고 반복\n- 구분: 지연이 외부 호출에 몰려 있고, 앱 처리 대기 경고와 DB 지연 로그는 없다\n- 구조 검토: 의존 대상의 소유를 본다. 서드파티면 MSP가 고칠 수 없다. 고객사 소유 서비스면 그 담당 팀에 에스컬레이션한다\n- 조치: 재시작·확장·롤백을 하지 않는다. 원인이 앱 밖에 있어서 효과가 없다. 고객 공지를 보낸다",
+          "section": "RB-STD-04 외부 의존 서비스 지연",
+          "version": "81501068c9b4",
+          "doc_type": "runbook",
+          "section_path": "MSP 표준 장애 대응 런북 > RB-STD-04 외부 의존 서비스 지연",
+          "source_format": "md",
+          "document_version": 5
+        },
+        {
+          "uri": "docs://_common/runbook-standard",
+          "scope": "common",
+          "score": 0.483,
+          "title": "MSP 표준 장애 대응 런북",
+          "doc_id": "runbook-standard",
+          "content": "[문서] MSP 표준 장애 대응 런북 | MSP 공통 | 런북 | 절 MSP 표준 장애 대응 런북 > RB-STD-03 트래픽 급증 (앱 처리 용량 부족)\n\n## RB-STD-03 트래픽 급증 (앱 처리 용량 부족)\n\n- 증상: 에러율은 정상인데 p95 응답시간 상승, 로그에 `request queue backlog` 경고 반복\n- 구분: 5xx 에러가 늘지 않는다(늘면 RB-STD-02). 외부 API timeout 로그와 DB `slow query` 로그가 없다. 지연이 앱의 처리 대기에서 생긴다\n- 구조 검토: 서비스 목록의 `autoscaling`(HPA)을 먼저 본다. 안전 상한(`safe_max_replicas`)은 DB 최대 연결 수와 계약 상한으로 정해지며, 넘으면 확장 때문에 DB 장애가 날 수 있다\n  - HPA가 있고 최대치에 닿지 않았다(`atMax` false): HPA가 늘리는 중이다. 레플리카를 직접 바꾸지 않고 조치하지 않는다\n  - HPA가 최대치에 닿았고 최대치가 안전 상한보다 작다(`canRaiseMax` true): HPA 최대치를 안전 상한까지 올린다\n  - HPA가 최대치에 닿았고 최대치가 이미 안전 상한이다: 더 늘릴 수 없다. RB-STD-06을 따른다\n  - HPA가 없다: 목표 레플리카는 현재의 2배이고, 안전 상한을 넘으면 상한까지만 늘린다. 이미 상한이면 RB-STD-06\n- 재시작(`restart_pods`)은 처리 용량을 늘리지 않으므로 급증에 효과가 없다. 확장할 수 없으면 재시작으로 대신하지 않고 RB-STD-06을 따른다\n- 조치: HPA가 있으면 `adjust_autoscaler`(`max_replicas`=안전 상한). HPA가 없으면 `scale_deployment`(`replicas`=목표 레플리카). HPA가 관리하는 서비스의 레플리카는 직접 바꾸지 않는다(HPA가 곧 덮어쓴다)",
+          "section": "RB-STD-03 트래픽 급증 (앱 처리 용량 부족)",
+          "version": "81501068c9b4",
+          "doc_type": "runbook",
+          "section_path": "MSP 표준 장애 대응 런북 > RB-STD-03 트래픽 급증 (앱 처리 용량 부족)",
+          "source_format": "md",
+          "document_version": 5
+        },
+        {
+          "uri": "docs://tenant-b/runbook-reservation-api",
+          "scope": "tenant",
+          "score": 0.438,
+          "title": "B사 reservation-api 서비스 런북",
+          "doc_id": "runbook-reservation-api",
+          "content": "[문서] B사 reservation-api 서비스 런북 | tenant-b | 런북 | 절 B사 reservation-api 서비스 런북 > RB-B-03 외부 결제 연동과 고객 공지\n\n## RB-B-03 외부 결제 연동과 고객 공지\n\n- 결제는 서드파티 결제 대행사(payment-gateway)를 쓴다. 결제 대행사 문의는 B사가 진행한다\n- Silver 등급이므로 장애 인지 후 1시간 안에 첫 공지를 보낸다\n- 외부 업체 원인이면 업체 이름은 밝히지 않고 \"외부 결제 연동 지연\"으로 적는다",
+          "section": "RB-B-03 외부 결제 연동과 고객 공지",
+          "version": "a747700199ef",
+          "doc_type": "runbook",
+          "section_path": "B사 reservation-api 서비스 런북 > RB-B-03 외부 결제 연동과 고객 공지",
+          "source_format": "md",
+          "document_version": 1
+        }
+      ],
+      "evidence": [
+        {
+          "args": {
+            "limit": 200,
+            "logql": "{app=\"demo-app\", service=\"checkin-api\", level=~\"ERROR|WARN\"}",
+            "direction": "backward",
+            "endRfc3339": "2026-10-26T01:11:07+00:00",
+            "startRfc3339": "2026-10-26T01:09:07+00:00"
+          },
+          "tool": "grafana_query_loki_logs",
+          "status": "success",
+          "signals": {
+            "slow_query": 0,
+            "external_api_timeout": 18,
+            "request_queue_backlog": 0,
+            "worker_pool_saturated": 0,
+            "connection_pool_exhausted": 0
+          },
+          "summary": "[{\"count\": 18, \"level\": \"WARN\", \"example\": \"WARN  [scheduling-1] PaymentGatewayClient - payment API timeout after 1743ms, retrying (gateway=pg.example.com)\"}]"
+        },
+        {
+          "args": {
+            "error_rate": "(sum(rate(demo_orders_seconds_count{service=\"checkin-api\", outcome=\"error\"}[1m])) or vector(0)) / sum(rate(demo_orders_seconds_count{service=\"checkin-api\"}[1m]))",
+            "p95_seconds": "histogram_quantile(0.95, sum by (le) (rate(demo_orders_seconds_bucket{service=\"checkin-api\"}[1m])))",
+            "requests_per_second": "sum(rate(demo_orders_seconds_count{service=\"checkin-api\"}[1m]))"
+          },
+          "tool": "grafana_query_prometheus",
+          "summary": "{\"error_rate\": 0.0, \"p95_seconds\": 2.018236946083333, \"requests_per_second\": 2.272685951164524}"
+        },
+        {
+          "args": {
+            "service": "checkin-api"
+          },
+          "tool": "business_list_recent_changes",
+          "summary": "{\"service\": \"checkin-api\", \"changeMode\": \"DIRECT\", \"source\": \"kubernetes 배포 이력\", \"revisions\": [{\"revision\": 1, \"image\": \"opslens/demo-app:0.1.0\", \"env\": {\"DEMO_DEPENDENCY_FAULTS_FILE\": \"/etc/demo-faults/dependency-faults\", \"LOKI_URL\": \"http://loki:3100/loki/api/v1/push\", \"SERVICE_NAME\": \"checkin-api\", \"TENANT_ID\": \"tenant-b\"}, \"createdAt\": \"2026-10-23T07:34:22Z\", \"deployedAt\": \"2026-10-23T07:34:28Z\"}]}"
+        },
+        {
+          "tool": "cause_facts",
+          "summary": "[{\"clause\": \"RB-STD-01\", \"signal\": \"connection_pool_exhausted\", \"signal_count\": 0, \"first_seen\": null, \"dependency\": null, \"dependency_status\": null, \"dependency_share\": null, \"evidence\": false}, {\"clause\": \"RB-STD-02\", \"signal\": \"worker_pool_saturated\", \"signal_count\": 0, \"first_seen\": null, \"dependency\": null, \"dependency_status\": null, \"dependency_share\": null, \"evidence\": false}, {\"clause\": \"RB-STD-03\", \"signal\": \"request_queue_backlog\", \"signal_count\": 0, \"first_seen\": null, \"dependency\": n"
+        },
+        {
+          "args": {
+            "dependency": "payment-gateway"
+          },
+          "tool": "business_get_dependency_health",
+          "status": "success",
+          "summary": "<tool_output>\n{\"dependency\":\"payment-gateway\",\"service\":\"checkin-api\",\"kind\":\"external_api\",\"owner\":\"third_party\",\"ownerContact\":\"B사 결제 담당(대행사 문의)\",\"status\":\"DEGRADED\",\"p95Seconds\":2.024,\"callsPerSecond\":1.855,\"window\":\"최근 1분\",\"thresholds\":{\"degradedSeconds\":0.3,\"downSeconds\":3.0}}\n</tool_output>"
+        }
+      ],
+      "approvalId": "7c305818-e0f8-5fc5-b209-412ceccecc06"
+    },
+    "createdAt": "2026-10-26T01:11:41.80552Z"
+  },
+  {
+    "type": "APPROVAL_DECIDED",
+    "data": {
+      "by": "admin",
+      "tool": "business_send_customer_notice",
+      "decision": "APPROVE"
+    },
+    "createdAt": "2026-10-26T01:11:42.20893Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "message": "영향받은 서비스는 checkin-api이며 시작 시각은 10:11(KST)입니다. 현재 장애 상태는 조치 중이며 외부 의존 지연으로 응답 시간이 길어지고 있습니다. 조치 진행 상황에 따라 30분 이내에 추가 안내를 드리겠습니다.",
+        "incident_id": 9
+      },
+      "node": "propose_action",
+      "tool": "business_send_customer_notice",
+      "callId": "2ddf98eed1f949afa6a768dcd261364b"
+    },
+    "createdAt": "2026-10-26T01:11:42.274377Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "propose_action",
+      "tool": "business_send_customer_notice",
+      "callId": "2ddf98eed1f949afa6a768dcd261364b",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:11:42.30932Z"
+  },
+  {
+    "type": "STEP",
+    "data": {
+      "node": "report"
+    },
+    "createdAt": "2026-10-26T01:11:42.314107Z"
+  },
+  {
+    "type": "DONE",
+    "data": {},
+    "createdAt": "2026-10-26T01:11:52.469864Z"
+  }
+]

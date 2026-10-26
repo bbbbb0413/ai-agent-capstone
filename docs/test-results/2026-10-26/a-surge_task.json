@@ -1,0 +1,98 @@
+{
+  "id": "4abf9ab1-27df-401b-bfe4-ce393c88164a",
+  "tenantId": "tenant-a",
+  "incidentId": 6,
+  "type": "DIAGNOSE",
+  "question": "tenant-a order-api p95 응답시간 1초 초과",
+  "status": "DONE",
+  "requestedBy": null,
+  "pendingAction": null,
+  "answer": "## 요약\ntenant-a의 order-api p95 응답시간 초과 장애가 발생했으나, 백로그 신호를 바탕으로 RB-STD-03에 따라 앱 측 autoscaler를 조정한 결과 정상화되었습니다. 현재 지표는 회복 상태이며, 백로그 초기 신호는 해소되었습니다.\n\n## 근거\n- 메트릭: p95Seconds 2.13s → 조치 직후 0.17s로 회복(기준 1.0s)\n- 로그: request_queue_backlog 67건(첫 관측 2026-10-26T01:10:30Z) 및 WARN 로그 예시 다수\n- 변경 이력: 직전 변경 시점에 order-api 관련 의존 장애 구성 반영(GitOps 저장소 변경)\n- 문서: MSP 표준 장애 대응 런북 RB-STD-03, RB-STD-01, RB-STD-05 참고\n- 인시던트: order-api(Open) 상태, 백로그 지속 신호 포함\n\n## 원인 후보\n1) RB-STD-03 트래픽 급증 — 67건의 request_queue_backlog 신호(first_seen 2026-10-26T01:10:30) · 증상: 백로그로 인한 순차 처리 지연\n2) RB-STD-01 풀 고갈 — connection_pool_exhausted 신호 없음\n3) RB-STD-02 작업 스레드 고갈 — worker_pool_saturated 신호 없음\n4) RB-STD-04 외부 의존 지연 — external_api_timeout 신호 없음\n5) RB-STD-05 DB 지연 — slow_query 신호 없음(Postgres HEALTHY, dependency_share 0.0)\n- 최종 판단: RB-STD-03이 현재 장애의 주된 원인 후보로 판단\n\n## 조치와 결과\n- 승인자: 엔지니어 승인 완료(APPROVE, ID: 471252ea-f968-585f-a8ac-e7d088ee879c)\n- 실행 내용: autoscaler 조정(주요 서비스 order-api) 및 PR 생성 후 GitOps 반영\n- 실행 방식: 자동 확장 조정 via PR 반영(GITOPS); PR #94 병합 및 ArgoCD 동기화 완료\n- 회복 확인 수치: 에러율 0.00, p95Seconds 0.17초로 확인\n- 요약: RB-STD-03에 따른 조치로 백로그 축적이 해소되며 정상화 확인\n\n## SLA 영향\n- 도구가 준 응답 기한 및 남은 시간 값을 그대로 인용: 남은 시간 및 기한은 도구 출력에 따른 값 사용\n\n## 권장 다음 행동\n- 현재 조치로 회복되었으나, 트래픽 급증 가능성 지속 시 모니터링 강화 및 필요 시 자동 스케일링 파라미터 재점검 권고\n- 향후 재발 방지를 위해 유사 상황 시 조치 루프를 자동화하는 추가 시나리오 검토\n\n## 조사 과정\n- grafana_query_loki_logs: order-api의 WARN 로그 및 backlog 신호 확인 (첫 백로그 67건, 예시 로그: “request queue backlog: 166 requests waiting for a processing slot (4/4 slots busy), queue wait 2314ms”)\n- grafana_query_prometheus: p95Seconds 2.13s, 요청 수/초 87.8\n- business_list_recent_changes: GitOps 변경 내역 확인\n- cause_facts: RB-STD-03 신호 확정, 다른 신호는 음성/비감지\n- 실행 기록: 자동 스케일링 조정 PR 생성 및 병합 동기화",
+  "sources": [
+    {
+      "doc": "docs://_common/runbook-standard",
+      "section": "RB-STD-03 트래픽 급증 (앱 처리 용량 부족)"
+    },
+    {
+      "doc": "docs://_common/runbook-standard",
+      "section": "RB-STD-02 작업 스레드 고갈 (파드 멈춤)"
+    },
+    {
+      "doc": "docs://tenant-a/runbook-order-api",
+      "section": "RB-A-03 고객 공지 기준"
+    },
+    {
+      "doc": "docs://tenant-a/runbook-order-api",
+      "section": "RB-A-02 DB 관련 연락과 주의"
+    },
+    {
+      "doc": "docs://tenant-a/sla-contract",
+      "section": "제3조 허용 조치"
+    },
+    {
+      "doc": "docs://tenant-a/postmortem-incident-5",
+      "section": "요약"
+    },
+    {
+      "doc": "docs://tenant-a/postmortem-incident-5",
+      "section": "근거"
+    }
+  ],
+  "summary": {
+    "cause": "트래픽 증가로 백로그(backlog) 발생으로 p95 응답시간이 증가",
+    "action": {
+      "args": {
+        "action": "adjust_autoscaler",
+        "reason": "RB-STD-03에 따른 조치로, HPA가 atMax이고 canRaiseMax가 true이며 안전 상한(safeMaxReplicas=4)까지 최대치를 올려 트래픽 증가에 대응합니다.",
+        "service": "order-api",
+        "incident_id": 6,
+        "max_replicas": 4
+      },
+      "tool": "business_execute_runbook_action",
+      "result": {
+        "next": "PR이 병합되고 ArgoCD 동기화가 끝나야 반영된다",
+        "files": [
+          "gitops/tenants/tenant-a/hpa.yaml"
+        ],
+        "prUrl": "https://github.com/bbbbb0413/ai-agent-capstone/pull/94",
+        "action": "adjust_autoscaler",
+        "status": "PR_CREATED",
+        "runtime": "kubernetes",
+        "service": "order-api",
+        "prNumber": 94,
+        "autoscaler": "order-api",
+        "changeMode": "GITOPS",
+        "maxReplicas": 4,
+        "previousMaxReplicas": 3
+      },
+      "decision": "APPROVE"
+    },
+    "change": {
+      "prUrl": "https://github.com/bbbbb0413/ai-agent-capstone/pull/94",
+      "result": "SYNCED",
+      "prNumber": 94
+    },
+    "notice": "APPROVE",
+    "service": "order-api",
+    "severity": "P2",
+    "recovered": true,
+    "error_type": "트래픽 급증",
+    "escalation": null,
+    "other_causes": [
+      "RB-STD-01 연결 풀 고갈 신호 없음",
+      "RB-STD-02 작업 스레드 고갈 신호 없음",
+      "RB-STD-04 외부 의존 지연 신호 없음",
+      "RB-STD-05 DB 지연 신호 없음(Postgres HEALTHY)"
+    ],
+    "notice_result": {
+      "status": "SENT"
+    },
+    "runbook_clause": "RB-STD-03 트래픽 급증 (앱 처리 용량 부족)",
+    "escalation_result": null
+  },
+  "traceUrl": null,
+  "createdAt": "2026-10-26T01:11:02.136069Z",
+  "updatedAt": "2026-10-26T01:13:08.823359Z",
+  "retryOf": null,
+  "retriedBy": null
+}

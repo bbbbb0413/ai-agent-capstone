@@ -1,0 +1,149 @@
+[
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {},
+      "node": "load_context",
+      "tool": "business_get_tenant_profile",
+      "callId": "2418d0b450394a9795828d799a84b5a6"
+    },
+    "createdAt": "2026-10-26T01:10:11.716421Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "load_context",
+      "tool": "business_get_tenant_profile",
+      "callId": "2418d0b450394a9795828d799a84b5a6",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:10:11.742307Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {},
+      "node": "load_context",
+      "tool": "business_get_service_inventory",
+      "callId": "5505da365c3e4403af9efa32e4e81f32"
+    },
+    "createdAt": "2026-10-26T01:10:11.74645Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "load_context",
+      "tool": "business_get_service_inventory",
+      "callId": "5505da365c3e4403af9efa32e4e81f32",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:10:11.83109Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "status": "OPEN"
+      },
+      "node": "load_context",
+      "tool": "business_list_incidents",
+      "callId": "a6a86d4b2aa34c199ccf33d8c47ad4cd"
+    },
+    "createdAt": "2026-10-26T01:10:11.832665Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "load_context",
+      "tool": "business_list_incidents",
+      "callId": "a6a86d4b2aa34c199ccf33d8c47ad4cd",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:10:11.853253Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "query": "A사 SLA 계약서에서 P1 장애 응답 기한은 몇 분이야?",
+        "scope": "common",
+        "top_k": 2
+      },
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "9da55e5b59e344afb89a501b3d8afd94"
+    },
+    "createdAt": "2026-10-26T01:10:11.855551Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "9da55e5b59e344afb89a501b3d8afd94",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:10:12.033555Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "query": "A사 SLA 계약서에서 P1 장애 응답 기한은 몇 분이야?",
+        "scope": "tenant",
+        "top_k": 2
+      },
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "00c86bbf82f9475dba55d72a27f63c01"
+    },
+    "createdAt": "2026-10-26T01:10:12.035345Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "00c86bbf82f9475dba55d72a27f63c01",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:10:12.19642Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "query": "MSP가 사전 동의 없이 수행할 수 있는 허용 조치와 고객사 승인이 필요한 조치",
+        "scope": "tenant",
+        "top_k": 1,
+        "doc_type": "sla"
+      },
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "f850ea74c3ee431896d17c8a95450ecf"
+    },
+    "createdAt": "2026-10-26T01:10:12.197813Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "retrieve_runbook",
+      "tool": "rag_search_documents",
+      "callId": "f850ea74c3ee431896d17c8a95450ecf",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:10:12.375538Z"
+  },
+  {
+    "type": "STEP",
+    "data": {
+      "node": "report"
+    },
+    "createdAt": "2026-10-26T01:10:12.383325Z"
+  },
+  {
+    "type": "DONE",
+    "data": {},
+    "createdAt": "2026-10-26T01:10:14.937788Z"
+  }
+]

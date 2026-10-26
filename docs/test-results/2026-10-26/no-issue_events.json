@@ -1,0 +1,69 @@
+[
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {},
+      "node": "load_context",
+      "tool": "business_get_tenant_profile",
+      "callId": "ed00409287664aff8cd0f569eab38b7c"
+    },
+    "createdAt": "2026-10-26T01:10:15.87157Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "load_context",
+      "tool": "business_get_tenant_profile",
+      "callId": "ed00409287664aff8cd0f569eab38b7c",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:10:15.890831Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {},
+      "node": "load_context",
+      "tool": "business_get_service_inventory",
+      "callId": "b6f4c02012754980bf7e3637f556f7a0"
+    },
+    "createdAt": "2026-10-26T01:10:15.892086Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "load_context",
+      "tool": "business_get_service_inventory",
+      "callId": "b6f4c02012754980bf7e3637f556f7a0",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:10:15.948185Z"
+  },
+  {
+    "type": "TOOL_START",
+    "data": {
+      "args": {
+        "status": "OPEN"
+      },
+      "node": "load_context",
+      "tool": "business_list_incidents",
+      "callId": "61b0466b2a4345429bcd4b932807ad5b"
+    },
+    "createdAt": "2026-10-26T01:10:15.949907Z"
+  },
+  {
+    "type": "TOOL_END",
+    "data": {
+      "node": "load_context",
+      "tool": "business_list_incidents",
+      "callId": "61b0466b2a4345429bcd4b932807ad5b",
+      "status": "success"
+    },
+    "createdAt": "2026-10-26T01:10:15.96871Z"
+  },
+  {
+    "type": "DONE",
+    "data": {},
+    "createdAt": "2026-10-26T01:10:15.9738Z"
+  }
+]

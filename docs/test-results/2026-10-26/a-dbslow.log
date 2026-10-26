@@ -1,0 +1,25 @@
+10:14:29  ▶ A사 DB 자체 지연 → DBA 에스컬레이션
+10:14:29  앞 장애의 인시던트(#12)가 닫히기를 기다린다 (알림 해제 반영)
+10:14:54  tenant-a inventory-api에 DB_SLOW 주입
+10:14:54  tenant-a inventory-api 알림 → 인시던트·작업 생성을 기다린다 (알림 규칙 for 15s + 평가 주기)
+10:15:33  인시던트 #16 (P2) · 작업 ed3ac873 · http://127.0.0.1:18000/tasks/ed3ac873-aded-49fe-8f66-888e9ba7fa59
+10:15:33  상태: QUEUED
+10:15:49  상태: RUNNING
+10:16:05  상태: WAITING_APPROVAL
+10:16:05  승인 요청: business_escalate_incident inventory-api DEPENDENCY postgres
+10:16:05  → engineer가 승인
+10:16:09  상태: RUNNING
+10:16:17  상태: WAITING_APPROVAL
+10:16:17  승인 요청: business_send_customer_notice
+10:16:17  → admin가 승인
+10:16:21  상태: DONE
+10:16:21  ✅ 작업 완료 (상태 DONE)
+10:16:21  ✅ 기대한 조치를 제안했다 (business_escalate_incident inventory-api DEPENDENCY postgres)
+10:16:21  ✅ 조치 제안이 한 번이다 (1번. 두 번 이상이면 회복 판단을 의심한다)
+10:16:21  ✅ 기대하지 않은 승인 요청이 없다
+10:16:21  ✅ 에스컬레이션 DEPENDENCY postgres 대기열 등록 (있음: DEPENDENCY postgres)
+10:16:21  ✅ 받는 사람에 A사 DBA팀이 있다 (engineer, admin, A사 DBA팀)
+10:16:21  ✅ 고객 공지가 발송됐다
+10:16:22  ✅ DB 자체 지연이라 앱 조치를 실행하지 않았다 (0건)
+10:16:24  tenant-a inventory-api 장애 해제
+10:16:24  ■ 통과 (115초)
