@@ -1,0 +1,141 @@
+
+> opslens-front@0.1.0 test
+> node --test tests/*.test.js
+
+✔ attachment-only form submits actual selected file and emits task ID (46.639125ms)
+✔ changing tenant clears selected evidence to prevent accidental cross-tenant upload (10.572709ms)
+✔ upload failure preserves selected files for correction and displays the error (7.65125ms)
+✔ file selection validates type, count, per-file and total size (2.412125ms)
+✔ attachment API uses multipart without a JSON header or file data in the URL (35.029709ms)
+✔ 변경 요청은 XSRF-TOKEN 쿠키 값을 헤더로 보낸다 (1.959542ms)
+✔ 조회 요청과 토큰 쿠키가 없을 때는 헤더를 붙이지 않는다 (0.122708ms)
+✔ 공통 문서는 관리자만, 고객사 문서는 관리자와 담당 엔지니어만 바꾼다 (0.894125ms)
+✔ 범위는 공통이 먼저이고, 공통 문서의 종류는 표준 런북뿐이다 (1.067834ms)
+✔ 최신 버전이 실패하면 검색이 어느 버전으로 계속되는지 알린다 (0.335541ms)
+✔ 대기 중인 버전이 있을 때만 다시 읽는다 (0.229208ms)
+✔ 파일 이름에서 문서 ID 후보를 만든다 (0.369667ms)
+✔ impact screen shows observations and service-node selection opens metric details (68.420375ms)
+✔ a slow response from a previous tenant cannot overwrite the newly selected tenant (4.791916ms)
+✔ failed refresh removes previous observations and displays the failure (5.116125ms)
+✔ MCP error is shown as a failed action with the reason (30.895792ms)
+✔ an interrupted tool is not marked completed when the task fails (0.177ms)
+✔ call IDs associate overlapping uses of the same tool (2.277916ms)
+✔ older successful events without call IDs are still readable (0.165625ms)
+✔ Jev fault verdict is a finished row, not the report step (0.205958ms)
+✔ cause candidates chosen by the diagnosis are a finished row (0.112833ms)
+✔ an alert attached to the open incident is shown without a new task (0.112709ms)
+✔ approval is not used as a substitute for execution outcome (9.747125ms)
+✔ reported symptom registration approval explains that it does not execute a recovery action (4.75575ms)
+✔ GitOps pod restart is described as direct API execution, not a PR (0.276834ms)
+✔ approval shows rolling restart impact from the service inventory (0.228042ms)
+✔ scale approval shows current, target, and calculated safe maximum (0.147584ms)
+✔ blocked-action escalation distinguishes a call record from reviewed Slack delivery (7.16225ms)
+✔ raising the autoscaler max shows the range change and the safe cap (0.203708ms)
+✔ web tracking moves through confirmation, assignment and completion and displays history (24.090875ms)
+✔ another engineer cannot see completion button for someone else’s assignment (2.131709ms)
+✔ rejected concurrent assignment keeps current state and displays server conflict (2.967208ms)
+✔ sent and unconfirmed delivery cannot be sent again from the review UI (0.673042ms)
+✔ approved does not mean delivered (0.217583ms)
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <App task= {
+  id: 'aaaaaaaa-1111',
+  status: 'FAILED',
+  retryOf: null,
+  retriedBy: null
+} isAdmin=true >
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <App task= {
+  id: 'aaaaaaaa-1111',
+  status: 'FAILED',
+  retryOf: null,
+  retriedBy: null
+} isAdmin=false >
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <App task= { id: 'aaaaaaaa-1111', status: 'DONE', retryOf: null, retriedBy: null } isAdmin=true >
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <App task= {
+  id: 'aaaaaaaa-1111',
+  status: 'FAILED',
+  retryOf: null,
+  retriedBy: 'bbbbbbbb-2222'
+} isAdmin=true >
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <App task= {
+  id: 'aaaaaaaa-1111',
+  status: 'FAILED',
+  retryOf: null,
+  retriedBy: null
+} isAdmin=true >
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <App task= {
+  id: 'aaaaaaaa-1111',
+  status: 'FAILED',
+  retryOf: null,
+  retriedBy: null
+} isAdmin=true >
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <App task= {
+  id: 'aaaaaaaa-1111',
+  status: 'FAILED',
+  retryOf: null,
+  retriedBy: null
+} isAdmin=true >
+✔ 관리자에게 실패한 작업의 다시 실행 버튼만 보인다 (28.543334ms)
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <App task= {
+  id: 'aaaaaaaa-1111',
+  status: 'FAILED',
+  retryOf: null,
+  retriedBy: null
+} isAdmin=true >
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <App task= {
+  id: 'aaaaaaaa-1111',
+  status: 'FAILED',
+  retryOf: null,
+  retriedBy: null
+} isAdmin=true >
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <App task= {
+  id: 'aaaaaaaa-1111',
+  status: 'FAILED',
+  retryOf: null,
+  retriedBy: null
+} isAdmin=true >
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <App task= {
+  id: 'aaaaaaaa-1111',
+  status: 'FAILED',
+  retryOf: null,
+  retriedBy: null
+} isAdmin=true >
+✔ 확인하면 다시 실행하고 새 작업 화면으로 간다 (9.045583ms)
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <App task= {
+  id: 'aaaaaaaa-1111',
+  status: 'RUNNING',
+  retryOf: 'dddddddd-4444',
+  retriedBy: null
+} isAdmin=true >
+✔ 취소하면 아무것도 하지 않고, 실패하면 이유를 보인다 (5.6385ms)
+✔ 원래 작업과 다시 실행한 작업을 서로 잇는다 (3.020333ms)
+ℹ tests 38
+ℹ suites 0
+ℹ pass 38
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 411.507417

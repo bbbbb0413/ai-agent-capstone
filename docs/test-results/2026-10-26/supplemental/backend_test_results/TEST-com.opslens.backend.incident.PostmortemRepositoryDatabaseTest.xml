@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.opslens.backend.incident.PostmortemRepositoryDatabaseTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-25T23:42:36.386Z" hostname="LOCAL_HOST" time="0.162">
+  <properties/>
+  <testcase name="onlyResolvedCompletedReportsForRequestedTenantAreExported()" classname="com.opslens.backend.incident.PostmortemRepositoryDatabaseTest" time="0.021"/>
+  <testcase name="paginationAndLateReportArrivalDoNotLoseOlderIncidents()" classname="com.opslens.backend.incident.PostmortemRepositoryDatabaseTest" time="0.118"/>
+  <testcase name="manualResolutionClosesOpenIncidentForItsTenantOnly()" classname="com.opslens.backend.incident.PostmortemRepositoryDatabaseTest" time="0.022"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

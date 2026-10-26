@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.opslens.backend.tenant.InternalTenantControllerTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-10-25T23:42:38.760Z" hostname="LOCAL_HOST" time="0.244">
+  <properties/>
+  <testcase name="ownTenantTokenReadsData()" classname="com.opslens.backend.tenant.InternalTenantControllerTest" time="0.003"/>
+  <testcase name="missingOrForgedTaskTokenIsUnauthorized()" classname="com.opslens.backend.tenant.InternalTenantControllerTest" time="0.058"/>
+  <testcase name="postmortemsAreOnlyForTheIndexer()" classname="com.opslens.backend.tenant.InternalTenantControllerTest" time="0.001"/>
+  <testcase name="taskTokenOfAnotherTenantIsBlockedAndAudited()" classname="com.opslens.backend.tenant.InternalTenantControllerTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

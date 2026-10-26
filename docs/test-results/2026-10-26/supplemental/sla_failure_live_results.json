@@ -1,0 +1,60 @@
+{
+  "uploadStatus": 201,
+  "beforeActiveVersion": 4,
+  "failedVersion": {
+    "id": "e9852215-f393-4874-b45f-1cf13f8d9088",
+    "documentId": "ce4b1e09-f844-4f79-bf85-a39fc0aec0fd",
+    "version": 5,
+    "originalFilename": "blank-sla.pdf",
+    "format": "pdf",
+    "objectKey": "tenant-b/sla-contract/v5/original.pdf",
+    "sha256": "9fabb3adab309f07f8d70e7653656c6ca5969afbf133c796afa5540cdc19ec3c",
+    "sizeBytes": 549,
+    "restoredFrom": null,
+    "uploadedBy": "engineer",
+    "uploadedAt": "2026-10-25T23:43:42.205711Z",
+    "indexStatus": "FAILED",
+    "indexStage": "PARSE",
+    "indexError": "텍스트가 없는 PDF다 (스캔 문서는 지원하지 않는다)",
+    "retryable": false,
+    "attempts": 1,
+    "chunkCount": null,
+    "clauses": null,
+    "hasExtracted": false,
+    "indexedAt": null,
+    "activeVersion": 4
+  },
+  "search": [
+    {
+      "uri": "docs://tenant-b/sla-contract",
+      "section_path": "B사 운영 대행 SLA 계약서 > 제2조 응답 기한",
+      "document_version": 4,
+      "content": "[문서] B사 운영 대행 SLA 계약서 | tenant-b | SLA 계약서 | 절 B사 운영 대행 SLA 계약서 > 제2조 응답 기한\n\n## 제2조 응답 기한\n\n- P1 장애: 인지 후 1시간 안에 1차 대응과 고객 공지\n- P2 장애: 인지 후 4시간 안에 1차 대응"
+    },
+    {
+      "uri": "docs://tenant-b/sla-contract",
+      "section_path": "B사 운영 대행 SLA 계약서 > 제1조 서비스 등급",
+      "document_version": 4,
+      "content": "[문서] B사 운영 대행 SLA 계약서 | tenant-b | SLA 계약서 | 절 B사 운영 대행 SLA 계약서 > 제1조 서비스 등급\n\n## 제1조 서비스 등급\n\n- 등급: Silver\n- 월 가용성 목표: 99.5%"
+    },
+    {
+      "uri": "docs://tenant-b/sla-contract",
+      "section_path": "B사 운영 대행 SLA 계약서 > 제4조 SLA 크레딧",
+      "document_version": 4,
+      "content": "[문서] B사 운영 대행 SLA 계약서 | tenant-b | SLA 계약서 | 절 B사 운영 대행 SLA 계약서 > 제4조 SLA 크레딧\n\n## 제4조 SLA 크레딧\n\n- 다운타임 60분 초과: 월 요금의 5%\n- 다운타임 240분 초과: 월 요금의 10%"
+    },
+    {
+      "uri": "docs://tenant-b/sla-contract",
+      "section_path": "B사 운영 대행 SLA 계약서 > 제3조 허용 조치",
+      "document_version": 4,
+      "content": "[문서] B사 운영 대행 SLA 계약서 | tenant-b | SLA 계약서 | 절 B사 운영 대행 SLA 계약서 > 제3조 허용 조치\n\n## 제3조 허용 조치\n\n- MSP는 파드 재시작과 고객 공지를 고객사 사전 동의 없이 수행할 수 있다\n- 레플리카 확장, 배포 롤백, 설정 변경은 고객사 승인이 필요하며 MSP가 직접 수행하지 않는다\n- 위 조치가 필요하면 MSP는 B사 담당자에게 에스컬레이션해 승인을 요청하고, 고객 영향이 있으면 공지를 함께 보낸다"
+    },
+    {
+      "uri": "docs://tenant-b/sla-contract",
+      "section_path": "B사 운영 대행 SLA 계약서",
+      "document_version": 4,
+      "content": "[문서] B사 운영 대행 SLA 계약서 | tenant-b | SLA 계약서 | 절 B사 운영 대행 SLA 계약서\n\n# B사 운영 대행 SLA 계약서\n\n가상 데모 문서다. 실제 계약서가 아니다."
+    }
+  ],
+  "passed": true
+}

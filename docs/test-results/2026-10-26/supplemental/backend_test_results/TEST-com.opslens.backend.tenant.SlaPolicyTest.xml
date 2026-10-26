@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.opslens.backend.tenant.SlaPolicyTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-10-25T23:42:39.024Z" hostname="LOCAL_HOST" time="0.016">
+  <properties/>
+  <testcase name="[1] tier=GOLD, severity=P1, minutes=15" classname="com.opslens.backend.tenant.SlaPolicyTest" time="0.014"/>
+  <testcase name="[2] tier=GOLD, severity=P2, minutes=60" classname="com.opslens.backend.tenant.SlaPolicyTest" time="0.001"/>
+  <testcase name="[3] tier=SILVER, severity=P1, minutes=60" classname="com.opslens.backend.tenant.SlaPolicyTest" time="0.001"/>
+  <testcase name="[4] tier=SILVER, severity=P2, minutes=240" classname="com.opslens.backend.tenant.SlaPolicyTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

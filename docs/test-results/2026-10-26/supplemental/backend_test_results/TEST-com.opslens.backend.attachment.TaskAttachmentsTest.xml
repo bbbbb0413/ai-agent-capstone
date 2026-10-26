@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.opslens.backend.attachment.TaskAttachmentsTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-10-25T23:42:34.747Z" hostname="LOCAL_HOST" time="0.453">
+  <properties/>
+  <testcase name="detectsImageBytesInsteadOfTrustingBrowserMime()" classname="com.opslens.backend.attachment.TaskAttachmentsTest" time="0.052"/>
+  <testcase name="authorizedReadReturnsMetadataAndDownloadIsNotExecutable()" classname="com.opslens.backend.attachment.TaskAttachmentsTest" time="0.061"/>
+  <testcase name="readsUtf8AndUsesSafeBasename()" classname="com.opslens.backend.attachment.TaskAttachmentsTest" time="0.004"/>
+  <testcase name="tenantAndStaffGuardsApplyBeforeReadingOrCreatingFiles()" classname="com.opslens.backend.attachment.TaskAttachmentsTest" time="0.003"/>
+  <testcase name="multipartControllerBindsFilesAndUsesDedicatedAnalysisType()" classname="com.opslens.backend.attachment.TaskAttachmentsTest" time="0.327"/>
+  <testcase name="rejectsBinaryEmptyInvalidUtf8AndUnsupportedFiles()" classname="com.opslens.backend.attachment.TaskAttachmentsTest" time="0.002"/>
+  <testcase name="rejectsSizeAndCountBeforeSaving()" classname="com.opslens.backend.attachment.TaskAttachmentsTest" time="0.001"/>
+  <system-out><![CDATA[08:42:34.963 [Test worker] INFO org.hibernate.validator.internal.util.Version -- HV000001: Hibernate Validator 8.0.3.Final
+08:42:35.120 [Test worker] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+08:42:35.120 [Test worker] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+08:42:35.124 [Test worker] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 2 ms
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

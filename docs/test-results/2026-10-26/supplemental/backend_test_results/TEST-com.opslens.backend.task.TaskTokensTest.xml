@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.opslens.backend.task.TaskTokensTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-25T23:42:38.393Z" hostname="LOCAL_HOST" time="0.307">
+  <properties/>
+  <testcase name="onlyQueuedOrRunningTasksGetAToken()" classname="com.opslens.backend.task.TaskTokensTest" time="0.088"/>
+  <testcase name="expiredTokenIsRejected()" classname="com.opslens.backend.task.TaskTokensTest" time="0.045"/>
+  <testcase name="jwksPublishesOnlyThePublicKey()" classname="com.opslens.backend.task.TaskTokensTest" time="0.173"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

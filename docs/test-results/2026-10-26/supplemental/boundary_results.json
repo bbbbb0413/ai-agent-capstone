@@ -1,0 +1,106 @@
+[
+  {
+    "name": "TC05_normal",
+    "expected": true,
+    "actual": true,
+    "passed": true
+  },
+  {
+    "name": "TC05_null",
+    "expected": false,
+    "actual": true,
+    "passed": false
+  },
+  {
+    "name": "TC05_missing",
+    "expected": false,
+    "actual": true,
+    "passed": false
+  },
+  {
+    "name": "TC05_negative",
+    "expected": false,
+    "actual": true,
+    "passed": false
+  },
+  {
+    "name": "TC05_string",
+    "expected": false,
+    "actual": "TypeError",
+    "passed": false
+  },
+  {
+    "name": "TC05_at_error_boundary",
+    "expected": false,
+    "actual": false,
+    "passed": true
+  },
+  {
+    "name": "TC05_at_latency_boundary",
+    "expected": false,
+    "actual": false,
+    "passed": true
+  },
+  {
+    "name": "TC08_0.49",
+    "expected": "RB-STD-03",
+    "actual": "RB-STD-03",
+    "passed": true
+  },
+  {
+    "name": "TC08_0.5",
+    "expected": "RB-STD-05",
+    "actual": "RB-STD-05",
+    "passed": true
+  },
+  {
+    "name": "TC08_0.51",
+    "expected": "RB-STD-05",
+    "actual": "RB-STD-05",
+    "passed": true
+  },
+  {
+    "name": "parser_markdown_target",
+    "expected": "RB-STD-03",
+    "actual": null,
+    "passed": false
+  },
+  {
+    "name": "proposal_invalid_turns_0",
+    "expected": null,
+    "actual": {
+      "tool": "business_execute_runbook_action",
+      "args": {
+        "action": "restart_pods",
+        "service": "order-api",
+        "reason": "RB-STD-02"
+      },
+      "reason": "synthetic invalid proposal"
+    },
+    "passed": false
+  },
+  {
+    "name": "proposal_call_counts_0",
+    "model_calls": 3,
+    "guard_calls": 2
+  },
+  {
+    "name": "proposal_invalid_turns_7",
+    "expected": null,
+    "actual": {
+      "tool": "business_execute_runbook_action",
+      "args": {
+        "action": "restart_pods",
+        "service": "order-api",
+        "reason": "RB-STD-02"
+      },
+      "reason": "synthetic invalid proposal"
+    },
+    "passed": false
+  },
+  {
+    "name": "proposal_call_counts_7",
+    "model_calls": 1,
+    "guard_calls": 1
+  }
+]

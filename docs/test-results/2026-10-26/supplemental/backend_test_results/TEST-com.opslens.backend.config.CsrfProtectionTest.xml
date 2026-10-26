@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.opslens.backend.config.CsrfProtectionTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-10-25T23:42:36.019Z" hostname="LOCAL_HOST" time="0.041">
+  <properties/>
+  <testcase name="cookieAuthenticatedChangeWithoutTokenIsForbidden()" classname="com.opslens.backend.config.CsrfProtectionTest" time="0.022"/>
+  <testcase name="tokenFromTheCookieRoundTripsInTheHeader()" classname="com.opslens.backend.config.CsrfProtectionTest" time="0.014"/>
+  <testcase name="bearerHeaderRequestNeedsNoToken()" classname="com.opslens.backend.config.CsrfProtectionTest" time="0.002"/>
+  <testcase name="loginNeedsNoToken()" classname="com.opslens.backend.config.CsrfProtectionTest" time="0.001"/>
+  <system-out><![CDATA[08:42:35.371 [Test worker] INFO org.springframework.test.context.support.AnnotationConfigContextLoaderUtils -- Could not detect default configuration classes for test class [com.opslens.backend.config.CsrfProtectionTest]: CsrfProtectionTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+08:42:35.427 [Test worker] INFO org.springframework.boot.test.context.SpringBootTestContextBootstrapper -- Found @SpringBootConfiguration com.opslens.backend.BackendApplication for test class com.opslens.backend.config.CsrfProtectionTest
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::               (v3.5.16)
+
+2026-10-26T08:42:35.619+09:00  INFO 4026 --- [opslens-backend] [    Test worker] c.o.backend.config.CsrfProtectionTest    : Starting CsrfProtectionTest using Java 21.0.12.1 with PID 4026 (started by sangwookim in /LOCAL_HOME/Downloads/ai-agent-capstone-main/server/spring/backend)
+2026-10-26T08:42:35.619+09:00  INFO 4026 --- [opslens-backend] [    Test worker] c.o.backend.config.CsrfProtectionTest    : No active profile set, falling back to 1 default profile: "default"
+2026-10-26T08:42:36.010+09:00  INFO 4026 --- [opslens-backend] [    Test worker] o.s.b.t.m.w.SpringBootMockServletContext : Initializing Spring TestDispatcherServlet ''
+2026-10-26T08:42:36.010+09:00  INFO 4026 --- [opslens-backend] [    Test worker] o.s.t.web.servlet.TestDispatcherServlet  : Initializing Servlet ''
+2026-10-26T08:42:36.011+09:00  INFO 4026 --- [opslens-backend] [    Test worker] o.s.t.web.servlet.TestDispatcherServlet  : Completed initialization in 0 ms
+2026-10-26T08:42:36.017+09:00  INFO 4026 --- [opslens-backend] [    Test worker] c.o.backend.config.CsrfProtectionTest    : Started CsrfProtectionTest in 0.568 seconds (process running for 2.866)
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

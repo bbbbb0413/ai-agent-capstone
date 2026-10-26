@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.opslens.backend.change.GitOpsSyncAuditTest" tests="2" skipped="0" failures="2" errors="0" timestamp="2026-10-25T23:42:03.654Z" hostname="LOCAL_HOST" time="0.547">
+  <properties/>
+  <testcase name="degradedHealthMustNotResume()" classname="com.opslens.backend.change.GitOpsSyncAuditTest" time="0.544">
+    <failure message="org.opentest4j.AssertionFailedError: Unsafe GitOps event must not resume task ==&gt; expected: &lt;[]&gt; but was: &lt;[86c70aea-b0be-430c-93a7-d2c6c529f272]&gt;" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: Unsafe GitOps event must not resume task ==&gt; expected: &lt;[]&gt; but was: &lt;[86c70aea-b0be-430c-93a7-d2c6c529f272]&gt;
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at app//org.junit.jupiter.api.AssertEquals.failNotEqual(AssertEquals.java:197)
+	at app//org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:182)
+	at app//org.junit.jupiter.api.Assertions.assertEquals(Assertions.java:1156)
+	at app//com.opslens.backend.change.GitOpsSyncAuditTest.check(GitOpsSyncAuditTest.java:22)
+	at app//com.opslens.backend.change.GitOpsSyncAuditTest.degradedHealthMustNotResume(GitOpsSyncAuditTest.java:25)
+	at java.base@21.0.12.1/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base@21.0.12.1/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base@21.0.12.1/java.util.ArrayList.forEach(ArrayList.java:1596)
+</failure>
+  </testcase>
+  <testcase name="unrelatedRevisionMustNotResume()" classname="com.opslens.backend.change.GitOpsSyncAuditTest" time="0.002">
+    <failure message="org.opentest4j.AssertionFailedError: Unsafe GitOps event must not resume task ==&gt; expected: &lt;[]&gt; but was: &lt;[15c98a14-ae1f-4d91-8a76-4880c8da8b39]&gt;" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: Unsafe GitOps event must not resume task ==&gt; expected: &lt;[]&gt; but was: &lt;[15c98a14-ae1f-4d91-8a76-4880c8da8b39]&gt;
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at app//org.junit.jupiter.api.AssertEquals.failNotEqual(AssertEquals.java:197)
+	at app//org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:182)
+	at app//org.junit.jupiter.api.Assertions.assertEquals(Assertions.java:1156)
+	at app//com.opslens.backend.change.GitOpsSyncAuditTest.check(GitOpsSyncAuditTest.java:22)
+	at app//com.opslens.backend.change.GitOpsSyncAuditTest.unrelatedRevisionMustNotResume(GitOpsSyncAuditTest.java:24)
+	at java.base@21.0.12.1/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base@21.0.12.1/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base@21.0.12.1/java.util.ArrayList.forEach(ArrayList.java:1596)
+</failure>
+  </testcase>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[Mockito is currently self-attaching to enable the inline-mock-maker. This will no longer work in future releases of the JDK. Please add Mockito as an agent to your build as described in Mockito's documentation: https://javadoc.io/doc/org.mockito/mockito-core/latest/org.mockito/org/mockito/Mockito.html#0.3
+WARNING: A Java agent has been loaded dynamically (/LOCAL_HOME/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.17.8/f09415827a71be7ed621c7bd02550678f28bc81c/byte-buddy-agent-1.17.8.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

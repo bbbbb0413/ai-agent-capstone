@@ -1,0 +1,21 @@
+test_history_does_not_appear_in_runbook_search (test_postmortem_database.PostmortemSearchTests.test_history_does_not_appear_in_runbook_search) ... ok
+test_indexed_report_is_searchable_with_self_and_tenant_exclusion (test_postmortem_database.PostmortemSearchTests.test_indexed_report_is_searchable_with_self_and_tenant_exclusion) ... ok
+test_backend_errors_become_resource_errors (test_read_document.ReadDocumentTests.test_backend_errors_become_resource_errors) ... ok
+test_other_tenant_is_refused_before_calling_the_backend (test_read_document.ReadDocumentTests.test_other_tenant_is_refused_before_calling_the_backend) ... ok
+test_postmortems_are_read_from_chunks_not_the_store (test_read_document.ReadDocumentTests.test_postmortems_are_read_from_chunks_not_the_store) ... /opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/lib/python3.14/tempfile.py:484: ResourceWarning: Implicitly cleaning up <HTTPError 404: 'x'>
+  _warnings.warn(self.warn_message, ResourceWarning)
+/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/lib/python3.14/tempfile.py:484: ResourceWarning: Implicitly cleaning up <HTTPError 403: 'x'>
+  _warnings.warn(self.warn_message, ResourceWarning)
+/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/lib/python3.14/tempfile.py:484: ResourceWarning: Implicitly cleaning up <HTTPError 500: 'x'>
+  _warnings.warn(self.warn_message, ResourceWarning)
+ok
+test_stored_document_comes_from_the_backend_with_both_tokens (test_read_document.ReadDocumentTests.test_stored_document_comes_from_the_backend_with_both_tokens) ... ok
+test_invalid_tokens_are_rejected (test_task_token.TaskTokenTests.test_invalid_tokens_are_rejected) ... /LOCAL_HOME/Downloads/ai-agent-capstone-main/server/python/rag-mcp/.venv/lib/python3.14/site-packages/jwt/api_jwt.py:149: InsecureKeyLengthWarning: The HMAC key is 6 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  return self._jws.encode(
+ok
+test_tenant_comes_from_a_valid_token (test_task_token.TaskTokenTests.test_tenant_comes_from_a_valid_token) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.112s
+
+OK

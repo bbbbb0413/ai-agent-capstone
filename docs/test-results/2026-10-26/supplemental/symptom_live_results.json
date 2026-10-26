@@ -1,0 +1,29 @@
+[
+  {
+    "input": "order-api가 가끔 느린 것 같아",
+    "taskId": "914a3d26-a322-4a41-9bf3-e4739d977bf6",
+    "status": "WAITING_APPROVAL",
+    "tool": "business_create_incident",
+    "passed": true,
+    "rejectStatus": 202,
+    "rejectionPersisted": true
+  },
+  {
+    "input": "order-api 응답이 느림",
+    "taskId": "8a18128b-19f5-4f2e-a09e-5ec846f2cb22",
+    "status": "WAITING_APPROVAL",
+    "tool": "business_create_incident",
+    "passed": true,
+    "rejectStatus": 202,
+    "rejectionPersisted": true
+  },
+  {
+    "input": "order-api가 좀 느리다",
+    "taskId": "b132fbe3-bdd8-4e78-916c-2ba6117e611b",
+    "status": "WAITING_APPROVAL",
+    "tool": "business_create_incident",
+    "passed": true,
+    "rejectStatus": 202,
+    "rejectionPersisted": true
+  }
+]

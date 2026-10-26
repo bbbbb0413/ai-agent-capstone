@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.opslens.backend.escalation.EscalationServiceTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-25T23:42:36.157Z" hostname="LOCAL_HOST" time="0.005">
+  <properties/>
+  <testcase name="blockedActionNeedsTheActionAndTheReason()" classname="com.opslens.backend.escalation.EscalationServiceTest" time="0.001"/>
+  <testcase name="blockedActionGoesToOncallAndCustomer()" classname="com.opslens.backend.escalation.EscalationServiceTest" time="0.001"/>
+  <testcase name="dependencyOwnerIsAddedFromCatalog()" classname="com.opslens.backend.escalation.EscalationServiceTest" time="0.001"/>
+  <testcase name="thirdPartyDependencyIsANoticeNotAnEscalation()" classname="com.opslens.backend.escalation.EscalationServiceTest" time="0.001"/>
+  <testcase name="queuedDuplicateIsReturnedInsteadOfAddingAnother()" classname="com.opslens.backend.escalation.EscalationServiceTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

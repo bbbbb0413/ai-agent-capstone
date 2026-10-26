@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.opslens.backend.slack.SlackSafetyTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-10-25T23:42:38.178Z" hostname="LOCAL_HOST" time="0.034">
+  <properties/>
+  <testcase name="secretsAreRandomizedAuthenticatedAndTenantBound()" classname="com.opslens.backend.slack.SlackSafetyTest" time="0.001"/>
+  <testcase name="onlySlackHttpsWebhookUrlsAreAccepted()" classname="com.opslens.backend.slack.SlackSafetyTest" time="0.0"/>
+  <testcase name="onlyAdminCanSaveConnectionAndOtherTenantsAreBlocked()" classname="com.opslens.backend.slack.SlackSafetyTest" time="0.029"/>
+  <testcase name="reviewedMessageIsPlainTextWithoutBroadcastMentions()" classname="com.opslens.backend.slack.SlackSafetyTest" time="0.003"/>
+  <testcase name="successRateLimitAndAmbiguousResultsAreDistinct()" classname="com.opslens.backend.slack.SlackSafetyTest" time="0.001"/>
+  <testcase name="secretIsNeverIncludedInSettingsView()" classname="com.opslens.backend.slack.SlackSafetyTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

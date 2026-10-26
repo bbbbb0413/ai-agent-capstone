@@ -1,0 +1,13 @@
+
+> opslens-front@0.1.0 build
+> vite build
+
+vite v7.3.7 building client environment for production...
+transforming...
+✓ 66 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.39 kB │ gzip:  0.26 kB
+dist/assets/index-BCmsmO9s.css   16.37 kB │ gzip:  4.06 kB
+dist/assets/index-BbdSSMJM.js   269.22 kB │ gzip: 96.02 kB
+✓ built in 886ms

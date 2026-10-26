@@ -1,0 +1,183 @@
+test_invalid_model_key_reports_configuration_help_without_raw_error (test_attachments.AttachmentAuthTests.test_invalid_model_key_reports_configuration_help_without_raw_error) ... task task OpenAI authentication failed
+ok
+test_complete_graph_uses_file_metrics_and_runbook_without_mutating_tools (test_attachments.AttachmentFlowTests.test_complete_graph_uses_file_metrics_and_runbook_without_mutating_tools) ... ok
+test_partial_tool_loading_keeps_available_server (test_attachments.AttachmentFlowTests.test_partial_tool_loading_keeps_available_server) ... ok
+test_unavailable_tools_do_not_hide_attachment_or_claim_monitoring_is_healthy (test_attachments.AttachmentFlowTests.test_unavailable_tools_do_not_hide_attachment_or_claim_monitoring_is_healthy) ... ok
+test_attachment_route_ignores_no_incident_and_never_proposes_actions (test_attachments.AttachmentTests.test_attachment_route_ignores_no_incident_and_never_proposes_actions) ... ok
+test_bad_files_are_not_silently_ignored (test_attachments.AttachmentTests.test_bad_files_are_not_silently_ignored) ... ok
+test_image_is_sent_as_multimodal_input_and_not_just_filename (test_attachments.AttachmentTests.test_image_is_sent_as_multimodal_input_and_not_just_filename) ... ok
+test_log_lines_redacted_and_long_input_marks_omission (test_attachments.AttachmentTests.test_log_lines_redacted_and_long_input_marks_omission) ... ok
+test_emit_raises_when_backend_rejects_the_event (test_backend.BackendTest.test_emit_raises_when_backend_rejects_the_event) ... ok
+test_result_does_not_retry_client_errors (test_backend.BackendTest.test_result_does_not_retry_client_errors) ... ok
+test_result_gives_up_after_retries (test_backend.BackendTest.test_result_gives_up_after_retries) ... task t1 result delivery failed (down), retrying in 0s
+task t1 result delivery failed (down), retrying in 0s
+ok
+test_result_retries_server_errors_until_saved (test_backend.BackendTest.test_result_retries_server_errors_until_saved) ... task t1 result delivery failed (Server error '503 Service Unavailable' for url 'http://backend/internal/tasks/t1/result'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/503), retrying in 0s
+task t1 result delivery failed (Server error '503 Service Unavailable' for url 'http://backend/internal/tasks/t1/result'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/503), retrying in 0s
+ok
+test_task_token_conflict_means_the_task_is_not_active (test_backend.BackendTest.test_task_token_conflict_means_the_task_is_not_active) ... ok
+test_compound_causes_both_have_evidence_and_no_order_is_imposed (test_cause_facts.CauseFactsTests.test_compound_causes_both_have_evidence_and_no_order_is_imposed) ... ok
+test_minimum_signal_count_is_the_noise_floor (test_cause_facts.CauseFactsTests.test_minimum_signal_count_is_the_noise_floor) ... ok
+test_signal_that_cannot_be_counted_without_a_dependency_has_no_row (test_cause_facts.CauseFactsTests.test_signal_that_cannot_be_counted_without_a_dependency_has_no_row) ... ok
+test_single_cause_has_evidence_and_others_do_not (test_cause_facts.CauseFactsTests.test_single_cause_has_evidence_and_others_do_not) ... ok
+test_unhealthy_dependency_is_evidence_without_logs_and_share_is_against_request_p95 (test_cause_facts.CauseFactsTests.test_unhealthy_dependency_is_evidence_without_logs_and_share_is_against_request_p95) ... ok
+test_each_dependency_of_the_service_is_looked_up (test_cause_facts.DependencyHealthTests.test_each_dependency_of_the_service_is_looked_up) ... ok
+test_count_is_the_sum_of_buckets_and_first_seen_is_the_first_bucket_start (test_cause_facts.LogSignalDetailsTests.test_count_is_the_sum_of_buckets_and_first_seen_is_the_first_bucket_start) ... ok
+test_failed_query_and_signal_without_phrase_are_left_out (test_cause_facts.LogSignalDetailsTests.test_failed_query_and_signal_without_phrase_are_left_out) ... ok
+test_two_signals_at_once_are_both_counted (test_cause_facts.LogSignalDetailsTests.test_two_signals_at_once_are_both_counted) ... ok
+test_escalation_and_failed_action_are_not_recorded (test_compound_causes.HandledTests.test_escalation_and_failed_action_are_not_recorded) ... ok
+test_executed_app_action_is_recorded_with_the_signal_count (test_compound_causes.HandledTests.test_executed_app_action_is_recorded_with_the_signal_count) ... ok
+test_final_escalation_names_the_causes_left_unhandled (test_compound_causes.HandledTests.test_final_escalation_names_the_causes_left_unhandled) ... ok
+test_signal_that_dropped_is_cleared_and_one_that_stayed_is_not (test_compound_causes.HandledTests.test_signal_that_dropped_is_cleared_and_one_that_stayed_is_not) ... ok
+test_broken_format_and_undetermined_yield_nothing (test_compound_causes.ParseCausesTests.test_broken_format_and_undetermined_yield_nothing) ... ok
+test_candidates_in_written_order_and_the_target (test_compound_causes.ParseCausesTests.test_candidates_in_written_order_and_the_target) ... ok
+test_symptom_clause_in_a_candidate_line_is_not_a_candidate (test_compound_causes.ParseCausesTests.test_symptom_clause_in_a_candidate_line_is_not_a_candidate) ... ok
+test_action_must_belong_to_the_target (test_compound_causes.TargetGuardTests.test_action_must_belong_to_the_target) ... ok
+test_blocked_escalation_check_uses_the_target_when_signals_overlap (test_compound_causes.TargetGuardTests.test_blocked_escalation_check_uses_the_target_when_signals_overlap) ... ok
+test_first_problem_runs_the_target_checks_first (test_compound_causes.TargetGuardTests.test_first_problem_runs_the_target_checks_first) ... ok
+test_handled_cause_gets_no_second_app_action_but_may_be_escalated (test_compound_causes.TargetGuardTests.test_handled_cause_gets_no_second_app_action_but_may_be_escalated) ... ok
+test_restart_does_not_fix_a_pool_after_a_recent_change (test_compound_causes.TargetGuardTests.test_restart_does_not_fix_a_pool_after_a_recent_change) ... ok
+test_target_without_evidence_is_sent_back (test_compound_causes.TargetGuardTests.test_target_without_evidence_is_sent_back) ... ok
+test_without_a_target_nothing_new_is_checked (test_compound_causes.TargetGuardTests.test_without_a_target_nothing_new_is_checked) ... ok
+test_abbreviation_is_matched_as_a_word (test_customer_notice.CustomerNoticeTests.test_abbreviation_is_matched_as_a_word) ... ok
+test_approval_process_and_hostnames_are_internal (test_customer_notice.CustomerNoticeTests.test_approval_process_and_hostnames_are_internal) ... ok
+test_bad_draft_is_rewritten_once (test_customer_notice.CustomerNoticeTests.test_bad_draft_is_rewritten_once) ... task t notice draft rejected: ['한글·영문이 아닌 문자: अभ', '내부 용어: 형식 오류', '내부 용어: 에스컬레이션', '내부 용어: 재시도', '내부 용어: 승인', '회복 전인데 구체적인 다음 안내 시각이 없다 (예: 30분 안에)']
+ok
+test_bad_rewrite_falls_back_to_state_based_notice (test_customer_notice.CustomerNoticeTests.test_bad_rewrite_falls_back_to_state_based_notice) ... task t notice draft rejected: ['한글·영문이 아닌 문자: अभ', '내부 용어: 형식 오류', '내부 용어: 에스컬레이션', '내부 용어: 재시도', '내부 용어: 승인', '회복 전인데 구체적인 다음 안내 시각이 없다 (예: 30분 안에)']
+task t notice rewrite rejected: ['한글·영문이 아닌 문자: अभ', '내부 용어: 형식 오류', '내부 용어: 에스컬레이션', '내부 용어: 재시도', '내부 용어: 승인', '회복 전인데 구체적인 다음 안내 시각이 없다 (예: 30분 안에)']
+ok
+test_clean_notice_has_no_problems (test_customer_notice.CustomerNoticeTests.test_clean_notice_has_no_problems) ... ok
+test_copied_instructions_and_lists_are_found (test_customer_notice.CustomerNoticeTests.test_copied_instructions_and_lists_are_found) ... ok
+test_fallback_for_recovered_incident (test_customer_notice.CustomerNoticeTests.test_fallback_for_recovered_incident) ... ok
+test_good_draft_is_kept_without_model_call (test_customer_notice.CustomerNoticeTests.test_good_draft_is_kept_without_model_call) ... ok
+test_leaked_internals_and_foreign_word_are_found (test_customer_notice.CustomerNoticeTests.test_leaked_internals_and_foreign_word_are_found) ... ok
+test_unrecovered_notice_needs_a_concrete_next_notice_time (test_customer_notice.CustomerNoticeTests.test_unrecovered_notice_needs_a_concrete_next_notice_time) ... ok
+test_t8_1_only_first_turn_requires_a_tool (test_diagnose_first_tool.FirstToolLoopTests.test_t8_1_only_first_turn_requires_a_tool) ... ok
+test_t8_2_plan_only_or_failed_tools_go_straight_to_report (test_diagnose_first_tool.NoEvidenceTests.test_t8_2_plan_only_or_failed_tools_go_straight_to_report) ... ok
+test_t8_3_successful_tool_keeps_the_final_answer (test_diagnose_first_tool.NoEvidenceTests.test_t8_3_successful_tool_keeps_the_final_answer) ... ok
+test_current_and_other_tenant_documents_are_excluded (test_history.HistoryTests.test_current_and_other_tenant_documents_are_excluded) ... ok
+test_first_diagnosis_passes_history_to_model_and_persists_sources (test_history.HistoryTests.test_first_diagnosis_passes_history_to_model_and_persists_sources) ... ok
+test_history_does_not_displace_runbooks (test_history.HistoryTests.test_history_does_not_displace_runbooks) ... ok
+test_missing_failed_or_malformed_history_does_not_stop_diagnosis (test_history.HistoryTests.test_missing_failed_or_malformed_history_does_not_stop_diagnosis) ... ok
+test_numbers_become_threshold_words (test_jev.BuildStateTests.test_numbers_become_threshold_words) ... ok
+test_answer_failure_and_missing_key (test_jev.ClassifyFaultTests.test_answer_failure_and_missing_key) ... Jev 판정 실패: 502
+Jev 판정 실패: 
+ok
+test_confident_verdict_goes_to_gpt_otherwise_only_recorded (test_jev.ProposeWithJevTests.test_confident_verdict_goes_to_gpt_otherwise_only_recorded) ... ok
+test_log_signal_with_digits_is_counted (test_jev.ProposeWithJevTests.test_log_signal_with_digits_is_counted) ... ok
+test_consumer_loop_reconnects_after_any_error (test_kafka_worker.KafkaWorkerTests.test_consumer_loop_reconnects_after_any_error) ... Kafka consumer loop failed, reconnecting in 0s
+Traceback (most recent call last):
+  File "/LOCAL_HOME/Downloads/ai-agent-capstone-main/server/python/agent/src/agent/kafka_worker.py", line 190, in consume
+    await _consume(runner, slots)
+  File "/LOCAL_HOME/Downloads/ai-agent-capstone-main/server/python/agent/tests/test_kafka_worker.py", line 180, in broken
+    raise RuntimeError("unexpected")
+RuntimeError: unexpected
+ok
+test_consumer_role (test_kafka_worker.KafkaWorkerTests.test_consumer_role) ... ok
+test_delayed_retry_does_not_block_other_partitions (test_kafka_worker.KafkaWorkerTests.test_delayed_retry_does_not_block_other_partitions) ... ok
+test_failure_goes_to_tier_retry_topic_with_backoff_header (test_kafka_worker.KafkaWorkerTests.test_failure_goes_to_tier_retry_topic_with_backoff_header) ... task bad failed (boom), sent to tasks.retry.silver
+ok
+test_fast_partition_is_committed_before_slow_one_finishes (test_kafka_worker.KafkaWorkerTests.test_fast_partition_is_committed_before_slow_one_finishes) ... ok
+test_health_needs_a_recent_poll (test_kafka_worker.KafkaWorkerTests.test_health_needs_a_recent_poll) ... ok
+test_last_attempt_goes_to_dlt_and_fails_task (test_kafka_worker.KafkaWorkerTests.test_last_attempt_goes_to_dlt_and_fails_task) ... task bad failed (boom), sent to tasks.dlt
+ok
+test_same_partition_runs_in_order_and_other_partitions_run_together (test_kafka_worker.KafkaWorkerTests.test_same_partition_runs_in_order_and_other_partitions_run_together) ... ok
+test_shared_slots_cap_concurrency (test_kafka_worker.KafkaWorkerTests.test_shared_slots_cap_concurrency) ... ok
+test_silver_yields_slot_while_gold_waits (test_kafka_worker.KafkaWorkerTests.test_silver_yields_slot_while_gold_waits) ... ok
+test_unhandled_record_is_reread_instead_of_skipped (test_kafka_worker.KafkaWorkerTests.test_unhandled_record_is_reread_instead_of_skipped) ... TopicPartition(topic='tasks.gold', partition=0)@4 not handled, rereading after 0s
+Traceback (most recent call last):
+  File "/LOCAL_HOME/Downloads/ai-agent-capstone-main/server/python/agent/src/agent/kafka_worker.py", line 158, in _handle
+    await self.runner.run(message, raise_errors=True)
+  File "/LOCAL_HOME/Downloads/ai-agent-capstone-main/server/python/agent/tests/test_kafka_worker.py", line 59, in run
+    raise RuntimeError("boom")
+RuntimeError: boom
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/LOCAL_HOME/Downloads/ai-agent-capstone-main/server/python/agent/src/agent/kafka_worker.py", line 134, in _chain
+    await self._handle(record)
+  File "/LOCAL_HOME/Downloads/ai-agent-capstone-main/server/python/agent/src/agent/kafka_worker.py", line 165, in _handle
+    await self.producer.send_and_wait(topic, record.value, key=record.key, headers=out)
+  File "/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/lib/python3.14/unittest/mock.py", line 2333, in _execute_mock_call
+    raise effect
+RuntimeError: broker down
+ok
+test_t7_6_empty_content_means_none_open_and_error_means_unknown (test_no_issue.NoIssueContextTests.test_t7_6_empty_content_means_none_open_and_error_means_unknown) ... ok
+test_t7_7_registration_creates_only_after_approval (test_no_issue.NoIssueContextTests.test_t7_7_registration_creates_only_after_approval) ... ok
+test_t7_8_rejected_registration_does_not_call_the_write_tool (test_no_issue.NoIssueContextTests.test_t7_8_rejected_registration_does_not_call_the_write_tool) ... ok
+test_t7_1_no_open_incident_answers_no_issue_otherwise_diagnoses (test_no_issue.NoIssueRouteTests.test_t7_1_no_open_incident_answers_no_issue_otherwise_diagnoses) ... ok
+test_t7_2_failed_incident_lookup_is_not_treated_as_no_issue (test_no_issue.NoIssueRouteTests.test_t7_2_failed_incident_lookup_is_not_treated_as_no_issue) ... ok
+test_t7_3_document_question_goes_to_documents_before_no_issue (test_no_issue.NoIssueRouteTests.test_t7_3_document_question_goes_to_documents_before_no_issue) ... ok
+test_t7_4_symptom_in_other_inflections_requires_incident_registration_approval (test_no_issue.NoIssueRouteTests.test_t7_4_symptom_in_other_inflections_requires_incident_registration_approval) ... ok
+test_t7_4_symptom_with_named_service_requires_incident_registration_approval (test_no_issue.NoIssueRouteTests.test_t7_4_symptom_with_named_service_requires_incident_registration_approval) ... ok
+test_t7_5_ambiguous_symptom_does_not_guess_a_service (test_no_issue.NoIssueRouteTests.test_t7_5_ambiguous_symptom_does_not_guess_a_service) ... ok
+test_table_names_every_fault_shape_of_the_runbook (test_runbook_clauses.JudgmentTableTests.test_table_names_every_fault_shape_of_the_runbook) ... ok
+test_table_uses_exactly_the_signals_code_counts (test_runbook_clauses.JudgmentTableTests.test_table_uses_exactly_the_signals_code_counts) ... ok
+test_clause_actions_match_the_document (test_runbook_clauses.RunbookClauseTests.test_clause_actions_match_the_document) ... ok
+test_code_knows_exactly_the_documented_clauses (test_runbook_clauses.RunbookClauseTests.test_code_knows_exactly_the_documented_clauses) ... ok
+test_question_without_incident_uses_the_only_open_incident_service (test_signals.DiagnoseServiceTests.test_question_without_incident_uses_the_only_open_incident_service) ... ok
+test_service_without_observability_ends_undetermined_without_queries (test_signals.DiagnoseServiceTests.test_service_without_observability_ends_undetermined_without_queries) ... ok
+test_previous_resolution_cuts_the_lead (test_signals.LogWindowTests.test_previous_resolution_cuts_the_lead) ... ok
+test_previous_resolved_at_is_the_latest_earlier_incident_of_the_same_service (test_signals.LogWindowTests.test_previous_resolved_at_is_the_latest_earlier_incident_of_the_same_service) ... ok
+test_catalog_queries_are_the_old_queries_with_a_service_condition (test_signals.QueryTests.test_catalog_queries_are_the_old_queries_with_a_service_condition) ... ok
+test_log_query_is_the_old_selector_with_a_service_condition (test_signals.QueryTests.test_log_query_is_the_old_selector_with_a_service_condition) ... ok
+test_observability_needs_a_known_service_with_a_definition (test_signals.QueryTests.test_observability_needs_a_known_service_with_a_definition) ... ok
+test_signal_without_a_catalog_phrase_is_left_out (test_signals.QueryTests.test_signal_without_a_catalog_phrase_is_left_out) ... ok
+test_acted_service_without_observability_is_not_recovered (test_signals.VerifyServiceTests.test_acted_service_without_observability_is_not_recovered) ... ok
+test_only_the_acted_service_is_measured (test_signals.VerifyServiceTests.test_only_the_acted_service_is_measured) ... ok
+test_notice_failure_is_not_reported_as_sent (test_task_outcomes.ReportTests.test_notice_failure_is_not_reported_as_sent) ... ok
+test_report_and_summary_receive_actual_outcome (test_task_outcomes.ReportTests.test_report_and_summary_receive_actual_outcome) ... ok
+test_report_tokens_are_sent_in_batches_with_the_full_text (test_task_outcomes.ReportTests.test_report_tokens_are_sent_in_batches_with_the_full_text) ... ok
+test_unlinked_information_question_skips_incident_classification (test_task_outcomes.ReportTests.test_unlinked_information_question_skips_incident_classification) ... ok
+test_unlinked_question_does_not_propose_an_invalid_execution (test_task_outcomes.ReportTests.test_unlinked_question_does_not_propose_an_invalid_execution) ... ok
+test_unlinked_sla_question_routes_directly_to_document_search (test_task_outcomes.ReportTests.test_unlinked_sla_question_routes_directly_to_document_search) ... ok
+test_approval_identity_is_stable_and_advances_with_decisions (test_task_outcomes.ResumeTests.test_approval_identity_is_stable_and_advances_with_decisions) ... ok
+test_concurrent_duplicate_resume_only_drives_once (test_task_outcomes.ResumeTests.test_concurrent_duplicate_resume_only_drives_once) ... ok
+test_each_run_passes_a_fresh_task_token_to_the_tools (test_task_outcomes.ResumeTests.test_each_run_passes_a_fresh_task_token_to_the_tools) ... ok
+test_finished_or_waiting_task_is_duplicate (test_task_outcomes.ResumeTests.test_finished_or_waiting_task_is_duplicate) ... ok
+test_lease_bookkeeping_failure_does_not_hide_the_result (test_task_outcomes.ResumeTests.test_lease_bookkeeping_failure_does_not_hide_the_result) ... task t1 lease bookkeeping failed
+Traceback (most recent call last):
+  File "/LOCAL_HOME/Downloads/ai-agent-capstone-main/server/python/agent/src/agent/runner.py", line 196, in _settle_lease
+    await self._add_elapsed(task_id, seconds)
+  File "/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/lib/python3.14/unittest/mock.py", line 2333, in _execute_mock_call
+    raise effect
+OSError: db down
+ok
+test_lease_held_elsewhere_skips_execution (test_task_outcomes.ResumeTests.test_lease_held_elsewhere_skips_execution) ... ok
+test_redelivered_unfinished_task_continues_from_checkpoint (test_task_outcomes.ResumeTests.test_redelivered_unfinished_task_continues_from_checkpoint) ... ok
+test_resume_that_never_gets_the_lease_fails_the_task_visibly (test_task_outcomes.ResumeTests.test_resume_that_never_gets_the_lease_fails_the_task_visibly) ... task test resume gave up: the execution lease was never released
+ok
+test_resume_waits_for_a_dead_pods_lease_instead_of_dropping_the_decision (test_task_outcomes.ResumeTests.test_resume_waits_for_a_dead_pods_lease_instead_of_dropping_the_decision) ... ok
+test_same_process_duplicate_does_not_run_twice (test_task_outcomes.ResumeTests.test_same_process_duplicate_does_not_run_twice) ... ok
+test_stale_approval_never_resumes_new_interrupt (test_task_outcomes.ResumeTests.test_stale_approval_never_resumes_new_interrupt) ... ok
+test_task_not_active_in_backend_is_not_run (test_task_outcomes.ResumeTests.test_task_not_active_in_backend_is_not_run)
+끝났거나 사람을 기다리는 작업(DLT에서 다시 꺼낸 메시지 등)은 토큰을 받지 못하고 실행하지 않는다. ... ok
+test_action_outside_supported_actions_is_sent_back (test_task_outcomes.ToolOutcomeTests.test_action_outside_supported_actions_is_sent_back) ... ok
+test_action_that_does_not_fit_the_cited_clause_is_sent_back (test_task_outcomes.ToolOutcomeTests.test_action_that_does_not_fit_the_cited_clause_is_sent_back) ... ok
+test_approval_uses_service_inventory_for_rolling_restart_impact (test_task_outcomes.ToolOutcomeTests.test_approval_uses_service_inventory_for_rolling_restart_impact) ... ok
+test_blocked_escalation_cannot_name_restart_after_a_recent_change (test_task_outcomes.ToolOutcomeTests.test_blocked_escalation_cannot_name_restart_after_a_recent_change) ... ok
+test_blocked_escalation_must_name_the_action_of_the_signalled_fault (test_task_outcomes.ToolOutcomeTests.test_blocked_escalation_must_name_the_action_of_the_signalled_fault) ... ok
+test_blocked_scaling_must_fit_whether_the_service_has_an_autoscaler (test_task_outcomes.ToolOutcomeTests.test_blocked_scaling_must_fit_whether_the_service_has_an_autoscaler) ... ok
+test_confirm_sample_over_threshold_overrides_model_recovered (test_task_outcomes.ToolOutcomeTests.test_confirm_sample_over_threshold_overrides_model_recovered) ... ok
+test_escalation_chosen_instead_of_action_is_queued_and_reported (test_task_outcomes.ToolOutcomeTests.test_escalation_chosen_instead_of_action_is_queued_and_reported) ... ok
+test_execution_and_pr_creation_have_distinct_routes (test_task_outcomes.ToolOutcomeTests.test_execution_and_pr_creation_have_distinct_routes) ... ok
+test_failed_execution_never_routes_to_recovery_verification (test_task_outcomes.ToolOutcomeTests.test_failed_execution_never_routes_to_recovery_verification) ... ok
+test_flow_escalation_category_follows_the_reason (test_task_outcomes.ToolOutcomeTests.test_flow_escalation_category_follows_the_reason) ... ok
+test_log_window_starts_shortly_before_the_incident (test_task_outcomes.ToolOutcomeTests.test_log_window_starts_shortly_before_the_incident) ... ok
+test_mcp_error_is_preserved_in_message_and_event (test_task_outcomes.ToolOutcomeTests.test_mcp_error_is_preserved_in_message_and_event) ... ok
+test_only_an_autoscaler_still_scaling_up_allows_no_action (test_task_outcomes.ToolOutcomeTests.test_only_an_autoscaler_still_scaling_up_allows_no_action) ... ok
+test_propose_send_back_runs_every_guard (test_task_outcomes.ToolOutcomeTests.test_propose_send_back_runs_every_guard) ... ok
+test_recent_change_is_a_change_shortly_before_the_incident (test_task_outcomes.ToolOutcomeTests.test_recent_change_is_a_change_shortly_before_the_incident) ... ok
+test_recovery_needs_error_metrics_and_both_thresholds (test_task_outcomes.ToolOutcomeTests.test_recovery_needs_error_metrics_and_both_thresholds) ... ok
+test_scale_approval_includes_current_target_and_safe_max (test_task_outcomes.ToolOutcomeTests.test_scale_approval_includes_current_target_and_safe_max) ... ok
+test_signal_clause_is_decided_only_when_one_fault_shape_fits (test_task_outcomes.ToolOutcomeTests.test_signal_clause_is_decided_only_when_one_fault_shape_fits) ... ok
+test_success_keeps_parseable_json (test_task_outcomes.ToolOutcomeTests.test_success_keeps_parseable_json) ... ok
+test_transport_failure_emits_error_then_propagates (test_task_outcomes.ToolOutcomeTests.test_transport_failure_emits_error_then_propagates) ... ok
+
+----------------------------------------------------------------------
+Ran 130 tests in 1.088s
+
+OK

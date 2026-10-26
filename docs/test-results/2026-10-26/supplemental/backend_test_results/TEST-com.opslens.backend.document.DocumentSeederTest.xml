@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.opslens.backend.document.DocumentSeederTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-25T23:42:36.067Z" hostname="LOCAL_HOST" time="0.026">
+  <properties/>
+  <testcase name="seedFilesTakeTypeFromThePrefixAndTitleFromTheFirstHeading()" classname="com.opslens.backend.document.DocumentSeederTest" time="0.006"/>
+  <testcase name="seedingContinuesWhenOneDocumentFails()" classname="com.opslens.backend.document.DocumentSeederTest" time="0.02"/>
+  <system-out><![CDATA[2026-10-26T08:42:36.093+09:00  WARN 4026 --- [opslens-backend] [    Test worker] c.o.backend.document.DocumentSeeder      : seed document tenant-a/runbook-a skipped: storage not ready
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

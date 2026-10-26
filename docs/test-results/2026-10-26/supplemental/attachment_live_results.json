@@ -1,0 +1,309 @@
+{
+  "checks": [
+    {
+      "name": "oversize_log_rejected",
+      "passed": true,
+      "actual": 400
+    },
+    {
+      "name": "upload_log_and_png",
+      "passed": true,
+      "actual": 202
+    },
+    {
+      "name": "analysis_done",
+      "passed": true,
+      "actual": "DONE"
+    },
+    {
+      "name": "no_mutation_tools",
+      "passed": true,
+      "actual": [
+        "business_get_tenant_profile",
+        "business_get_service_inventory",
+        "business_list_incidents",
+        "grafana_query_prometheus",
+        "grafana_query_prometheus",
+        "grafana_query_prometheus",
+        "rag_search_documents",
+        "rag_search_documents",
+        "rag_search_documents"
+      ]
+    },
+    {
+      "name": "filename_reference",
+      "passed": true,
+      "actual": "다음은 첨부 자료를 바탕으로 한 진단 초안입니다. 실제 장애 여부를 단정하지 않으며, 관측된 증거와 근거를 기반으로 원인 후보를 제시합니다.\n\n1) 확인한 사실 (파일명/줄 번호와 함께)\n- 합성 로그 파일: synthetic_error.log\n  - L1: 2026-10-26T08:45:00 ERROR reservation-api HikariPool connection pool exhausted\n  - L2: 2026-10-26T08:45:01 ERROR reservation-api SQLTransientConnectionException Connection is not available, request timed out after 30000ms\n  - L3: 2026-10-26T08:45:02 ERROR reservation-api HTTP 503 upstream timeout\n  - 요약: reservation-api의 커넥션 풀 고갈(HikariPool exhausted) 및 연결 대기 타임아웃으로 인한 HTTP 503 업스트림 타임아웃이 명시적으로 기록되어 있습니다.\n- 합성 화면/이미지: synthetic_error.png\n  - 화면 문구: \"reservation-api HTTP 503\", \"ERROR: connection pool exhausted\", \"HikariPool: connection timeout after 30000ms\"\n  - 위치: 화면에서 reservation-api 관련 503 및 커넥션 풀 고갈이 시각적으로 강조되어 있음\n- 현재 지표(최근 1분, 첨부 시각과 다를 수 있음)\n  - checkin-api 에러율 및 요청량 관련 Prometheus 응답은 데이터가 없거나 특정 지표가 누락되었다고 표시. 예: checkin-api 에러율의 data 부분이 빈 배열\n  - reservation-api 지표에 대해서도 특정 근거로 판단된다고 나오나, “grafana_query_prometheus를 이 단계에서 이미 3번 호출했다”는 메시지로 인해 현재 지표를 통한 단일 근거로 판단하기 어렵다고 명시\n  - 요약: 지표 데이터 부재/ 조회 제약으로 현재 단정은 어려움. 로그/이미지의 직접적 증거가 더 강합니다.\n- 추가 첨부 자료의 서비스 구성 정보\n  - reservation-api: external 의존성(payment-gateway) 있음, 풀 사이즈 20, 최대 레플리카 1\n  - checkin-api: 외부 의존성 존재 및 Prometheus 지표 쿼리의 데이터 부재\n  - 상태 및 경고 문구는 NoSuchFileException 등은 없고, 공유된 상태 확인 필요 등 일반 안내만 보임\n\n2) 원인 후보 및 근거\n- 후보 A: 데이터베이스 커넥션 풀 고갈(HikariPool exhausted)\n  - 근거 파일/라인: synthetic_error.log L1\n  - 근거 내용: “HikariPool connection pool exhausted” 명시\n  - 추가 관찰점: 합성 화면에서도 동일한 메시지가 노출(L3의 HTTP 503 업스트림 타임아웃과 연결)\n- 후보 B: 외부 의존성(결제 게이트웨이)으로 인한 대기/지연 증가\n  - 근거 파일/라인: synthetic_error.log L2의 SQLTransientConnectionException 및 L3의 HTTP 503 업스트림 타임아웃\n  - 근거 해석: 내부 커넥션 풀이 고갈되면 외부 API 응답 지연이 누적되어 503으로 귀결될 가능성 존재. 구성상 payment-gateway 의존성 있음\n- 후보 C: 애플리케이션 레벨에서의 과도한 동시성/트래픽 증가로 커넥션 풀이 빨리 고갈\n  - 근거 파일/라인: 합성 로그의 커넥션 풀 고갈 현상\n  - 추가 근거: checkin-api 지표의 부재/데이터 제약으로 동시성 증가 여부를 단정하기 어렵지만, 로그 상의 패턴은 과도한 동시성 가능성을 시사\n- 후보 D: 모니터링 지표의 데이터 부재/조회 이슈로 정확한 원인 판단에 제약\n  - 근거 파일/라인: GrafanaPrometheus 조회 결과의 데이터 부재 및 쿼리 실패 경향\n  - 근거 내용: 데이터가 없고 단일 지표로 확정하기 어렵다는 관찰\n\n3) 현재 관측과의 비교\n- 로그/이미지 관측은 “reservation-api 커넥션 풀 고갈로 인한 HTTP 503” 패턴이 일관되게 보입니다. 이는 강하게 커넥션 풀 이슈를 시사합니다.\n- 다만 지표 측면은 데이터 부재/조회 제약으로 단일 원인으로 확정하기 어렵습니다. 로그의 증거가 강하나, 운영 지표가 이를 뒷받침하는지 여부는 추가 확인이 필요합니다.\n- 따라서 현재 관측은 로그/이미지 증거가 강하고, 지표의 한계로 인해 확정 단계로 가지 못했습니다.\n\n4) 추가 확인 방법\n- 커넥션 풀 상태 점검\n  - HikariCP 현재 사용률, 대기 커넥션 수, Maximum Pool Size, 대기 시간(waitTimeout) 확인\n  - 최근 로그에서 HikariPool 관련 WARN/ERROR가 추가로 있는지 확인\n- 데이터베이스 쿼리/시간 초과 분석\n  - 길게 실행되는 쿼리 여부 확인 및 대기열(backlog) 상태 점검\n  - 트랜잭션 대기/잠금 여부 확인\n- 외부 의존성 영향 점검\n  - payment-gateway 응답 시간 분포 확인, 외부 API 타임아웃/지연 여부 확인\n- 트래픽/동시성 확인\n  - 최근 5~15분 간 초당 요청 수, 동시성 추이, 큐(backlog) 크기 확인\n  - reservation-api의 요청량 급증 여부를 로그/메트릭으로 교차 검증\n- 지표 수집 구성 점검\n  - Prometheus 스크레이프 대상 상태 확인(메트릭 존재 여부, 레이블 값 확인)\n  - 시간 범위 확대하여 데이터 존재 여부 재확인\n  - 쿼리 단순화/레이블 축소 시도하여 데이터 획득 가능성 확인\n- 장애 판단 규칙 보완\n  - 현재 지표 데이터 부재로 장애 여부를 확정하지 않되, 로그의 증거를 바탕으로 원인 후보 확인을 권고\n\n참고 및 근거 출처\n- 첨부 파일/로그: synthetic_error.log, synthetic_error.png\n  - 파일명과 증거 위치를 명시했습니다.\n- 운영 런북 및 문서 근거의 연결\n  - RB-STD-01 설정 변경으로 인한 DB 커넥션 풀 고갈 및 RB-STD-03 트래픽 급증 관련 내용은 첨부 런북에 요약되어 있으며, 현재 관측과의 연결고리를 확인하는 데 참고할 수 있습니다.\n  - 관련 문서 예시:\n    - RB-STD-01 설정 변경으로 인한 DB 커넥션 풀 고갈\n    - RB-STD-03 트래픽 급증(앱 처리 용량 부족)\n    - Reservation-api 관련 런북(RB-B-02 재시작 시 주의 등)\n- Prometheus/Grafana 관련 실행 시나리오 및 결과 해석은 첨부의 grafana_query_prometheus 응답에 포함\n\n다음 단계 제안\n- 현재 상태를 승인 없이 실행하는 변경은 권장되지 않습니다. 우선 검토 및 승인을 얻고, 아래 순서로 조치를 제안합니다.\n  - 커넥션 풀 상태 점검 및 필요시 Hikari 풀 설정 값 확인/조정\n  - DB 쿼리/잠금 상태 확인 및 장시간 쿼리 식별\n  - 외부 의존성(payment-gateway) 응답 시간 모니터링 및 지연 원인 파악\n  - 트래픽 추이 확인 및 필요 시 안전 상한 내에서의 자동 확장 여부 평가\n- 필요 시 아래 변경/조치에 대해 간단한 이유를 함께 기재해 승인을 요청하면, 최소한의 영향으로 수행 가능하도록 안내드리겠습니다.\n  - 예: \"커넥션 풀 고갈 가능성 확인 및 조정\" 근거: synthetic_error.log L1의 HikariPool exhausted 및 L2/L3의 503 업스트림 타임아웃\n  - 예: \"외부 의존성 응답 지연 여부 점검\" 근거: logs에서 외부 의존성 관련 503 및 SQLTransientConnectionException 관측\n\n추가로 원하시면, 제가 현재 관측과 문서 간 매핑 표를 만들어 드리고, 각 항목에 대한 체크리스트와 확인 방법을 실행 가능 스텝으로 정리해 드리겠습니다."
+    }
+  ],
+  "task": {
+    "id": "58deae7e-e5d8-4d84-920d-b428489ba346",
+    "tenantId": "tenant-b",
+    "incidentId": null,
+    "type": "ATTACHMENT",
+    "question": "첨부한 합성 로그와 화면을 분석해 원인 후보와 파일명, 줄 번호 근거를 설명해줘. 실제 장애라고 단정하지 말아줘.",
+    "status": "DONE",
+    "requestedBy": 2,
+    "pendingAction": null,
+    "answer": "다음은 첨부 자료를 바탕으로 한 진단 초안입니다. 실제 장애 여부를 단정하지 않으며, 관측된 증거와 근거를 기반으로 원인 후보를 제시합니다.\n\n1) 확인한 사실 (파일명/줄 번호와 함께)\n- 합성 로그 파일: synthetic_error.log\n  - L1: 2026-10-26T08:45:00 ERROR reservation-api HikariPool connection pool exhausted\n  - L2: 2026-10-26T08:45:01 ERROR reservation-api SQLTransientConnectionException Connection is not available, request timed out after 30000ms\n  - L3: 2026-10-26T08:45:02 ERROR reservation-api HTTP 503 upstream timeout\n  - 요약: reservation-api의 커넥션 풀 고갈(HikariPool exhausted) 및 연결 대기 타임아웃으로 인한 HTTP 503 업스트림 타임아웃이 명시적으로 기록되어 있습니다.\n- 합성 화면/이미지: synthetic_error.png\n  - 화면 문구: \"reservation-api HTTP 503\", \"ERROR: connection pool exhausted\", \"HikariPool: connection timeout after 30000ms\"\n  - 위치: 화면에서 reservation-api 관련 503 및 커넥션 풀 고갈이 시각적으로 강조되어 있음\n- 현재 지표(최근 1분, 첨부 시각과 다를 수 있음)\n  - checkin-api 에러율 및 요청량 관련 Prometheus 응답은 데이터가 없거나 특정 지표가 누락되었다고 표시. 예: checkin-api 에러율의 data 부분이 빈 배열\n  - reservation-api 지표에 대해서도 특정 근거로 판단된다고 나오나, “grafana_query_prometheus를 이 단계에서 이미 3번 호출했다”는 메시지로 인해 현재 지표를 통한 단일 근거로 판단하기 어렵다고 명시\n  - 요약: 지표 데이터 부재/ 조회 제약으로 현재 단정은 어려움. 로그/이미지의 직접적 증거가 더 강합니다.\n- 추가 첨부 자료의 서비스 구성 정보\n  - reservation-api: external 의존성(payment-gateway) 있음, 풀 사이즈 20, 최대 레플리카 1\n  - checkin-api: 외부 의존성 존재 및 Prometheus 지표 쿼리의 데이터 부재\n  - 상태 및 경고 문구는 NoSuchFileException 등은 없고, 공유된 상태 확인 필요 등 일반 안내만 보임\n\n2) 원인 후보 및 근거\n- 후보 A: 데이터베이스 커넥션 풀 고갈(HikariPool exhausted)\n  - 근거 파일/라인: synthetic_error.log L1\n  - 근거 내용: “HikariPool connection pool exhausted” 명시\n  - 추가 관찰점: 합성 화면에서도 동일한 메시지가 노출(L3의 HTTP 503 업스트림 타임아웃과 연결)\n- 후보 B: 외부 의존성(결제 게이트웨이)으로 인한 대기/지연 증가\n  - 근거 파일/라인: synthetic_error.log L2의 SQLTransientConnectionException 및 L3의 HTTP 503 업스트림 타임아웃\n  - 근거 해석: 내부 커넥션 풀이 고갈되면 외부 API 응답 지연이 누적되어 503으로 귀결될 가능성 존재. 구성상 payment-gateway 의존성 있음\n- 후보 C: 애플리케이션 레벨에서의 과도한 동시성/트래픽 증가로 커넥션 풀이 빨리 고갈\n  - 근거 파일/라인: 합성 로그의 커넥션 풀 고갈 현상\n  - 추가 근거: checkin-api 지표의 부재/데이터 제약으로 동시성 증가 여부를 단정하기 어렵지만, 로그 상의 패턴은 과도한 동시성 가능성을 시사\n- 후보 D: 모니터링 지표의 데이터 부재/조회 이슈로 정확한 원인 판단에 제약\n  - 근거 파일/라인: GrafanaPrometheus 조회 결과의 데이터 부재 및 쿼리 실패 경향\n  - 근거 내용: 데이터가 없고 단일 지표로 확정하기 어렵다는 관찰\n\n3) 현재 관측과의 비교\n- 로그/이미지 관측은 “reservation-api 커넥션 풀 고갈로 인한 HTTP 503” 패턴이 일관되게 보입니다. 이는 강하게 커넥션 풀 이슈를 시사합니다.\n- 다만 지표 측면은 데이터 부재/조회 제약으로 단일 원인으로 확정하기 어렵습니다. 로그의 증거가 강하나, 운영 지표가 이를 뒷받침하는지 여부는 추가 확인이 필요합니다.\n- 따라서 현재 관측은 로그/이미지 증거가 강하고, 지표의 한계로 인해 확정 단계로 가지 못했습니다.\n\n4) 추가 확인 방법\n- 커넥션 풀 상태 점검\n  - HikariCP 현재 사용률, 대기 커넥션 수, Maximum Pool Size, 대기 시간(waitTimeout) 확인\n  - 최근 로그에서 HikariPool 관련 WARN/ERROR가 추가로 있는지 확인\n- 데이터베이스 쿼리/시간 초과 분석\n  - 길게 실행되는 쿼리 여부 확인 및 대기열(backlog) 상태 점검\n  - 트랜잭션 대기/잠금 여부 확인\n- 외부 의존성 영향 점검\n  - payment-gateway 응답 시간 분포 확인, 외부 API 타임아웃/지연 여부 확인\n- 트래픽/동시성 확인\n  - 최근 5~15분 간 초당 요청 수, 동시성 추이, 큐(backlog) 크기 확인\n  - reservation-api의 요청량 급증 여부를 로그/메트릭으로 교차 검증\n- 지표 수집 구성 점검\n  - Prometheus 스크레이프 대상 상태 확인(메트릭 존재 여부, 레이블 값 확인)\n  - 시간 범위 확대하여 데이터 존재 여부 재확인\n  - 쿼리 단순화/레이블 축소 시도하여 데이터 획득 가능성 확인\n- 장애 판단 규칙 보완\n  - 현재 지표 데이터 부재로 장애 여부를 확정하지 않되, 로그의 증거를 바탕으로 원인 후보 확인을 권고\n\n참고 및 근거 출처\n- 첨부 파일/로그: synthetic_error.log, synthetic_error.png\n  - 파일명과 증거 위치를 명시했습니다.\n- 운영 런북 및 문서 근거의 연결\n  - RB-STD-01 설정 변경으로 인한 DB 커넥션 풀 고갈 및 RB-STD-03 트래픽 급증 관련 내용은 첨부 런북에 요약되어 있으며, 현재 관측과의 연결고리를 확인하는 데 참고할 수 있습니다.\n  - 관련 문서 예시:\n    - RB-STD-01 설정 변경으로 인한 DB 커넥션 풀 고갈\n    - RB-STD-03 트래픽 급증(앱 처리 용량 부족)\n    - Reservation-api 관련 런북(RB-B-02 재시작 시 주의 등)\n- Prometheus/Grafana 관련 실행 시나리오 및 결과 해석은 첨부의 grafana_query_prometheus 응답에 포함\n\n다음 단계 제안\n- 현재 상태를 승인 없이 실행하는 변경은 권장되지 않습니다. 우선 검토 및 승인을 얻고, 아래 순서로 조치를 제안합니다.\n  - 커넥션 풀 상태 점검 및 필요시 Hikari 풀 설정 값 확인/조정\n  - DB 쿼리/잠금 상태 확인 및 장시간 쿼리 식별\n  - 외부 의존성(payment-gateway) 응답 시간 모니터링 및 지연 원인 파악\n  - 트래픽 추이 확인 및 필요 시 안전 상한 내에서의 자동 확장 여부 평가\n- 필요 시 아래 변경/조치에 대해 간단한 이유를 함께 기재해 승인을 요청하면, 최소한의 영향으로 수행 가능하도록 안내드리겠습니다.\n  - 예: \"커넥션 풀 고갈 가능성 확인 및 조정\" 근거: synthetic_error.log L1의 HikariPool exhausted 및 L2/L3의 503 업스트림 타임아웃\n  - 예: \"외부 의존성 응답 지연 여부 점검\" 근거: logs에서 외부 의존성 관련 503 및 SQLTransientConnectionException 관측\n\n추가로 원하시면, 제가 현재 관측과 문서 간 매핑 표를 만들어 드리고, 각 항목에 대한 체크리스트와 확인 방법을 실행 가능 스텝으로 정리해 드리겠습니다.",
+    "sources": [
+      {
+        "doc": "docs://_common/runbook-standard",
+        "section": "RB-STD-03 트래픽 급증 (앱 처리 용량 부족)"
+      },
+      {
+        "doc": "docs://_common/runbook-standard",
+        "section": "RB-STD-01 설정 변경으로 인한 DB 커넥션 풀 고갈"
+      },
+      {
+        "doc": "docs://tenant-b/runbook-reservation-api",
+        "section": "B사 reservation-api 서비스 런북"
+      },
+      {
+        "doc": "docs://tenant-b/runbook-reservation-api",
+        "section": "RB-B-02 재시작 시 주의"
+      },
+      {
+        "doc": "docs://tenant-b/sla-contract",
+        "section": "제3조 허용 조치"
+      }
+    ],
+    "summary": null,
+    "traceUrl": null,
+    "createdAt": "2026-10-25T23:43:15.384491Z",
+    "updatedAt": "2026-10-25T23:43:40.480511Z",
+    "retryOf": null,
+    "retriedBy": null
+  },
+  "events": [
+    {
+      "type": "TOOL_START",
+      "data": {
+        "args": {},
+        "node": "load_context",
+        "tool": "business_get_tenant_profile",
+        "callId": "fa45cd470c2d4aeb8f4f131dbe0a0a83"
+      },
+      "createdAt": "2026-10-25T23:43:15.444993Z"
+    },
+    {
+      "type": "TOOL_END",
+      "data": {
+        "node": "load_context",
+        "tool": "business_get_tenant_profile",
+        "callId": "fa45cd470c2d4aeb8f4f131dbe0a0a83",
+        "status": "success"
+      },
+      "createdAt": "2026-10-25T23:43:15.47136Z"
+    },
+    {
+      "type": "TOOL_START",
+      "data": {
+        "args": {},
+        "node": "load_context",
+        "tool": "business_get_service_inventory",
+        "callId": "017ae09607094cd7aa65a8463aa7b860"
+      },
+      "createdAt": "2026-10-25T23:43:15.473303Z"
+    },
+    {
+      "type": "TOOL_END",
+      "data": {
+        "node": "load_context",
+        "tool": "business_get_service_inventory",
+        "callId": "017ae09607094cd7aa65a8463aa7b860",
+        "status": "success"
+      },
+      "createdAt": "2026-10-25T23:43:15.494032Z"
+    },
+    {
+      "type": "TOOL_START",
+      "data": {
+        "args": {
+          "status": "OPEN"
+        },
+        "node": "load_context",
+        "tool": "business_list_incidents",
+        "callId": "23fb3d5672ce4b35a5da46531cd1f3ec"
+      },
+      "createdAt": "2026-10-25T23:43:15.496064Z"
+    },
+    {
+      "type": "TOOL_END",
+      "data": {
+        "node": "load_context",
+        "tool": "business_list_incidents",
+        "callId": "23fb3d5672ce4b35a5da46531cd1f3ec",
+        "status": "success"
+      },
+      "createdAt": "2026-10-25T23:43:15.514674Z"
+    },
+    {
+      "type": "STEP",
+      "data": {
+        "node": "analyze_attachments"
+      },
+      "createdAt": "2026-10-25T23:43:15.517252Z"
+    },
+    {
+      "type": "TOOL_START",
+      "data": {
+        "args": {
+          "expr": "(sum(rate(demo_orders_seconds_count{service=\"checkin-api\", outcome=\"error\"}[1m])) or vector(0)) / sum(rate(demo_orders_seconds_count{service=\"checkin-api\"}[1m]))",
+          "endTime": "now",
+          "queryType": "instant",
+          "datasourceUid": "prom-tenant-b"
+        },
+        "node": "analyze_attachments",
+        "tool": "grafana_query_prometheus",
+        "callId": "856cc6e73c764b2eb3a4912c971e33b9"
+      },
+      "createdAt": "2026-10-25T23:43:15.528622Z"
+    },
+    {
+      "type": "TOOL_END",
+      "data": {
+        "node": "analyze_attachments",
+        "tool": "grafana_query_prometheus",
+        "callId": "856cc6e73c764b2eb3a4912c971e33b9",
+        "status": "success"
+      },
+      "createdAt": "2026-10-25T23:43:15.587606Z"
+    },
+    {
+      "type": "TOOL_START",
+      "data": {
+        "args": {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(demo_orders_seconds_bucket{service=\"checkin-api\"}[1m])))",
+          "endTime": "now",
+          "queryType": "instant",
+          "datasourceUid": "prom-tenant-b"
+        },
+        "node": "analyze_attachments",
+        "tool": "grafana_query_prometheus",
+        "callId": "16873b5df8ce4655bd4b0e7cb6a69018"
+      },
+      "createdAt": "2026-10-25T23:43:15.589707Z"
+    },
+    {
+      "type": "TOOL_END",
+      "data": {
+        "node": "analyze_attachments",
+        "tool": "grafana_query_prometheus",
+        "callId": "16873b5df8ce4655bd4b0e7cb6a69018",
+        "status": "success"
+      },
+      "createdAt": "2026-10-25T23:43:15.611077Z"
+    },
+    {
+      "type": "TOOL_START",
+      "data": {
+        "args": {
+          "expr": "sum(rate(demo_orders_seconds_count{service=\"checkin-api\"}[1m]))",
+          "endTime": "now",
+          "queryType": "instant",
+          "datasourceUid": "prom-tenant-b"
+        },
+        "node": "analyze_attachments",
+        "tool": "grafana_query_prometheus",
+        "callId": "5d472a8052fd457aa0982a068ac06d31"
+      },
+      "createdAt": "2026-10-25T23:43:15.612666Z"
+    },
+    {
+      "type": "TOOL_END",
+      "data": {
+        "node": "analyze_attachments",
+        "tool": "grafana_query_prometheus",
+        "callId": "5d472a8052fd457aa0982a068ac06d31",
+        "status": "success"
+      },
+      "createdAt": "2026-10-25T23:43:15.629814Z"
+    },
+    {
+      "type": "TOOL_START",
+      "data": {
+        "args": {
+          "query": "다음은 첨부 자료를 바탕으로 도출한 관찰 요약과 원인 후보, 추가 확인 방법입니다. 실제 장애 여부는 단정하지 않습니다.\n\n1) 확인한 사실 (파일명/줄 번호와 함께)\n- 합성 로그: synthetic_error.log\n  - L1: 2026-10-26T08:45:00 ERROR reservation-api HikariPool connection pool exhausted\n  - L2: 2026-10-26T08:45:01 ERROR reservation-api SQLTransientConnectionException Connection is not available, request timed out after 30000ms\n  - L3: 2026-10-26T08:45:02 ERROR reservation-api HTTP 503 upstream timeout\n  - 이 로그에서 reservation-api의 커넥션 풀 고갈(HikariPool exhausted) 및 연결 대기 타임아웃으로 인한 HTTP 503 업스트림 타임아웃이 명시적으로 기록되어 있습니다.\n- 합성 화면/이미지: synthetic_error.png\n  - 화면 문구: \"reservation-api HTTP 503\", \"ERROR: connection pool exhausted\", \"HikariPool: connection timeout after 30000ms\"\n  - 이미지 위치상으로도 reservation-api 관련 503 및 커넥션 풀 고갈이 시각적으로 강조되어 있습니다.\n- 현재 지표(최근 1분, 첨부 시각과 다를 수 있음)\n  - checkin-api 에러율 및 요청량 관련 Prometheus 응답은 데이터가 없거나 특정 지표가 누락되었다고 나타남. 예: checkin-api 에러율의 data 부분이 빈 배열이며, grafana Prometheus 쿼리 관련 힌트가 포함되어 있습니다.\n  - reservation-api 관련 지표는 특정 근거로 판단되었다고 나타나 있으나, “grafana_query_prometheus를 이 단계에서 이미 3번 호출했다”는 메시지로 인해 현재 지표를 통한 단일 근거로 판단하기 어렵다는 상태가 포함되어 있습니다.\n  - 요약: 현재 지표 측면은 데이터 부재나 조회 제약으로 인해 확정 상태를 판단하기 어렵고, 로그/이미지 상의 증거가 더 직접적입니다.\n- 추가 첨부 자료의 서비스 구성 정보\n  - reservation-api: external 의존성(payment-gateway) 있음, 풀 사이즈 20, 최대 레플리카 1, 노출 지표 및 로그 셀렉터는 존재하지만, 상태 오류 메시지에 NoSuchFileException 등은 없고, 다만 현재 장애 관측과는 별개로 \"공유된 상태 확인 필요\" 메시지가 남아 있습니다.\n  - checkin-api: 유사하게 외부 의존성 존재 및 Prometheus 지표 쿼리의 데이터부재가 관측됩니다.\n\n2) 원인 후보 및 근거\n- 후보 A: 데이터베이스 커넥션 풀 고갈(HikariPool exhausted)\n  - 근거 파일/라인: synthetic_error.log L1\n  - 근거 내용: reservation-api의 HikariPool 커넥션 풀 고갈 메시지와 SQLTransientConnectionException, 30000ms 타임아웃이 명시적으로 기록되어 있음.\n  - 추가 관찰점: 합성 화면에서도 “connection pool exhausted” 및 503 업스트림 타임아웃이 반복적으로 노출.\n- 후보 B: 외부 의존성(결제 게이트웨이)으로 인한 대기/지연 증가\n  - 근거 파일/라인: synthetic_error.log L2의 SQLTransientConnectionException 및 L3의 HTTP 503 업스트림 타임아웃\n  - 근거 해석: 내부 커넥션 풀이 고갈되면 외부 API 응답 지연이 누적되어 503으로 귀결될 수 있음. 외부 의존성(결제 게이트웨이) 관련 설정은 로그에 직접적 표기는 없지만, 서비스 구성에서 의존성이 명시되어 있습니다.\n- 후보 C: 애플리케이션 레벨에서의 과도한 동시성/트래픽 증가로 커넥션 풀이 빨리 고갈\n  - 근거 파일/라인: 합성 로그의 커넥션 풀 고갈 현상; checkin-api 지표의 데이터 부재 및 reservation-api의 503 이슈가 동시성 증가를 시사할 수 있음.\n  - 추가 근거: 현재 지표 데이터가 불완전하여 동시성 증가 여부를 단정하기 어렵지만, 로그 상 커넥션 풀이 고갈되는 패턴은 과도한 동시성의 가능성을 시사.\n- 후보 D: 모니터링 지표의 데이터 부재/조회 이슈로 정확한 원인 판단에 제약\n  - 근거 파일/라인: 현재 지표 데이터의 빈 배열/쿼리 실패 메시지\n  - 근거 내용: checkin-api 응답의 data가 비어 있거나 PromQL 조회가 반복적으로 실패했다는 힌트가 포함되어 있어, 지표만으로 장애 원인을 확정하기 어렵습니다.\n\n3) 현재 관측과의 비교\n- 로그 기반 관측과 화면 기반 관측은 서로 일관되게 “reservation-api의 커넥션 풀 고갈로 인한 HTTP 503” 패턴을 보여줍니다.\n- 지표 측면은 데이터 부재나 조회 실패로 인해 단일 지표로 확정하기 어렵습니다. 즉, 로그의 증거는 강하게 커넥션 풀 이슈를 시사하지만, 현재 운영 지표가 이를 충분히 증명하는지 여부는 추가 확인이 필요합니다.\n- 따라서 현재 관측은 로그/이미지의 증거가 강하고, 지표 측정의 한계로 인해 확정으로 갈 수 없습니다.\n\n4) 추가 확인 방법\n- 커넥션 풀 상태 점검\n  - HikariCP의 현재 커넥션 풀 사용률, 대기 커넥션 수, Maximum Pool Size, 연결 대기 시간(waitTimeout) 값을 실시간으로 확인합니다.\n  - 최신 로그에서 HikariPool 관련 WARN/ERROR가 추가로 있는지 확인합니다.\n- 데이터베이스 쿼리/시간 초과 분석\n  - 장시간 실행되는 쿼리 여부 및 상태 대기열(backlog) 확인.\n  - SQL 트랜잭션의 대기/잠금 현상 여부 점검.\n- 외부 의존성 영향 점검\n  - payment-gateway의 응답 시간 분포를 확인하고, 외부 API 타임아웃/지연으로 인해 내부 커넥션 풀이 빠르게 소모되는지 확인합니다.\n- 트래픽/동시성 확인\n  - 최근 5~15분 간 초당 요청 수, 동시성 추이, 큐 대기열(backlog) 크기 확인.\n  - reservation-api의 요청량 급증 여부를 로그/메트릭으로 교차 검증합니다.\n- 지표 수집 구성 점검\n  - Prometheus 스크레이프 대상의 상태 확인, metric 이름/레이블이 실제로 존재하는지 확인(list_metric_names, list_label_values 사용).\n  - 시간 범위를 확대하여 데이터가 존재하는지 재확인.\n  - 쿼리 구성의 단순화/레이블 축소를 시도하여 데이터 획득 가능 여부를 확인.\n- 장애 여부 판단 규칙 보완\n  - 현재 지표 데이터 부재로 장애 여부를 확정하지 않되, 로그에서 확인되는 증거를 바탕으로 ‘원인 후보를 더 깊이 확인하는 것을 권고’하는 형태로 판단합니다.\n\n요약\n- 확인된 증거: synthetic_error.log의 reservation-api 커넥션 풀 고갈 및 30000ms 타임아웃, HTTP 503 업스트림 타임아웃, 화면 이미지에서도 동일한 메시지 확인.\n- 주요 원인 후보: 커넥션 풀 고갈(HikariPool exhausted) 또는 그로 인한 HTTP 503, 외부 의존성(결제 게이트웨이) 지연 가능성, 동시성 증가 가능성.\n- 현재 관측의 한계: checkin-api 및 reservation-api 관련 지표의 데이터 부재/쿼리 제한으로 단정은 불가.\n- 추가 확인 권고: 커넥션 풀 상태, DB 쿼리 지연 여부, 외부 의존성 응답 시간, 트래픽 추이, Prometheus 설정 및 데이터 존재 여부를 단계적으로 확인.\n\n참고\n- 증거를 제시할 때는 파일명/줄 번호를 명확히 언급했습니다. 원인 확정은 현재의 증거만으로는 어렵고, 추가 확인이 필요합니다.",
+          "scope": "common",
+          "top_k": 2
+        },
+        "node": "retrieve_runbook",
+        "tool": "rag_search_documents",
+        "callId": "511d1b8d75e34fc1bdaf3dcbe0c37609"
+      },
+      "createdAt": "2026-10-25T23:43:28.910174Z"
+    },
+    {
+      "type": "TOOL_END",
+      "data": {
+        "node": "retrieve_runbook",
+        "tool": "rag_search_documents",
+        "callId": "511d1b8d75e34fc1bdaf3dcbe0c37609",
+        "status": "success"
+      },
+      "createdAt": "2026-10-25T23:43:29.117775Z"
+    },
+    {
+      "type": "TOOL_START",
+      "data": {
+        "args": {
+          "query": "다음은 첨부 자료를 바탕으로 도출한 관찰 요약과 원인 후보, 추가 확인 방법입니다. 실제 장애 여부는 단정하지 않습니다.\n\n1) 확인한 사실 (파일명/줄 번호와 함께)\n- 합성 로그: synthetic_error.log\n  - L1: 2026-10-26T08:45:00 ERROR reservation-api HikariPool connection pool exhausted\n  - L2: 2026-10-26T08:45:01 ERROR reservation-api SQLTransientConnectionException Connection is not available, request timed out after 30000ms\n  - L3: 2026-10-26T08:45:02 ERROR reservation-api HTTP 503 upstream timeout\n  - 이 로그에서 reservation-api의 커넥션 풀 고갈(HikariPool exhausted) 및 연결 대기 타임아웃으로 인한 HTTP 503 업스트림 타임아웃이 명시적으로 기록되어 있습니다.\n- 합성 화면/이미지: synthetic_error.png\n  - 화면 문구: \"reservation-api HTTP 503\", \"ERROR: connection pool exhausted\", \"HikariPool: connection timeout after 30000ms\"\n  - 이미지 위치상으로도 reservation-api 관련 503 및 커넥션 풀 고갈이 시각적으로 강조되어 있습니다.\n- 현재 지표(최근 1분, 첨부 시각과 다를 수 있음)\n  - checkin-api 에러율 및 요청량 관련 Prometheus 응답은 데이터가 없거나 특정 지표가 누락되었다고 나타남. 예: checkin-api 에러율의 data 부분이 빈 배열이며, grafana Prometheus 쿼리 관련 힌트가 포함되어 있습니다.\n  - reservation-api 관련 지표는 특정 근거로 판단되었다고 나타나 있으나, “grafana_query_prometheus를 이 단계에서 이미 3번 호출했다”는 메시지로 인해 현재 지표를 통한 단일 근거로 판단하기 어렵다는 상태가 포함되어 있습니다.\n  - 요약: 현재 지표 측면은 데이터 부재나 조회 제약으로 인해 확정 상태를 판단하기 어렵고, 로그/이미지 상의 증거가 더 직접적입니다.\n- 추가 첨부 자료의 서비스 구성 정보\n  - reservation-api: external 의존성(payment-gateway) 있음, 풀 사이즈 20, 최대 레플리카 1, 노출 지표 및 로그 셀렉터는 존재하지만, 상태 오류 메시지에 NoSuchFileException 등은 없고, 다만 현재 장애 관측과는 별개로 \"공유된 상태 확인 필요\" 메시지가 남아 있습니다.\n  - checkin-api: 유사하게 외부 의존성 존재 및 Prometheus 지표 쿼리의 데이터부재가 관측됩니다.\n\n2) 원인 후보 및 근거\n- 후보 A: 데이터베이스 커넥션 풀 고갈(HikariPool exhausted)\n  - 근거 파일/라인: synthetic_error.log L1\n  - 근거 내용: reservation-api의 HikariPool 커넥션 풀 고갈 메시지와 SQLTransientConnectionException, 30000ms 타임아웃이 명시적으로 기록되어 있음.\n  - 추가 관찰점: 합성 화면에서도 “connection pool exhausted” 및 503 업스트림 타임아웃이 반복적으로 노출.\n- 후보 B: 외부 의존성(결제 게이트웨이)으로 인한 대기/지연 증가\n  - 근거 파일/라인: synthetic_error.log L2의 SQLTransientConnectionException 및 L3의 HTTP 503 업스트림 타임아웃\n  - 근거 해석: 내부 커넥션 풀이 고갈되면 외부 API 응답 지연이 누적되어 503으로 귀결될 수 있음. 외부 의존성(결제 게이트웨이) 관련 설정은 로그에 직접적 표기는 없지만, 서비스 구성에서 의존성이 명시되어 있습니다.\n- 후보 C: 애플리케이션 레벨에서의 과도한 동시성/트래픽 증가로 커넥션 풀이 빨리 고갈\n  - 근거 파일/라인: 합성 로그의 커넥션 풀 고갈 현상; checkin-api 지표의 데이터 부재 및 reservation-api의 503 이슈가 동시성 증가를 시사할 수 있음.\n  - 추가 근거: 현재 지표 데이터가 불완전하여 동시성 증가 여부를 단정하기 어렵지만, 로그 상 커넥션 풀이 고갈되는 패턴은 과도한 동시성의 가능성을 시사.\n- 후보 D: 모니터링 지표의 데이터 부재/조회 이슈로 정확한 원인 판단에 제약\n  - 근거 파일/라인: 현재 지표 데이터의 빈 배열/쿼리 실패 메시지\n  - 근거 내용: checkin-api 응답의 data가 비어 있거나 PromQL 조회가 반복적으로 실패했다는 힌트가 포함되어 있어, 지표만으로 장애 원인을 확정하기 어렵습니다.\n\n3) 현재 관측과의 비교\n- 로그 기반 관측과 화면 기반 관측은 서로 일관되게 “reservation-api의 커넥션 풀 고갈로 인한 HTTP 503” 패턴을 보여줍니다.\n- 지표 측면은 데이터 부재나 조회 실패로 인해 단일 지표로 확정하기 어렵습니다. 즉, 로그의 증거는 강하게 커넥션 풀 이슈를 시사하지만, 현재 운영 지표가 이를 충분히 증명하는지 여부는 추가 확인이 필요합니다.\n- 따라서 현재 관측은 로그/이미지의 증거가 강하고, 지표 측정의 한계로 인해 확정으로 갈 수 없습니다.\n\n4) 추가 확인 방법\n- 커넥션 풀 상태 점검\n  - HikariCP의 현재 커넥션 풀 사용률, 대기 커넥션 수, Maximum Pool Size, 연결 대기 시간(waitTimeout) 값을 실시간으로 확인합니다.\n  - 최신 로그에서 HikariPool 관련 WARN/ERROR가 추가로 있는지 확인합니다.\n- 데이터베이스 쿼리/시간 초과 분석\n  - 장시간 실행되는 쿼리 여부 및 상태 대기열(backlog) 확인.\n  - SQL 트랜잭션의 대기/잠금 현상 여부 점검.\n- 외부 의존성 영향 점검\n  - payment-gateway의 응답 시간 분포를 확인하고, 외부 API 타임아웃/지연으로 인해 내부 커넥션 풀이 빠르게 소모되는지 확인합니다.\n- 트래픽/동시성 확인\n  - 최근 5~15분 간 초당 요청 수, 동시성 추이, 큐 대기열(backlog) 크기 확인.\n  - reservation-api의 요청량 급증 여부를 로그/메트릭으로 교차 검증합니다.\n- 지표 수집 구성 점검\n  - Prometheus 스크레이프 대상의 상태 확인, metric 이름/레이블이 실제로 존재하는지 확인(list_metric_names, list_label_values 사용).\n  - 시간 범위를 확대하여 데이터가 존재하는지 재확인.\n  - 쿼리 구성의 단순화/레이블 축소를 시도하여 데이터 획득 가능 여부를 확인.\n- 장애 여부 판단 규칙 보완\n  - 현재 지표 데이터 부재로 장애 여부를 확정하지 않되, 로그에서 확인되는 증거를 바탕으로 ‘원인 후보를 더 깊이 확인하는 것을 권고’하는 형태로 판단합니다.\n\n요약\n- 확인된 증거: synthetic_error.log의 reservation-api 커넥션 풀 고갈 및 30000ms 타임아웃, HTTP 503 업스트림 타임아웃, 화면 이미지에서도 동일한 메시지 확인.\n- 주요 원인 후보: 커넥션 풀 고갈(HikariPool exhausted) 또는 그로 인한 HTTP 503, 외부 의존성(결제 게이트웨이) 지연 가능성, 동시성 증가 가능성.\n- 현재 관측의 한계: checkin-api 및 reservation-api 관련 지표의 데이터 부재/쿼리 제한으로 단정은 불가.\n- 추가 확인 권고: 커넥션 풀 상태, DB 쿼리 지연 여부, 외부 의존성 응답 시간, 트래픽 추이, Prometheus 설정 및 데이터 존재 여부를 단계적으로 확인.\n\n참고\n- 증거를 제시할 때는 파일명/줄 번호를 명확히 언급했습니다. 원인 확정은 현재의 증거만으로는 어렵고, 추가 확인이 필요합니다.",
+          "scope": "tenant",
+          "top_k": 2
+        },
+        "node": "retrieve_runbook",
+        "tool": "rag_search_documents",
+        "callId": "64f1a9ba82ad43188d933cb641bc7c5c"
+      },
+      "createdAt": "2026-10-25T23:43:29.120431Z"
+    },
+    {
+      "type": "TOOL_END",
+      "data": {
+        "node": "retrieve_runbook",
+        "tool": "rag_search_documents",
+        "callId": "64f1a9ba82ad43188d933cb641bc7c5c",
+        "status": "success"
+      },
+      "createdAt": "2026-10-25T23:43:29.33923Z"
+    },
+    {
+      "type": "TOOL_START",
+      "data": {
+        "args": {
+          "query": "MSP가 사전 동의 없이 수행할 수 있는 허용 조치와 고객사 승인이 필요한 조치",
+          "scope": "tenant",
+          "top_k": 1,
+          "doc_type": "sla"
+        },
+        "node": "retrieve_runbook",
+        "tool": "rag_search_documents",
+        "callId": "8f43521d7ba346ba9dc201669f3c983b"
+      },
+      "createdAt": "2026-10-25T23:43:29.342141Z"
+    },
+    {
+      "type": "TOOL_END",
+      "data": {
+        "node": "retrieve_runbook",
+        "tool": "rag_search_documents",
+        "callId": "8f43521d7ba346ba9dc201669f3c983b",
+        "status": "success"
+      },
+      "createdAt": "2026-10-25T23:43:29.513641Z"
+    },
+    {
+      "type": "STEP",
+      "data": {
+        "node": "report"
+      },
+      "createdAt": "2026-10-25T23:43:29.516682Z"
+    },
+    {
+      "type": "DONE",
+      "data": {},
+      "createdAt": "2026-10-25T23:43:40.480511Z"
+    }
+  ]
+}

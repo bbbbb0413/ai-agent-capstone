@@ -1,0 +1,44 @@
+{
+  "search": {
+    "all": [
+      "docs://tenant-b/runbook-reservation-api",
+      "docs://tenant-b/runbook-reservation-api",
+      "docs://_common/runbook-standard",
+      "docs://_common/runbook-standard",
+      "docs://_common/runbook-standard",
+      "docs://tenant-b/sla-contract",
+      "docs://_common/runbook-standard",
+      "docs://tenant-b/runbook-reservation-api",
+      "docs://tenant-b/sla-contract",
+      "docs://tenant-b/runbook-reservation-api"
+    ],
+    "common": [
+      "docs://_common/runbook-standard",
+      "docs://_common/runbook-standard",
+      "docs://_common/runbook-standard",
+      "docs://_common/runbook-standard",
+      "docs://_common/runbook-standard",
+      "docs://_common/runbook-standard",
+      "docs://_common/runbook-standard",
+      "docs://_common/runbook-standard"
+    ]
+  },
+  "resources": [
+    {
+      "uri": "docs://tenant-a/sla-contract",
+      "allowed": false,
+      "exception": "McpError"
+    },
+    {
+      "uri": "docs://tenant-b/sla-contract",
+      "allowed": true,
+      "nonempty": true
+    },
+    {
+      "uri": "docs://_common/runbook-standard",
+      "allowed": true,
+      "nonempty": true
+    }
+  ],
+  "passed": true
+}

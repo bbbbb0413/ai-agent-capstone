@@ -1,0 +1,334 @@
+{
+  "recorded_execution_date": "2026-10-26",
+  "publication_base_commit": "632ae8cfca651b431fab1a30423f5e0b3906f626",
+  "note": "Existing local evidence published after review; tests were not rerun. Base commit identifies publication context, not a newly recorded test execution commit.",
+  "files": [
+    {
+      "path": "agent_tests.log",
+      "original_sha256": "ee727f7476c6e22ff13a8621dbd894e58269c4235da398328c4448f742790f48",
+      "published_sha256": "b5bf34fe418b503d481631eb66dede89ac20c83b8e7ca64545b197ff22d58e96",
+      "changes": [
+        "personal home path replaced with /LOCAL_HOME"
+      ]
+    },
+    {
+      "path": "indexer_tests_with_vector.log",
+      "original_sha256": "d29e040e6f267953fe502abe9936b2861ab3ba118875e575589fdf28a1a8e4d0",
+      "published_sha256": "d29e040e6f267953fe502abe9936b2861ab3ba118875e575589fdf28a1a8e4d0",
+      "changes": []
+    },
+    {
+      "path": "rag_tests_with_vector.log",
+      "original_sha256": "9a90ae9cdd808deae30d87f3e94e0637c244d342206d45685a0d839507a637e8",
+      "published_sha256": "e3cfc18aa847815984a71a8f5db2a6e2ca0a04af37f4664a8b61b85d42369b59",
+      "changes": [
+        "personal home path replaced with /LOCAL_HOME"
+      ]
+    },
+    {
+      "path": "backend_tests_final.log",
+      "original_sha256": "21ca7c7f86a46388d307e4917577739e7ebc824395d72180ddb22f8c8438509b",
+      "published_sha256": "9def4e766c0cdceff6c0c0233389fbd0774a432df9a5f2bb37d63c0ecb077c8f",
+      "changes": [
+        "personal home path replaced with /LOCAL_HOME"
+      ]
+    },
+    {
+      "path": "frontend_tests.log",
+      "original_sha256": "040192605075e9e7f95e3f20c33df8a03fe18dc81e71208868818b9d5d307a2d",
+      "published_sha256": "040192605075e9e7f95e3f20c33df8a03fe18dc81e71208868818b9d5d307a2d",
+      "changes": []
+    },
+    {
+      "path": "frontend_build.log",
+      "original_sha256": "ca08142033d019edef22ab2d88f22ed20ebcdf4ca5a8defd39d05adbc8b46ddb",
+      "published_sha256": "ca08142033d019edef22ab2d88f22ed20ebcdf4ca5a8defd39d05adbc8b46ddb",
+      "changes": []
+    },
+    {
+      "path": "boundary_results.json",
+      "original_sha256": "7ba963434229a775e2b8f30dad59b78765162a670bb6bdf43774ac00d488d24e",
+      "published_sha256": "7ba963434229a775e2b8f30dad59b78765162a670bb6bdf43774ac00d488d24e",
+      "changes": []
+    },
+    {
+      "path": "gitops_probe.log",
+      "original_sha256": "89af3e6b83d972645c8ed80cdec8aaf09427afb4783b09ad49fbe3706b7d7d1c",
+      "published_sha256": "dfc9da146951f5ce427a13198f66ec3032c5229864162838bba13b80fa0696e8",
+      "changes": [
+        "personal home path replaced with /LOCAL_HOME"
+      ]
+    },
+    {
+      "path": "gitops_probe_results.xml",
+      "original_sha256": "c4608e29c97965cf07b45c7860f076b97d1d738dcdbdcf2b34835f03dc9b75d9",
+      "published_sha256": "3369921525cf37b513a0a6903b59ea9692abbe953e41feb1bcd5d72095ffa4e2",
+      "changes": [
+        "personal home path replaced with /LOCAL_HOME",
+        "JUnit hostname replaced with LOCAL_HOST"
+      ]
+    },
+    {
+      "path": "http_results.json",
+      "original_sha256": "62bee3f9d79946c16c7fb16604a30a54ba17b7e56783bc7e226509c8e0fd3575",
+      "published_sha256": "62bee3f9d79946c16c7fb16604a30a54ba17b7e56783bc7e226509c8e0fd3575",
+      "changes": []
+    },
+    {
+      "path": "symptom_live_results.json",
+      "original_sha256": "1a005c3c6ecd93d905ce5ae0a56efc79c02c7a9d4bd0637f574337e25a15f989",
+      "published_sha256": "1a005c3c6ecd93d905ce5ae0a56efc79c02c7a9d4bd0637f574337e25a15f989",
+      "changes": []
+    },
+    {
+      "path": "attachment_live_results.json",
+      "original_sha256": "caa3769f0263a5f625aeb98e4782475d7e2a5ef8733fcaa26835e3f964a726a3",
+      "published_sha256": "caa3769f0263a5f625aeb98e4782475d7e2a5ef8733fcaa26835e3f964a726a3",
+      "changes": []
+    },
+    {
+      "path": "sla_failure_live_results.json",
+      "original_sha256": "ce1076111614dbc9522f65ed9b2a189b9736695b1f7114468d5ea21c4da0b53a",
+      "published_sha256": "ce1076111614dbc9522f65ed9b2a189b9736695b1f7114468d5ea21c4da0b53a",
+      "changes": []
+    },
+    {
+      "path": "rag_live_results.json",
+      "original_sha256": "1309dbae42204311316427723934aae7b612abc58aa5bcd13d827a96b07f078b",
+      "published_sha256": "1309dbae42204311316427723934aae7b612abc58aa5bcd13d827a96b07f078b",
+      "changes": []
+    },
+    {
+      "path": "boundary_probes.py",
+      "original_sha256": "6ad80dda78ba1c2a20b63e105b08eb3ea1342e5d291904e5ac8946a0a4e753ad",
+      "published_sha256": "6ad80dda78ba1c2a20b63e105b08eb3ea1342e5d291904e5ac8946a0a4e753ad",
+      "changes": []
+    },
+    {
+      "path": "probes/com/opslens/backend/change/GitOpsSyncAuditTest.java",
+      "original_sha256": "c352e6d4d9e9dbeb7ad7da8bf43367771706dfaa7153b4469586a1bd9e26d446",
+      "published_sha256": "c352e6d4d9e9dbeb7ad7da8bf43367771706dfaa7153b4469586a1bd9e26d446",
+      "changes": []
+    },
+    {
+      "path": "synthetic_error.log",
+      "original_sha256": "e7b1291fd526aa258829ddc10fd359edb46b503e1cdab147f8defc3c28f39887",
+      "published_sha256": "e7b1291fd526aa258829ddc10fd359edb46b503e1cdab147f8defc3c28f39887",
+      "changes": []
+    },
+    {
+      "path": "backend_test_results/TEST-com.opslens.backend.alert.AlertWebhookControllerTest.xml",
+      "original_sha256": "963d653eb23bcb58a13a74f63583bbc31aa582a590cde602ec3788e65dc22cee",
+      "published_sha256": "a07e52dca60f3ae73e80954eadf57aaef4b4c392b53fef5a73b8930a319e9d5d",
+      "changes": [
+        "personal home path replaced with /LOCAL_HOME",
+        "JUnit hostname replaced with LOCAL_HOST"
+      ]
+    },
+    {
+      "path": "backend_test_results/TEST-com.opslens.backend.attachment.AttachmentDatabaseTest.xml",
+      "original_sha256": "41d10130fa0ab9fd16738fa72e044514ff1ab0e94ad07aa05e14dfbe8d009279",
+      "published_sha256": "06f3fdc76a395adadf6cdc276ab9848d1240da260155ed3e84ba55f38f6cefa1",
+      "changes": [
+        "JUnit hostname replaced with LOCAL_HOST"
+      ]
+    },
+    {
+      "path": "backend_test_results/TEST-com.opslens.backend.attachment.TaskAttachmentsTest.xml",
+      "original_sha256": "f1eac3bdc17c3d56aea76b057e35803dc26159b1ec549b552b1e1382eb4a61f7",
+      "published_sha256": "09b0a89544bf008a111a4835cde86f7b8296c8e79dc662e41dedddf971eca15c",
+      "changes": [
+        "JUnit hostname replaced with LOCAL_HOST"
+      ]
+    },
+    {
+      "path": "backend_test_results/TEST-com.opslens.backend.auth.InternalTokensTest.xml",
+      "original_sha256": "a3e010bea51efbce5efd642c78ce222b9378c23a8c709657b1fcfc97e03cb048",
+      "published_sha256": "ced68259dec2c24cce90ad25f41c7c87fe726f9b4d61cc7da0d3fe950976c190",
+      "changes": [
+        "JUnit hostname replaced with LOCAL_HOST"
+      ]
+    },
+    {
+      "path": "backend_test_results/TEST-com.opslens.backend.change.ChangeServiceTest.xml",
+      "original_sha256": "f7677ce3a84724e89712e291f93169e59e2ff27d7dbdea5c732093a8c42bb121",
+      "published_sha256": "7ab4e678fa7fce896f82f9a8325cfe5baaed87ee0007987820c19c28dfeda807",
+      "changes": [
+        "JUnit hostname replaced with LOCAL_HOST"
+      ]
+    },
+    {
+      "path": "backend_test_results/TEST-com.opslens.backend.change.DependencyHealthTest.xml",
+      "original_sha256": "a9dbf1446579f0611a2f487456f8a1d68687685bcfb916aa4a7ddeaf80c3e6ef",
+      "published_sha256": "7fef6b631ee0ec3ad9e09e7310226d7f03c2ae5125a9c147d59e07ebb012e1a5",
+      "changes": [
+        "JUnit hostname replaced with LOCAL_HOST"
+      ]
+    },
+    {
+      "path": "backend_test_results/TEST-com.opslens.backend.change.GitOpsRepositoryTest.xml",
+      "original_sha256": "e33bbaa291706e5aa3fd426343a1a27cabe05baa06f7fed1df9557a4ff57d2fa",
+      "published_sha256": "d9cf2ee5546305957604d17286d64ab57fe4d36cd29f388210ec44756bf2a31c",
+      "changes": [
+        "JUnit hostname replaced with LOCAL_HOST"
+      ]
+    },
+    {
+      "path": "backend_test_results/TEST-com.opslens.backend.config.CsrfProtectionTest.xml",
+      "original_sha256": "6bcbdd2b0c733faf3fa823936772fdeb9ece654c99f83cfe6898358b3c409208",
+      "published_sha256": "e9a0e9417191b62546c6c7abbe3e6409d95c964ba7200f10146be5cd65610ef9",
+      "changes": [
+        "personal home path replaced with /LOCAL_HOME",
+        "JUnit hostname replaced with LOCAL_HOST"
+      ]
+    },
+    {
+      "path": "backend_test_results/TEST-com.opslens.backend.document.DocumentFilesTest.xml",
+      "original_sha256": "6436ec8f581da4268494c4a4e31c10898f10f1dfe28a17532667c0a5905e6d81",
+      "published_sha256": "f31a54396da04c6ae9b17deb22347c1e1bb8d14c4e4bcad6ff45ff3141e1d889",
+      "changes": [
+        "JUnit hostname replaced with LOCAL_HOST"
+      ]
+    },
+    {
+      "path": "backend_test_results/TEST-com.opslens.backend.document.DocumentSeederTest.xml",
+      "original_sha256": "4cb71a3034030e95d01bfdd13ab6fd7dcbeb206e2f910e202998c98e7dc8e20e",
+      "published_sha256": "b47df34de2b722e6276c3028022a43c37b8aa4a67665e0bf19422e47020d568d",
+      "changes": [
+        "JUnit hostname replaced with LOCAL_HOST"
+      ]
+    },
+    {
+      "path": "backend_test_results/TEST-com.opslens.backend.document.DocumentServiceTest.xml",
+      "original_sha256": "c846dec61a2bc0ede0731e59d37ff8aab39a37e3ed5ba730d9d136fa6423581a",
+      "published_sha256": "f3d091664aed5a20c6c9fdcf5de66ba24d02944781c0c6e237c182a964257ec1",
+      "changes": [
+        "JUnit hostname replaced with LOCAL_HOST"
+      ]
+    },
+    {
+      "path": "backend_test_results/TEST-com.opslens.backend.document.InternalDocumentControllerTest.xml",
+      "original_sha256": "dc23b3bbd7cf0bb5a7c2ae657e183822a6df0dce362a000bc52e81064e6bcc4f",
+      "published_sha256": "3741dc5b14b0d865d94e01c348506389f7348bed385c902436a1e5371227fc00",
+      "changes": [
+        "JUnit hostname replaced with LOCAL_HOST"
+      ]
+    },
+    {
+      "path": "backend_test_results/TEST-com.opslens.backend.escalation.EscalationServiceTest.xml",
+      "original_sha256": "2ba4fab2fbec099ab02c2a019907d82593a89eee0f204587a8764c839059b57c",
+      "published_sha256": "77c1dba480731ab8aee289241e7f050f7babf3253c70cd67a323c1a9b9c58048",
+      "changes": [
+        "JUnit hostname replaced with LOCAL_HOST"
+      ]
+    },
+    {
+      "path": "backend_test_results/TEST-com.opslens.backend.impact.ImpactMetricsTest.xml",
+      "original_sha256": "83ad798ebabb64d724433448881d42e289fea1e31fc9409df6872365a424a1e0",
+      "published_sha256": "b09ab7b3c89f22321f311d8d6084efe372ab23ca5edb7cb17d6a573cd2a6a567",
+      "changes": [
+        "JUnit hostname replaced with LOCAL_HOST"
+      ]
+    },
+    {
+      "path": "backend_test_results/TEST-com.opslens.backend.impact.ImpactServiceTest.xml",
+      "original_sha256": "1ff925a4945285c4683b19349f6d5028e3cad5d33cbee3e535d461299a0a95a1",
+      "published_sha256": "e3dd1815f5eb6e2ac5fe41bc40ebd937be05e629fc92f3bdf126f23285c114f1",
+      "changes": [
+        "JUnit hostname replaced with LOCAL_HOST"
+      ]
+    },
+    {
+      "path": "backend_test_results/TEST-com.opslens.backend.incident.IncidentAlertsDatabaseTest.xml",
+      "original_sha256": "4a17c81c62353d2a140c8ae5730151bdbd277ba30084c8a19176f43c57a67857",
+      "published_sha256": "9d9c8dab827b956a74960879696750342767cdb5ebfbbd803ac915e6c01aa5c1",
+      "changes": [
+        "JUnit hostname replaced with LOCAL_HOST"
+      ]
+    },
+    {
+      "path": "backend_test_results/TEST-com.opslens.backend.incident.PostmortemRepositoryDatabaseTest.xml",
+      "original_sha256": "db38bc334762ccc90ea63be8b5313c377e922a903be4c1fe716423956798dd3a",
+      "published_sha256": "bcdc74ab56f7eeddc761aae91a0710b8c783405c22602ec12c019ba85696dcb1",
+      "changes": [
+        "JUnit hostname replaced with LOCAL_HOST"
+      ]
+    },
+    {
+      "path": "backend_test_results/TEST-com.opslens.backend.slack.SlackDeliveryDatabaseTest.xml",
+      "original_sha256": "62efb669fdaae96ed88f24c305aa8fc7d3730cc7a274aae91ec725c635031935",
+      "published_sha256": "0b7f1c3d720f2db95613d6cce7c77b11482ede23c92926c1471e8dd1a01355d3",
+      "changes": [
+        "JUnit hostname replaced with LOCAL_HOST"
+      ]
+    },
+    {
+      "path": "backend_test_results/TEST-com.opslens.backend.slack.SlackSafetyTest.xml",
+      "original_sha256": "0f10d2e6f38adbde5933625ce9be497cad3702aef9fb0366a8f270f516604e2e",
+      "published_sha256": "1e78837009b2f7de4a5ea4fc8fb6de67d1750bdc239ed3596f55a28204606efc",
+      "changes": [
+        "JUnit hostname replaced with LOCAL_HOST"
+      ]
+    },
+    {
+      "path": "backend_test_results/TEST-com.opslens.backend.task.TaskOutboxRelayTest.xml",
+      "original_sha256": "8f4bd49eea1e269b01de627f0aa58235fd29f64987059e6f5ea68bb3917b8c1f",
+      "published_sha256": "2a5648bf8296524ba67898ba08be936f6fc39e53a994123600aa59b6ae9ec4fc",
+      "changes": [
+        "JUnit hostname replaced with LOCAL_HOST"
+      ]
+    },
+    {
+      "path": "backend_test_results/TEST-com.opslens.backend.task.TaskRepositoryDatabaseTest.xml",
+      "original_sha256": "4051d9be75fc2bf6f1b44fe19f865aeea0a3ed5e94df3650d83b4d7aed1f72ed",
+      "published_sha256": "4963e6ffe999f349936194c1486db59a93d72d1565746a6058301de7fc800ab8",
+      "changes": [
+        "JUnit hostname replaced with LOCAL_HOST"
+      ]
+    },
+    {
+      "path": "backend_test_results/TEST-com.opslens.backend.task.TaskServiceTest.xml",
+      "original_sha256": "8a4988abec05e830aebcd2641aa16c8b2873fd53132643e374774172c8d38857",
+      "published_sha256": "ca1134bac9b73a256a4fc2c04b20b9fb8651cb6771cd2f39d81c320510c790fd",
+      "changes": [
+        "JUnit hostname replaced with LOCAL_HOST"
+      ]
+    },
+    {
+      "path": "backend_test_results/TEST-com.opslens.backend.task.TaskTokensTest.xml",
+      "original_sha256": "7360102d7f3503e0bd412953de1338343bb44f1612525f897824f32008cf9a5d",
+      "published_sha256": "c6297ab6ef03edb8e6222a6ff3c2cb9c7b96bfb05520d006802f0e56d8156a4f",
+      "changes": [
+        "JUnit hostname replaced with LOCAL_HOST"
+      ]
+    },
+    {
+      "path": "backend_test_results/TEST-com.opslens.backend.tenant.InternalTenantControllerTest.xml",
+      "original_sha256": "831c91d82bfa03e6d551a7c85cbff4657d4d91cc55de8f5b881f5b63479aab2e",
+      "published_sha256": "825cf14658c5396b4af6aec6faefb97f3aafdecee919d6b45ccf9a94e955a41b",
+      "changes": [
+        "JUnit hostname replaced with LOCAL_HOST"
+      ]
+    },
+    {
+      "path": "backend_test_results/TEST-com.opslens.backend.tenant.SlaPolicyTest.xml",
+      "original_sha256": "a27d233ebeb953d990276b4718051a179674b118ae226528c81d10265de192fb",
+      "published_sha256": "291c4d79c2d35fff5513b2f349924a7900ee69535bce75a95d26ad75bd8157ff",
+      "changes": [
+        "JUnit hostname replaced with LOCAL_HOST"
+      ]
+    },
+    {
+      "path": "synthetic_error.png",
+      "original_sha256": "10af823e64fd13402b5a9dbcc1a9903810c53aeef722eecfb8f2ff9dc56ce7d5",
+      "published_sha256": "10af823e64fd13402b5a9dbcc1a9903810c53aeef722eecfb8f2ff9dc56ce7d5",
+      "changes": []
+    },
+    {
+      "path": "document_failure_ui.jpg",
+      "original_sha256": "46d2f3dcbc53bf445887bf0bff84a94e32f9b9e0d9aca427c68be4d6a08f5dbd",
+      "published_sha256": "46d2f3dcbc53bf445887bf0bff84a94e32f9b9e0d9aca427c68be4d6a08f5dbd",
+      "changes": []
+    }
+  ]
+}

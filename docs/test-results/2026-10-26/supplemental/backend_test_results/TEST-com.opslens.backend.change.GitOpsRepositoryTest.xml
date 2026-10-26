@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.opslens.backend.change.GitOpsRepositoryTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-25T23:42:35.318Z" hostname="LOCAL_HOST" time="0.033">
+  <properties/>
+  <testcase name="manifestIsTheServiceFileUnderTheTenantPath()" classname="com.opslens.backend.change.GitOpsRepositoryTest" time="0.001"/>
+  <testcase name="recentCommitsAreThoseOfTheServiceManifestAndShowOnlyItsPatch()" classname="com.opslens.backend.change.GitOpsRepositoryTest" time="0.031"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -7,8 +7,8 @@ PDF 표 6-3의 권장값을 기준으로 둔 값과, 팀이 바꾼 값과 이유
 | 구성 요소 | 항목 | 값 | PDF 권장값 | 비고 |
 |---|---|---|---|---|
 | Agent Loop | 모델 호출 최대 턴 | 8 | 8 | |
-| Agent Loop | 작업 실행 시간 | 120초 | 120초 | 승인·PR 반영 대기, 회복 확인 대기(20초, 재측정 20초)는 빼고 구간별로 잰다 (`agent.task_budget`) |
-| Agent Loop | 회복 확인 | 조치 20초 뒤 15초 창, 기준 안이면 20초 뒤 한 번 더 | — | 둘 다 알림 기준(에러율 0.2, p95 1초) 안이어야 회복 (`harness.VERIFY_*_SECONDS`, `signals.within_thresholds`) |
+| Agent Loop | 작업 실행 시간 | 120초 | 120초 | 승인·PR 반영 대기, 회복 확인 대기(최초 20초, 지표 미수집 시 재시도 10초, 정상 범위 확인 후 재측정 35초)는 빼고 구간별로 잰다 (`agent.task_budget`) |
+| Agent Loop | 회복 확인 | 조치 20초 뒤 15초 창, 기준 안이면 35초 뒤 한 번 더 | — | 둘 다 알림 기준(에러율 0.2, p95 1초) 안이어야 회복 (`harness.VERIFY_*_SECONDS`, `signals.within_thresholds`) |
 | Agent Loop | 같은 도구 호출 | Node마다 3회 | 3회 | |
 | Tools | 도구 결과 길이 | 4,000자 | 길이 제한 | |
 | Context | 대화 예산 | 24,000자 | Token 예산 | 넘으면 오래된 도구 결과를 줄인다. 모델 요약은 TODO |
@@ -19,6 +19,8 @@ PDF 표 6-3의 권장값을 기준으로 둔 값과, 팀이 바꾼 값과 이유
 | Agent Loop | 도구 호출 강제 | propose_action 전체, diagnose 첫 턴 | — | diagnose는 `DIAGNOSE_FORCE_FIRST_TOOL`(기본 true). 진단 도구는 조회 전용이라 강제해도 부작용이 없다 |
 | Guardrails | 조치 돌려보내기 | 최대 2번 | — | 인용 조항과 맞지 않는 조치(직전 변경이 있으면 RB-STD-01 재시작 불가)와 `supportedActions`에 없는 조치를 이유와 함께 돌려보낸다 (`graph.PROPOSE_SEND_BACKS`) |
 | Guardrails | 고객 공지 문안 | 규칙 검사 → 고쳐 쓰기 1번 → 기본 문안 | — | `prompts/notice.md`, `agent/customer_notice.py`. 발송 전 MSP 관리자 승인은 그대로 |
+
+현재 값은 `VERIFY_SETTLE_SECONDS=20`, `VERIFY_RETRY_SECONDS=10`, `VERIFY_CONFIRM_SECONDS=35`와 일치한다. 2026-10-26 문서 대조 시 남아 있던 재측정 20초 표기를 35초로 정정했다. 이번 정정은 명세 변경이며 코드나 과거 실행 결과를 변경하지 않는다.
 
 ## 변경 이력
 
@@ -84,3 +86,4 @@ PDF 표 6-3의 권장값을 기준으로 둔 값과, 팀이 바꾼 값과 이유
 이미지는 별도 내부 API로 받아 모델에 한 번 전달하고 State에는 분석 결과와 파일 메타데이터만 남긴다.
 기존 시간 한도 120초와 모델 재시도 정책을 유지한다. 첨부 작업에 한해 MCP 연결이 일부 실패해도
 사용 가능한 도구로 진행하며, 조회할 수 없는 현재 지표나 문서는 확인 불가로 표시한다.
+

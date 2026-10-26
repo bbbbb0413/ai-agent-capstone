@@ -1,0 +1,128 @@
+[
+  {
+    "name": "health",
+    "expected": 200,
+    "actual": 200,
+    "passed": true
+  },
+  {
+    "name": "unauthenticated_tasks",
+    "expected": 401,
+    "actual": 401,
+    "passed": true
+  },
+  {
+    "name": "bad_login",
+    "expected": 401,
+    "actual": 401,
+    "passed": true
+  },
+  {
+    "name": "login_admin",
+    "expected": 200,
+    "actual": 200,
+    "passed": true
+  },
+  {
+    "name": "login_engineer",
+    "expected": 200,
+    "actual": 200,
+    "passed": true
+  },
+  {
+    "name": "login_viewer-a",
+    "expected": 200,
+    "actual": 200,
+    "passed": true
+  },
+  {
+    "name": "login_viewer-b",
+    "expected": 200,
+    "actual": 200,
+    "passed": true
+  },
+  {
+    "name": "viewer_create_other_tenant",
+    "expected": 403,
+    "actual": 403,
+    "passed": true
+  },
+  {
+    "name": "viewer_documents",
+    "expected": 403,
+    "actual": 403,
+    "passed": true
+  },
+  {
+    "name": "TC01_alert_0",
+    "expected": 202,
+    "actual": 202,
+    "passed": true
+  },
+  {
+    "name": "TC01_alert_1",
+    "expected": 202,
+    "actual": 202,
+    "passed": true
+  },
+  {
+    "name": "TC01_alert_2",
+    "expected": 202,
+    "actual": 202,
+    "passed": true
+  },
+  {
+    "name": "TC01_open_incidents",
+    "expected": 1,
+    "actual": 1,
+    "passed": true
+  },
+  {
+    "name": "TC01_diagnosis_task",
+    "expected": 1,
+    "actual": 1,
+    "passed": true
+  },
+  {
+    "name": "TC07_rollback_deployment",
+    "expected": 422,
+    "actual": 422,
+    "passed": true
+  },
+  {
+    "name": "TC07_scale_deployment",
+    "expected": 422,
+    "actual": 422,
+    "passed": true
+  },
+  {
+    "name": "TC12_other_tenant_original",
+    "expected": 403,
+    "actual": 403,
+    "passed": true
+  },
+  {
+    "name": "TC12_other_tenant_services",
+    "expected": 403,
+    "actual": 403,
+    "passed": true
+  },
+  {
+    "name": "TC06_engineer_notice_approval",
+    "expected": 403,
+    "actual": 403,
+    "passed": true
+  },
+  {
+    "name": "TC06_still_waiting",
+    "expected": "WAITING_APPROVAL",
+    "actual": "WAITING_APPROVAL",
+    "passed": true
+  },
+  {
+    "name": "alert_resolution",
+    "expected": 202,
+    "actual": 202,
+    "passed": true
+  }
+]

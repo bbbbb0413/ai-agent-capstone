@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.opslens.backend.change.ChangeServiceTest" tests="14" skipped="0" failures="0" errors="0" timestamp="2026-10-25T23:42:35.283Z" hostname="LOCAL_HOST" time="0.032">
+  <properties/>
+  <testcase name="inventoryForUnsupportedRuntimeHasNoActions()" classname="com.opslens.backend.change.ChangeServiceTest" time="0.008"/>
+  <testcase name="inventoryShowsAutoscalerAndSwapsScaleForAdjust()" classname="com.opslens.backend.change.ChangeServiceTest" time="0.001"/>
+  <testcase name="scaleIsRejectedWhenAutoscalerManagesReplicas()" classname="com.opslens.backend.change.ChangeServiceTest" time="0.001"/>
+  <testcase name="safeMaxReplicasIsCappedByDatabaseConnections()" classname="com.opslens.backend.change.ChangeServiceTest" time="0.001"/>
+  <testcase name="poolSizeIsReadFromTheEnvNamedByTheCatalog()" classname="com.opslens.backend.change.ChangeServiceTest" time="0.0"/>
+  <testcase name="inventoryCarriesTheObservabilityDefinition()" classname="com.opslens.backend.change.ChangeServiceTest" time="0.001"/>
+  <testcase name="poolSizeFallsBackToTheCatalogWithoutAnEnvName()" classname="com.opslens.backend.change.ChangeServiceTest" time="0.002"/>
+  <testcase name="autoscalerAlreadyAtSafeMaxMeansEscalation()" classname="com.opslens.backend.change.ChangeServiceTest" time="0.002"/>
+  <testcase name="inventoryReportsComputedLimits()" classname="com.opslens.backend.change.ChangeServiceTest" time="0.001"/>
+  <testcase name="unsupportedRuntimeIsRejected()" classname="com.opslens.backend.change.ChangeServiceTest" time="0.001"/>
+  <testcase name="restartGoesStraightToRuntimeEvenForGitopsTenant()" classname="com.opslens.backend.change.ChangeServiceTest" time="0.001"/>
+  <testcase name="scaleWithinSafeMaxOpensPullRequestForGitopsTenant()" classname="com.opslens.backend.change.ChangeServiceTest" time="0.002"/>
+  <testcase name="autoscalerMaxIsRaisedUpToSafeMaxByPullRequest()" classname="com.opslens.backend.change.ChangeServiceTest" time="0.002"/>
+  <testcase name="scaleAboveSafeMaxIsRejectedBeforeAnyChange()" classname="com.opslens.backend.change.ChangeServiceTest" time="0.003"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

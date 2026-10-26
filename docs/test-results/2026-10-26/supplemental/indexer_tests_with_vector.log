@@ -1,0 +1,47 @@
+test_deleted_documents_lose_their_chunks (test_documents.DeleteTests.test_deleted_documents_lose_their_chunks) ... ok
+test_docx_chunks_carry_format_version_and_path_and_report_the_extracted_text (test_documents.IndexVersionTests.test_docx_chunks_carry_format_version_and_path_and_report_the_extracted_text) ... ok
+test_duplicate_late_or_finished_messages_are_skipped (test_documents.IndexVersionTests.test_duplicate_late_or_finished_messages_are_skipped) ... ok
+test_failures_report_their_stage_and_whether_to_retry (test_documents.IndexVersionTests.test_failures_report_their_stage_and_whether_to_retry) ... tenant-b/sla-contract v3 색인 실패 [PARSE] PDF를 읽을 수 없다: PdfminerException
+tenant-b/sla-contract v3 색인 실패 [CHUNK] 본문이 비어 있어 색인할 내용이 없다
+tenant-b/sla-contract v3 색인 실패 [EMBED] 임베딩 API 오류 (APIConnectionError)
+ok
+test_late_result_is_reported_but_not_applied (test_documents.IndexVersionTests.test_late_result_is_reported_but_not_applied) ... ok
+test_markdown_reports_no_extracted_text (test_documents.IndexVersionTests.test_markdown_reports_no_extracted_text) ... ok
+test_changed_clause_numbers_are_rejected_and_not_stored (test_documents.StandardRunbookTests.test_changed_clause_numbers_are_rejected_and_not_stored) ... _common/runbook-standard v3 색인 실패 [VALIDATE] 공통 표준 런북의 조항 번호가 바뀌었다: 빠짐 RB-STD-04, 늘어남 RB-STD-08. agent의 조치 검사가 조항 번호에 묶여 있어 색인하지 않았다
+ok
+test_clause_check_applies_only_to_the_standard_runbook (test_documents.StandardRunbookTests.test_clause_check_applies_only_to_the_standard_runbook) ... ok
+test_first_version_sets_the_reference_and_same_clauses_pass (test_documents.StandardRunbookTests.test_first_version_sets_the_reference_and_same_clauses_pass) ... ok
+test_missing_or_duplicated_clause_titles_are_rejected (test_documents.StandardRunbookTests.test_missing_or_duplicated_clause_titles_are_rejected) ... _common/runbook-standard v3 색인 실패 [VALIDATE] 조항 제목을 찾지 못했다 (RB-STD-0N). PDF 제목 추정이 실패했으면 Word 제목 스타일이나 Markdown으로 올린다
+_common/runbook-standard v3 색인 실패 [VALIDATE] 같은 조항 번호가 여러 번 나온다: RB-STD-01
+ok
+test_other_formats_are_checked_after_parsing (test_documents.StandardRunbookTests.test_other_formats_are_checked_after_parsing) ... ok
+test_broken_docx_is_a_non_retryable_parse_error (test_parse_chunk.DocxTests.test_broken_docx_is_a_non_retryable_parse_error) ... ok
+test_heading_styles_and_tables_in_document_order (test_parse_chunk.DocxTests.test_heading_styles_and_tables_in_document_order) ... ok
+test_chunk_carries_the_header_and_the_last_title_as_section (test_parse_chunk.MarkdownTests.test_chunk_carries_the_header_and_the_last_title_as_section) ... ok
+test_hash_lines_inside_a_code_fence_are_not_headings (test_parse_chunk.MarkdownTests.test_hash_lines_inside_a_code_fence_are_not_headings) ... ok
+test_headings_build_section_paths_and_the_title_line_alone_is_not_a_chunk (test_parse_chunk.MarkdownTests.test_headings_build_section_paths_and_the_title_line_alone_is_not_a_chunk) ... ok
+test_intro_before_the_first_section_is_kept (test_parse_chunk.MarkdownTests.test_intro_before_the_first_section_is_kept) ... ok
+test_long_sections_split_with_overlap_but_tables_stay_whole (test_parse_chunk.MarkdownTests.test_long_sections_split_with_overlap_but_tables_stay_whole) ... ok
+test_text_files_have_no_headings (test_parse_chunk.MarkdownTests.test_text_files_have_no_headings) ... ok
+test_korean_article_pattern (test_parse_chunk.PdfTests.test_korean_article_pattern) ... ok
+test_larger_font_lines_become_headings (test_parse_chunk.PdfTests.test_larger_font_lines_become_headings) ... ok
+test_numbered_clause_lines_are_headings_even_in_body_font (test_parse_chunk.PdfTests.test_numbered_clause_lines_are_headings_even_in_body_font) ... ok
+test_scanned_and_broken_pdfs_fail_with_a_reason (test_parse_chunk.PdfTests.test_scanned_and_broken_pdfs_fail_with_a_reason) ... ok
+test_uniform_font_without_numbers_has_no_headings (test_parse_chunk.PdfTests.test_uniform_font_without_numbers_has_no_headings) ... ok
+test_each_seed_clause_is_one_chunk_as_before (test_parse_chunk.SeedDocumentTests.test_each_seed_clause_is_one_chunk_as_before)
+지금 Markdown 문서는 `## ` 조항 하나가 조각 하나다. 달라지는 것은 머리말 조각뿐이다. ... ok
+test_standard_runbook_clause_numbers (test_parse_chunk.SeedDocumentTests.test_standard_runbook_clause_numbers) ... ok
+test_all_pages_and_late_reports_are_scanned_again (test_postmortems.PostmortemTests.test_all_pages_and_late_reports_are_scanned_again) ... ok
+test_common_scope_cannot_receive_incident_reports (test_postmortems.PostmortemTests.test_common_scope_cannot_receive_incident_reports) ... ok
+test_content_and_resolution_changes_invalidate_version (test_postmortems.PostmortemTests.test_content_and_resolution_changes_invalidate_version) ... ok
+test_each_chunk_preserves_provenance_and_unreviewed_status (test_postmortems.PostmortemTests.test_each_chunk_preserves_provenance_and_unreviewed_status) ... ok
+test_http_request_is_tenant_scoped_and_validates_response (test_postmortems.PostmortemTests.test_http_request_is_tenant_scoped_and_validates_response) ... ok
+test_long_report_is_bounded_and_wrong_tenant_is_rejected (test_postmortems.PostmortemTests.test_long_report_is_bounded_and_wrong_tenant_is_rejected) ... ok
+test_older_document_version_does_not_overwrite_newer_chunks (test_storage_database.StorageDatabaseTests.test_older_document_version_does_not_overwrite_newer_chunks) ... ok
+test_retries_skip_embeddings_and_revisions_replace_atomically (test_storage_database.StorageDatabaseTests.test_retries_skip_embeddings_and_revisions_replace_atomically) ... ok
+test_same_document_id_in_other_tenant_is_independent (test_storage_database.StorageDatabaseTests.test_same_document_id_in_other_tenant_is_independent) ... ok
+
+----------------------------------------------------------------------
+Ran 35 tests in 0.104s
+
+OK

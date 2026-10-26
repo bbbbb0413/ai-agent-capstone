@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.opslens.backend.task.TaskRepositoryDatabaseTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-25T23:42:38.255Z" hostname="LOCAL_HOST" time="0.098">
+  <properties/>
+  <testcase name="changeRestoreKeepsTheOriginalWaitStart()" classname="com.opslens.backend.task.TaskRepositoryDatabaseTest" time="0.019"/>
+  <testcase name="deliveryFailureRestoresOnlyTheSameApproval()" classname="com.opslens.backend.task.TaskRepositoryDatabaseTest" time="0.023"/>
+  <testcase name="concurrentApprovalsHaveOneWinner()" classname="com.opslens.backend.task.TaskRepositoryDatabaseTest" time="0.022"/>
+  <testcase name="finishedTaskIsNotReopenedByLateEvents()" classname="com.opslens.backend.task.TaskRepositoryDatabaseTest" time="0.013"/>
+  <testcase name="reportSaveNeverCrossesTenantBoundary()" classname="com.opslens.backend.task.TaskRepositoryDatabaseTest" time="0.02"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

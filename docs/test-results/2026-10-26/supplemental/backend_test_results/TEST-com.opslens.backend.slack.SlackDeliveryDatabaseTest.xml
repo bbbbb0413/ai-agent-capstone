@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.opslens.backend.slack.SlackDeliveryDatabaseTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-10-25T23:42:36.550Z" hostname="LOCAL_HOST" time="1.627">
+  <properties/>
+  <testcase name="signedSlackActionsTrackActorAndTimeAndDeduplicateRetriesWithoutResolvingIncident()" classname="com.opslens.backend.slack.SlackDeliveryDatabaseTest" time="0.258"/>
+  <testcase name="viewerAndOtherTenantCannotPreviewOrApprove()" classname="com.opslens.backend.slack.SlackDeliveryDatabaseTest" time="0.087"/>
+  <testcase name="concurrentApprovalsAndWorkersClaimOnlyOneDelivery()" classname="com.opslens.backend.slack.SlackDeliveryDatabaseTest" time="0.108"/>
+  <testcase name="invalidSignatureStaleTimestampForeignWorkspaceAndUnsafeResponseUrlDoNotChangeState()" classname="com.opslens.backend.slack.SlackDeliveryDatabaseTest" time="0.132"/>
+  <testcase name="simultaneousClaimHasOnlyOneOwnerAndSettingsChangeInvalidatesOldButtons()" classname="com.opslens.backend.slack.SlackDeliveryDatabaseTest" time="0.146"/>
+  <testcase name="settingsChangeInvalidatesOldPreviewAndCancelsQueuedMessages()" classname="com.opslens.backend.slack.SlackDeliveryDatabaseTest" time="0.114"/>
+  <testcase name="savingConnectionDoesNotSendOldMessagesButApprovalSendsExactReviewedTextOnce()" classname="com.opslens.backend.slack.SlackDeliveryDatabaseTest" time="0.117"/>
+  <testcase name="unmappedSlackUserReceivesPrivateFeedbackWithoutTakingOwnership()" classname="com.opslens.backend.slack.SlackDeliveryDatabaseTest" time="0.145"/>
+  <testcase name="rateLimitWaitsButUnknownDeliveryNeverRetriesAutomatically()" classname="com.opslens.backend.slack.SlackDeliveryDatabaseTest" time="0.151"/>
+  <testcase name="asynchronousRelayReplacesOriginalWithLatestStateAndNeverPostsToWebhook()" classname="com.opslens.backend.slack.SlackDeliveryDatabaseTest" time="0.193"/>
+  <testcase name="webActionsEnforceTenantRoleAndCurrentAssignee()" classname="com.opslens.backend.slack.SlackDeliveryDatabaseTest" time="0.172"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
